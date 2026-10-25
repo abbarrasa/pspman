@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PSPMan.Core/PSPMan.Core.csproj" />
+    <Project Path="src/PSPMan.Desktop/PSPMan.Desktop.csproj" />
+    <Project Path="src/PSPMan.Infraestructure/PSPMan.Infraestructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj" />
+  </Folder>
+</Solution>
