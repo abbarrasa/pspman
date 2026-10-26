@@ -9,4 +9,6 @@ public interface IGameRecordRepository
     void Create(GameRecord record);
 
     void Update(GameRecord record);
+
+    void Delete(Guid id);
 }

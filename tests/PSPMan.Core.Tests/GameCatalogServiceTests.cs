@@ -374,6 +374,64 @@ public class GameCatalogServiceTests
         Assert.Null(Assert.Single(repository.Records).DvdNumber);
     }
 
+    [Fact]
+    public void DeleteRemovesOnlyTheSelectedCatalogRecord()
+    {
+        var other = SavedGame with { Id = Guid.NewGuid(), Location = "/Other/game.rar" };
+        var repository = new FakeRepository(SavedGame, other);
+        var service = new GameCatalogService(repository);
+
+        var result = service.Delete(SavedGame.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value);
+        Assert.Null(result.Error);
+        Assert.Equal(1, repository.DeleteCalls);
+        Assert.Equal(other, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void DeleteOfMissingRecordReportsFailureWithoutWriting()
+    {
+        var repository = new FakeRepository(SavedGame);
+        var service = new GameCatalogService(repository);
+
+        var result = service.Delete(Guid.NewGuid());
+
+        Assert.False(result.IsSuccess);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(0, repository.DeleteCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void DeleteReportsReadFailureWithoutWriting()
+    {
+        var repository = new FakeRepository(SavedGame) { FailReads = true };
+        var service = new GameCatalogService(repository);
+
+        var result = service.Delete(SavedGame.Id);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(0, repository.DeleteCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void DeleteReportsWriteFailureAndKeepsSavedRecord()
+    {
+        var repository = new FakeRepository(SavedGame) { FailWrites = true };
+        var service = new GameCatalogService(repository);
+
+        var result = service.Delete(SavedGame.Id);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(1, repository.DeleteCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
     private static GameRecordInput InputFrom(GameRecord record) => new(
         record.Title,
         record.Medium,
@@ -400,6 +458,8 @@ public class GameCatalogServiceTests
         public int GetByIdCalls { get; private set; }
 
         public int UpdateCalls { get; private set; }
+
+        public int DeleteCalls { get; private set; }
 
         public IReadOnlyList<GameRecord> Records => _records;
 
@@ -455,6 +515,24 @@ public class GameCatalogServiceTests
             }
 
             _records[index] = record;
+        }
+
+        public void Delete(Guid id)
+        {
+            DeleteCalls++;
+
+            if (FailWrites)
+            {
+                throw new InvalidOperationException("Write failed.");
+            }
+
+            var index = _records.FindIndex(record => record.Id == id);
+            if (index < 0)
+            {
+                throw new InvalidOperationException("Record not found.");
+            }
+
+            _records.RemoveAt(index);
         }
     }
 }
