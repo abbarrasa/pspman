@@ -40,6 +40,39 @@ public class GameRecordRulesTests
         Assert.False(string.IsNullOrWhiteSpace(error.Message));
     }
 
+    [Theory]
+    [InlineData("/game.rar")]
+    [InlineData("/DevHook/GAMES/Key of Heaven.rar")]
+    [InlineData("/mnt/usb/game.rar")]
+    [InlineData("/Games/Mi Juego.iso")]
+    public void MediumRootedFilePathIsAcceptedWithoutAccessingTheMedium(string location)
+    {
+        Assert.Empty(GameRecordRules.Validate(ValidInput with { Location = location }));
+    }
+
+    [Theory]
+    [InlineData("game.rar")]
+    [InlineData("C:\\Games\\game.rar")]
+    [InlineData("/")]
+    [InlineData("/Games/")]
+    [InlineData("/Games//game.rar")]
+    [InlineData("//game.rar")]
+    [InlineData("/./game.rar")]
+    [InlineData("/Games/../game.rar")]
+    [InlineData("/Games/./game.rar")]
+    [InlineData("/Games\\game.rar")]
+    [InlineData("/Games/game\u0000.rar")]
+    [InlineData("/Games/game\u001F.rar")]
+    [InlineData("/Games/game\u007F.rar")]
+    public void MalformedLocationHasAFieldSpecificError(string location)
+    {
+        var errors = GameRecordRules.Validate(ValidInput with { Location = location });
+
+        var error = Assert.Single(errors);
+        Assert.Equal(nameof(GameRecordInput.Location), error.Field);
+        Assert.False(string.IsNullOrWhiteSpace(error.Message));
+    }
+
     [Fact]
     public void UnsupportedMediumAndFormatHaveSeparateFieldErrors()
     {

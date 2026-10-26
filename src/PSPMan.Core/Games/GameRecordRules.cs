@@ -21,6 +21,10 @@ public static class GameRecordRules
         {
             errors.Add(new(nameof(GameRecordInput.Location), "Location is required."));
         }
+        else if (!IsWellFormedLocation(input.Location))
+        {
+            errors.Add(new(nameof(GameRecordInput.Location), "Location must be a complete path from the medium root."));
+        }
 
         if (!Enum.IsDefined(input.Medium))
         {
@@ -54,5 +58,16 @@ public static class GameRecordRules
         }
 
         return errors;
+    }
+
+    private static bool IsWellFormedLocation(string location)
+    {
+        if (location[0] != '/' || location.Contains('\\') || location.Any(char.IsControl))
+        {
+            return false;
+        }
+
+        return location[1..].Split('/').All(segment =>
+            segment.Length > 0 && segment is not "." and not "..");
     }
 }
