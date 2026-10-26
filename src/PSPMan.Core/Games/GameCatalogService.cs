@@ -95,4 +95,49 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
             return GameCatalogResult<GameRecord>.Failure("Unable to save the game record.");
         }
     }
+
+    public GameCatalogResult<GameRecord> Edit(Guid id, GameRecordInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var validationErrors = GameRecordRules.Validate(input);
+        if (validationErrors.Count > 0)
+        {
+            return GameCatalogResult<GameRecord>.InvalidInput(validationErrors);
+        }
+
+        try
+        {
+            var existing = _repository.GetById(id);
+            if (existing is null)
+            {
+                return GameCatalogResult<GameRecord>.Failure("Game record not found.");
+            }
+
+            if (_repository.List().Any(other =>
+                    other.Id != id && GameRecordRules.HasSameIdentity(input, other)))
+            {
+                return GameCatalogResult<GameRecord>.Failure(
+                    "A game record with the same medium, location, and DVD number already exists.");
+            }
+
+            var updated = existing with
+            {
+                Title = input.Title,
+                Medium = input.Medium,
+                DvdNumber = GameRecordRules.NormalizeDvdNumber(input.DvdNumber),
+                Location = input.Location,
+                Format = input.Format,
+                SizeBytes = input.SizeBytes,
+                Notes = input.Notes
+            };
+
+            _repository.Update(updated);
+            return GameCatalogResult<GameRecord>.Success(updated);
+        }
+        catch (Exception)
+        {
+            return GameCatalogResult<GameRecord>.Failure("Unable to update the game record.");
+        }
+    }
 }

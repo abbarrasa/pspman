@@ -18,7 +18,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests return saved records or an empty catalog, expose record details, and report read failures without inventing data.
 - [x] **T07 (30 min; FR-4, FR-5, FR-6, FR-9, FR-10):** Add service creation using the rules and repository contract; test invalid, duplicate, offline, success, and failed-save paths.
   Done when: Tests show only valid unique records persist, no media check occurs, and a repository failure is reported as unsaved.
-- [ ] **T08 (25 min; FR-4, FR-6, FR-7, FR-9, FR-10):** Add service editing, including self-exclusion from duplicate detection, and focused fake-repository tests.
+- [x] **T08 (25 min; FR-4, FR-6, FR-7, FR-9, FR-10):** Add service editing, including self-exclusion from duplicate detection, and focused fake-repository tests.
   Done when: Tests prove valid edits replace only the selected record, duplicates/invalid input leave it intact, and failed updates are reported.
 - [ ] **T09 (20 min; FR-8, FR-10):** Add the service delete operation for a confirmed catalog-record ID and test success and failure.
   Done when: Tests prove deletion affects only the requested repository record and failed deletion is reported; Core has no file-access dependency.
