@@ -16,7 +16,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests prove Title and Format do not affect identity, case-different paths stay distinct, and DVD numbers distinguish DVD records.
 - [x] **T06 (25 min; FR-1, FR-3, FR-10):** Add the Core repository contract and service list/read operations with an in-memory fake and failure tests.
   Done when: Tests return saved records or an empty catalog, expose record details, and report read failures without inventing data.
-- [ ] **T07 (30 min; FR-4, FR-5, FR-6, FR-9, FR-10):** Add service creation using the rules and repository contract; test invalid, duplicate, offline, success, and failed-save paths.
+- [x] **T07 (30 min; FR-4, FR-5, FR-6, FR-9, FR-10):** Add service creation using the rules and repository contract; test invalid, duplicate, offline, success, and failed-save paths.
   Done when: Tests show only valid unique records persist, no media check occurs, and a repository failure is reported as unsaved.
 - [ ] **T08 (25 min; FR-4, FR-6, FR-7, FR-9, FR-10):** Add service editing, including self-exclusion from duplicate detection, and focused fake-repository tests.
   Done when: Tests prove valid edits replace only the selected record, duplicates/invalid input leave it intact, and failed updates are reported.

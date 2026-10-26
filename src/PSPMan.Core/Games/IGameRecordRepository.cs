@@ -5,4 +5,6 @@ public interface IGameRecordRepository
     IReadOnlyList<GameRecord> List();
 
     GameRecord? GetById(Guid id);
+
+    void Create(GameRecord record);
 }
