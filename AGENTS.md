@@ -47,6 +47,14 @@ Use [MEMORY.md](./MEMORY.md) for concise project context that remains useful acr
 - Make small, focused changes; do not rewrite code that already works.
 - When finished, summarize what changed and any decisions the user should review.
 
+## Branches for feature implementation
+
+- Run `git status --short --branch` before changing branches and preserve all pre-existing local changes.
+- Start a feature task from the current commit of local `dev` on a new branch named `feature/NNN_TNN_<brief-kebab-case-description>`.
+- If uncommitted changes make the branch switch unsafe, stop and explain the exact conflict. Do not discard or temporarily shelve the changes.
+- Do not run `reset`, `restore`, `clean`, `stash`, `commit`, `amend`, `rebase`, `merge`, `force-push`, or `push` unless the user explicitly requests it.
+- Do not create commits or push during this feature-task workflow. Report the branch name and final `git status` instead.
+
 ## Verification
 
 - Build from the repository root with `dotnet build PSPMan.slnx`.
