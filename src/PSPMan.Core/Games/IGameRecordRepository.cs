@@ -7,4 +7,6 @@ public interface IGameRecordRepository
     GameRecord? GetById(Guid id);
 
     void Create(GameRecord record);
+
+    void Update(GameRecord record);
 }

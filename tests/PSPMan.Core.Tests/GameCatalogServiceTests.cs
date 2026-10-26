@@ -225,11 +225,171 @@ public class GameCatalogServiceTests
         Assert.Equal(SavedGame, Assert.Single(repository.Records));
     }
 
+    [Fact]
+    public void EditUpdatesOwnRecordWithoutTreatingItAsADuplicate()
+    {
+        var repository = new FakeRepository(SavedGame);
+        var service = new GameCatalogService(repository);
+        var input = InputFrom(SavedGame) with
+        {
+            Title = "Key of Heaven (corrected)",
+            Notes = "Updated notes"
+        };
+
+        var result = service.Edit(SavedGame.Id, input);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+        Assert.Equal(SavedGame.Id, result.Value.Id);
+        Assert.Equal(input.Title, result.Value.Title);
+        Assert.Equal(input.Notes, result.Value.Notes);
+        Assert.Equal(result.Value, Assert.Single(repository.Records));
+        Assert.Equal(result.Value, service.GetById(SavedGame.Id).Value);
+        Assert.Equal(1, repository.UpdateCalls);
+    }
+
+    [Fact]
+    public void EditAllowsAnOfflineLocationWithoutCheckingForItsFile()
+    {
+        var repository = new FakeRepository(SavedGame);
+        var service = new GameCatalogService(repository);
+        var input = InputFrom(SavedGame) with { Location = "/DisconnectedMedium/GAMES/Key of Heaven.rar" };
+
+        var result = service.Edit(SavedGame.Id, input);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(input.Location, Assert.Single(repository.Records).Location);
+    }
+
+    [Fact]
+    public void EditRejectsIdentityOfAnotherRecordAndLeavesBothUnchanged()
+    {
+        var other = SavedGame with
+        {
+            Id = Guid.NewGuid(),
+            Medium = GameMedium.Usb,
+            DvdNumber = null,
+            Location = ValidInput.Location
+        };
+        var repository = new FakeRepository(SavedGame, other);
+        var service = new GameCatalogService(repository);
+
+        var result = service.Edit(SavedGame.Id, ValidInput);
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.Contains("already", result.Error!, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, repository.UpdateCalls);
+        Assert.Contains(SavedGame, repository.Records);
+        Assert.Contains(other, repository.Records);
+    }
+
+    [Fact]
+    public void EditReturnsFieldErrorsBeforeAnyRepositoryCall()
+    {
+        var repository = new FakeRepository(SavedGame);
+        var service = new GameCatalogService(repository);
+        var input = InputFrom(SavedGame) with { Title = "\u00A0\t", SizeBytes = 0 };
+
+        var result = service.Edit(SavedGame.Id, input);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains(result.ValidationErrors, error => error.Field == nameof(GameRecordInput.Title));
+        Assert.Contains(result.ValidationErrors, error => error.Field == nameof(GameRecordInput.SizeBytes));
+        Assert.Equal(0, repository.GetByIdCalls);
+        Assert.Equal(0, repository.ListCalls);
+        Assert.Equal(0, repository.UpdateCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void EditOfMissingRecordFailsWithoutCreatingOne()
+    {
+        var repository = new FakeRepository(SavedGame);
+        var service = new GameCatalogService(repository);
+
+        var result = service.Edit(Guid.NewGuid(), ValidInput);
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(0, repository.UpdateCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void EditReportsReadFailureWithoutWriting()
+    {
+        var repository = new FakeRepository(SavedGame) { FailReads = true };
+        var service = new GameCatalogService(repository);
+
+        var result = service.Edit(SavedGame.Id, InputFrom(SavedGame));
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(0, repository.UpdateCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void EditReportsDuplicateCheckFailureWithoutWriting()
+    {
+        var repository = new FakeRepository(SavedGame) { FailLists = true };
+        var service = new GameCatalogService(repository);
+
+        var result = service.Edit(SavedGame.Id, InputFrom(SavedGame));
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(0, repository.UpdateCalls);
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void EditReportsWriteFailureAndKeepsSavedRecord()
+    {
+        var repository = new FakeRepository(SavedGame) { FailWrites = true };
+        var service = new GameCatalogService(repository);
+
+        var result = service.Edit(SavedGame.Id, InputFrom(SavedGame) with { Title = "Changed" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(SavedGame, Assert.Single(repository.Records));
+    }
+
+    [Fact]
+    public void EditNormalizesZeroDvdNumberWhenChangingToUsb()
+    {
+        var repository = new FakeRepository(SavedGame);
+        var service = new GameCatalogService(repository);
+
+        var result = service.Edit(SavedGame.Id, ValidInput);
+
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value!.DvdNumber);
+        Assert.Null(Assert.Single(repository.Records).DvdNumber);
+    }
+
+    private static GameRecordInput InputFrom(GameRecord record) => new(
+        record.Title,
+        record.Medium,
+        record.DvdNumber,
+        record.Location,
+        record.Format,
+        record.SizeBytes,
+        record.Notes);
+
     private sealed class FakeRepository(params GameRecord[] records) : IGameRecordRepository
     {
         private readonly List<GameRecord> _records = [.. records];
 
         public bool FailReads { get; init; }
+
+        public bool FailLists { get; init; }
 
         public bool FailWrites { get; init; }
 
@@ -237,13 +397,17 @@ public class GameCatalogServiceTests
 
         public int CreateCalls { get; private set; }
 
+        public int GetByIdCalls { get; private set; }
+
+        public int UpdateCalls { get; private set; }
+
         public IReadOnlyList<GameRecord> Records => _records;
 
         public IReadOnlyList<GameRecord> List()
         {
             ListCalls++;
 
-            if (FailReads)
+            if (FailReads || FailLists)
             {
                 throw new InvalidOperationException("Read failed.");
             }
@@ -253,6 +417,8 @@ public class GameCatalogServiceTests
 
         public GameRecord? GetById(Guid id)
         {
+            GetByIdCalls++;
+
             if (FailReads)
             {
                 throw new InvalidOperationException("Read failed.");
@@ -271,6 +437,24 @@ public class GameCatalogServiceTests
             }
 
             _records.Add(record);
+        }
+
+        public void Update(GameRecord record)
+        {
+            UpdateCalls++;
+
+            if (FailWrites)
+            {
+                throw new InvalidOperationException("Write failed.");
+            }
+
+            var index = _records.FindIndex(existing => existing.Id == record.Id);
+            if (index < 0)
+            {
+                throw new InvalidOperationException("Record not found.");
+            }
+
+            _records[index] = record;
         }
     }
 }
