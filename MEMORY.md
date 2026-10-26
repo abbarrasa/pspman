@@ -5,9 +5,9 @@ Keep this file short (about 50 lines maximum). Update it when implementation cha
 ## Current state
 
 - PSPMan aims to catalog, manage, and deploy PSP game collections across removable media. The [README](./README.md) gives the product overview.
-- The repository is still an initial scaffold. Core now has game record/input value types and allowed Medium/Format values; catalog operations, deployment, removable-media handling, and persistence are not implemented yet.
+- The repository is still an initial scaffold. Core has game record/input types and pure required-field/choice validation; DVD, size, path, catalog operations, deployment, removable-media handling, and persistence are not implemented yet.
 - [PSPMan.slnx](./PSPMan.slnx) contains Core, Infraestructure, Desktop, and Core.Tests projects targeting .NET 10.
-- [Core](./src/PSPMan.Core/) contains the game record types alongside a placeholder `Class1`; [Infraestructure](./src/PSPMan.Infraestructure/) contains only a placeholder `Class1`; [Core.Tests](./tests/PSPMan.Core.Tests/) contains value-type tests and an empty sample test.
+- [Core](./src/PSPMan.Core/) contains game record types and `GameRecordRules.Validate` alongside a placeholder `Class1`; [Infraestructure](./src/PSPMan.Infraestructure/) contains only a placeholder `Class1`; [Core.Tests](./tests/PSPMan.Core.Tests/) contains value-type/rule tests and an empty sample test.
 - [Desktop](./src/PSPMan.Desktop/) is the Avalonia starter app. `App.axaml.cs` creates `MainWindow` with `MainViewModel`; the window displays a sample greeting.
 - SQLite and Microsoft.Data.Sqlite are the intended persistence stack, but the repository has no SQLite package reference, schema, database, or migrations.
 
@@ -18,4 +18,4 @@ Keep this file short (about 50 lines maximum). Update it when implementation cha
 - The repository-local [feature skill](./.agents/skills/feature/SKILL.md) requires a reviewable plan and user approval before changing files for a new feature.
 - The skill-creator validator requires PyYAML; validate skills in an isolated Python environment when the system interpreter lacks it.
 - The approved [constitution](./docs/constitution.md) sets six project principles for stack, specs, boundaries, tests, and English artifacts; apply it to future feature work.
-- The [game record CRUD specification](./specs/001-crud-game/spec.md) defines required fields, DVD-only numbering, manually entered decompressed size, case-sensitive location/medium/DVD duplicate identity, confirmed record-only deletion, and offline editing. Its [implementation plan](./specs/001-crud-game/plan.md) guides [dependency-ordered tasks](./specs/001-crud-game/tasks.md); T01 is complete, and implementation proceeds one task at a time only when requested.
+- The [game record CRUD specification](./specs/001-crud-game/spec.md) defines required fields, DVD-only numbering, manually entered decompressed size, case-sensitive location/medium/DVD duplicate identity, confirmed record-only deletion, and offline editing. Its [implementation plan](./specs/001-crud-game/plan.md) guides [dependency-ordered tasks](./specs/001-crud-game/tasks.md); T01–T02 are complete, and implementation proceeds one approved task at a time.
