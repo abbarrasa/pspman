@@ -37,7 +37,7 @@ The existing `ViewLocator` is not used by this single-window flow, so it needs n
 4. **Compare record identity:** Compare Medium, then Location using exact case-sensitive text, then DVD Number when Medium is DVD. Ignore Title, Format, Size, and Notes; exclude the record being edited from the duplicate search. [FR-6, FR-7]
 
 ## Use-case algorithms (pseudocode)
-5. **Save:** Validate input; if errors exist, report them. Check for another record with the same identity; if found, report a duplicate. Otherwise create or update the record atomically, reload the list, and report success only after persistence succeeds. If persistence fails, keep the previous saved state and show the failure. [FR-1, FR-4–FR-7, FR-9, FR-10]
+5. **Save:** Validate input; if errors exist, report them. Check for another record with the same identity; if found, report a duplicate. Otherwise create or update the record atomically and report success only after persistence succeeds. The UI reloads the list after a successful result, so a subsequent read failure cannot misrepresent an already saved record as unsaved. If persistence fails, keep the previous saved state and show the failure. [FR-1, FR-4–FR-7, FR-9, FR-10]
 6. **Delete:** Mark the selected record as pending deletion; cancellation clears that state. On confirmation, delete only its catalog row. Refresh the list after success; on failure, report the error and do not claim deletion succeeded. Never access the referenced game file. [FR-8, FR-10]
 7. **Corrupt catalog:** If opening or reading existing catalog data fails because of corruption, show an error and stop catalog mutations for that session. Do not recreate, repair, discard, or overwrite the existing catalog. [FR-10, FR-11]
 
