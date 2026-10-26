@@ -1,0 +1,12 @@
+{
+    "files.watcherExclude": {
+        "**/bin/**": true,
+        "**/obj/**": true,
+        ".git/objects/**": true,
+        ".git/subtree-cache/**": true,
+        ".hg/store/**": true,
+        "*/.git/objects/**": true,
+        "*/.git/subtree-cache/**": true,
+        "*/.hg/store/**": true
+    }
+}

@@ -6,7 +6,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 - [x] **T01 (20 min; FR-2, FR-3):** Add record/input types, stable ID, and the allowed Medium and Format values in Core; test their value semantics.
   Done when: Core tests prove all fields and allowed values can be represented, and the solution builds.
-- [ ] **T02 (25 min; FR-2, FR-4):** Add pure required-field, Unicode-whitespace Title, Medium, and Format validation with field-specific results and boundary tests.
+- [x] **T02 (25 min; FR-2, FR-4):** Add pure required-field, Unicode-whitespace Title, Medium, and Format validation with field-specific results and boundary tests.
   Done when: Tests reject every missing or unsupported value and accept valid choices without persistence.
 - [ ] **T03 (25 min; FR-2, FR-4):** Add DVD Number normalization and validation, positive byte Size validation, and the 2,500-character Notes limit with boundary tests.
   Done when: Tests cover DVD null/zero/negative/positive, non-DVD number rejection, Size boundaries, and Notes at 2,500/2,501 characters.
