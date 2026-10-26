@@ -20,7 +20,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests show only valid unique records persist, no media check occurs, and a repository failure is reported as unsaved.
 - [x] **T08 (25 min; FR-4, FR-6, FR-7, FR-9, FR-10):** Add service editing, including self-exclusion from duplicate detection, and focused fake-repository tests.
   Done when: Tests prove valid edits replace only the selected record, duplicates/invalid input leave it intact, and failed updates are reported.
-- [ ] **T09 (20 min; FR-8, FR-10):** Add the service delete operation for a confirmed catalog-record ID and test success and failure.
+- [x] **T09 (20 min; FR-8, FR-10):** Add the service delete operation for a confirmed catalog-record ID and test success and failure.
   Done when: Tests prove deletion affects only the requested repository record and failed deletion is reported; Core has no file-access dependency.
 
 ## SQLite storage

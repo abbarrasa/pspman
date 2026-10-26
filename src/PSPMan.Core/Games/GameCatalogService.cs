@@ -140,4 +140,22 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
             return GameCatalogResult<GameRecord>.Failure("Unable to update the game record.");
         }
     }
+
+    public GameCatalogResult<bool> Delete(Guid id)
+    {
+        try
+        {
+            if (_repository.GetById(id) is null)
+            {
+                return GameCatalogResult<bool>.Failure("Game record not found.");
+            }
+
+            _repository.Delete(id);
+            return GameCatalogResult<bool>.Success(true);
+        }
+        catch (Exception)
+        {
+            return GameCatalogResult<bool>.Failure("Unable to delete the game record.");
+        }
+    }
 }
