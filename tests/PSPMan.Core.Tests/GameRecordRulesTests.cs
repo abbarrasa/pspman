@@ -211,4 +211,71 @@ public class GameRecordRulesTests
         Assert.Equal(nameof(GameRecordInput.Notes), Assert.Single(GameRecordRules.Validate(
             ValidInput with { Notes = string.Concat(Enumerable.Repeat(emoji, 1_251)) })).Field);
     }
+
+    [Fact]
+    public void IdentityIgnoresTitleFormatSizeAndNotes()
+    {
+        var saved = SavedRecord(ValidInput);
+        var candidate = ValidInput with
+        {
+            Title = "A different title",
+            Format = GameFormat.Chd,
+            SizeBytes = 42,
+            Notes = "Different notes"
+        };
+
+        Assert.True(GameRecordRules.HasSameIdentity(candidate, saved));
+    }
+
+    [Fact]
+    public void IdentityComparesLocationWithExactCase()
+    {
+        var saved = SavedRecord(ValidInput);
+
+        Assert.True(GameRecordRules.HasSameIdentity(ValidInput, saved));
+        Assert.False(GameRecordRules.HasSameIdentity(
+            ValidInput with { Location = "/games/Key of Heaven.rar" }, saved));
+        Assert.False(GameRecordRules.HasSameIdentity(
+            ValidInput with { Location = "/GAMES/Key of Heaven.rar " }, saved));
+    }
+
+    [Fact]
+    public void IdentityDistinguishesMediaWithTheSameLocation()
+    {
+        var saved = SavedRecord(ValidInput);
+
+        Assert.False(GameRecordRules.HasSameIdentity(
+            ValidInput with { Medium = GameMedium.MemoryCard }, saved));
+        Assert.False(GameRecordRules.HasSameIdentity(
+            ValidInput with { Medium = GameMedium.Dvd, DvdNumber = 1 }, saved));
+    }
+
+    [Fact]
+    public void DvdIdentityIncludesDvdNumber()
+    {
+        var dvd = ValidInput with { Medium = GameMedium.Dvd, DvdNumber = 2 };
+        var saved = SavedRecord(dvd);
+
+        Assert.True(GameRecordRules.HasSameIdentity(dvd, saved));
+        Assert.False(GameRecordRules.HasSameIdentity(dvd with { DvdNumber = 1 }, saved));
+    }
+
+    [Fact]
+    public void NonDvdIdentityIgnoresNormalizedZeroDvdNumber()
+    {
+        var saved = SavedRecord(ValidInput);
+
+        Assert.True(GameRecordRules.HasSameIdentity(
+            ValidInput with { DvdNumber = 0 }, saved));
+    }
+
+    private static GameRecord SavedRecord(GameRecordInput input) => new(
+        Guid.NewGuid(),
+        input.Title,
+        input.Medium,
+        input.DvdNumber,
+        input.Location,
+        input.Format,
+        input.SizeBytes,
+        input.Notes);
 }

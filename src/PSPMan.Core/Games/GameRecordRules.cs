@@ -6,6 +6,17 @@ public static class GameRecordRules
 {
     public static int? NormalizeDvdNumber(int? dvdNumber) => dvdNumber == 0 ? null : dvdNumber;
 
+    public static bool HasSameIdentity(GameRecordInput candidate, GameRecord existing)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(existing);
+
+        return candidate.Medium == existing.Medium
+            && string.Equals(candidate.Location, existing.Location, StringComparison.Ordinal)
+            && (candidate.Medium != GameMedium.Dvd
+                || NormalizeDvdNumber(candidate.DvdNumber) == NormalizeDvdNumber(existing.DvdNumber));
+    }
+
     public static IReadOnlyList<GameRecordValidationError> Validate(GameRecordInput input)
     {
         ArgumentNullException.ThrowIfNull(input);

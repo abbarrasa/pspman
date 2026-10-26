@@ -12,7 +12,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests cover DVD null/zero/negative/positive, non-DVD number rejection, Size boundaries, and Notes at 2,500/2,501 characters.
 - [x] **T04 (25 min; FR-3, FR-4, FR-9):** Add pure medium-rooted Location validation without checking the host file system; test valid and malformed paths.
   Done when: Tests accept a valid `/`-rooted file path while rejecting missing filename, empty/dot/traversal segments, control characters, and host-dependent validation.
-- [ ] **T05 (20 min; FR-6):** Add the pure duplicate-identity comparison and tests for exact Location case, Medium, and DVD Number.
+- [x] **T05 (20 min; FR-6):** Add the pure duplicate-identity comparison and tests for exact Location case, Medium, and DVD Number.
   Done when: Tests prove Title and Format do not affect identity, case-different paths stay distinct, and DVD numbers distinguish DVD records.
 - [ ] **T06 (25 min; FR-1, FR-3, FR-10):** Add the Core repository contract and service list/read operations with an in-memory fake and failure tests.
   Done when: Tests return saved records or an empty catalog, expose record details, and report read failures without inventing data.
