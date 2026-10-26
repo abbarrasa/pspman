@@ -32,7 +32,7 @@ The existing `ViewLocator` is not used by this single-window flow, so it needs n
 ## Pure logic functions (pseudocode)
 
 1. **Normalize DVD number:** If the entered number is zero, treat it as null; otherwise retain a positive integer or return a field error. A DVD requires a positive number; USB and Memory Card require null. [FR-2, FR-4]
-2. **Validate record input:** Reject a Title containing only Unicode whitespace, missing required fields, unsupported Medium or Format, non-positive Size in bytes, Notes longer than 2,500 characters, or an invalid DVD number. Return field-specific errors without changing a saved record. [FR-2–FR-4, FR-7]
+2. **Validate record input:** Reject a Title containing only Unicode whitespace, missing required fields, unsupported Medium or Format, non-positive Size in bytes, Notes longer than 2,500 UTF-16 code units, or an invalid DVD number. Return field-specific errors without changing a saved record. [FR-2–FR-4, FR-7]
 3. **Validate Location:** Require a path rooted within the medium, beginning with `/` and ending in a file-name segment. Split it into segments; reject empty, `.` or `..` segments and control characters. Do not consult the host file system or require a connected medium. Preserve the entered case. [FR-3, FR-4, FR-9]
 4. **Compare record identity:** Compare Medium, then Location using exact case-sensitive text, then DVD Number when Medium is DVD. Ignore Title, Format, Size, and Notes; exclude the record being edited from the duplicate search. [FR-6, FR-7]
 
@@ -55,7 +55,7 @@ Use the existing main window: a game list with an empty state, a detail area, an
 
 ## Test and verification strategy
 
-- **Unit:** Test every pure rule and use case: all-whitespace Titles; DVD null/zero/negative/positive; Medium and Format options; malformed or case-different paths; Size boundaries; Notes at 2,500/2,501 characters; duplicate create/edit; cancel/confirm deletion; failed repository calls. No test requires a mounted medium. [FR-1–FR-11]
+- **Unit:** Test every pure rule and use case: all-whitespace Titles; DVD null/zero/negative/positive; Medium and Format options; malformed or case-different paths; Size boundaries; Notes at 2,500/2,501 UTF-16 code units; duplicate create/edit; cancel/confirm deletion; failed repository calls. No test requires a mounted medium. [FR-1–FR-11]
 - **Integration:** Use isolated temporary SQLite catalogs to test schema creation, round-trip values, persistence after reopening, both uniqueness rules, exact case comparison, atomic updates/deletes, storage failures, and corrupt-data reporting without overwrite. [FR-1, FR-3, FR-5–FR-11]
 - **Functional:** Drive the Avalonia controls headlessly through create, list/view, edit, invalid input, duplicate rejection, confirmed/cancelled deletion, empty state, unavailable media, startup corruption, and visible error messages. Also perform the specification's manual main-flow demonstration on an available graphical desktop. [FR-1–FR-11]
 - **Coverage and checks:** Run `dotnet build PSPMan.slnx` and `dotnet test PSPMan.slnx`; collect line and branch coverage using the existing coverlet tooling, produce a coverage report, and justify significant gaps. Review the FR-to-test mapping before declaring the feature complete. [FR-1–FR-11]

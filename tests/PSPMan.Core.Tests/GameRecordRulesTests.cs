@@ -72,4 +72,110 @@ public class GameRecordRulesTests
 
         Assert.Empty(errors);
     }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(0, null)]
+    [InlineData(1, 1)]
+    [InlineData(-1, -1)]
+    public void NormalizeDvdNumberConvertsOnlyZeroToNull(int? entered, int? expected)
+    {
+        Assert.Equal(expected, GameRecordRules.NormalizeDvdNumber(entered));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void DvdRequiresAPositiveNumber(int? dvdNumber)
+    {
+        var errors = GameRecordRules.Validate(ValidInput with
+        {
+            Medium = GameMedium.Dvd,
+            DvdNumber = dvdNumber
+        });
+
+        Assert.Equal(nameof(GameRecordInput.DvdNumber), Assert.Single(errors).Field);
+    }
+
+    [Fact]
+    public void DvdAcceptsAPositiveNumber()
+    {
+        Assert.Empty(GameRecordRules.Validate(ValidInput with
+        {
+            Medium = GameMedium.Dvd,
+            DvdNumber = int.MaxValue
+        }));
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Usb, 1)]
+    [InlineData(GameMedium.MemoryCard, -1)]
+    public void NonDvdMediumRejectsANumber(GameMedium medium, int dvdNumber)
+    {
+        var errors = GameRecordRules.Validate(ValidInput with
+        {
+            Medium = medium,
+            DvdNumber = dvdNumber
+        });
+
+        Assert.Equal(nameof(GameRecordInput.DvdNumber), Assert.Single(errors).Field);
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Usb)]
+    [InlineData(GameMedium.MemoryCard)]
+    public void NonDvdMediumTreatsZeroAsNoNumber(GameMedium medium)
+    {
+        Assert.Empty(GameRecordRules.Validate(ValidInput with
+        {
+            Medium = medium,
+            DvdNumber = 0
+        }));
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData(long.MinValue)]
+    public void SizeMustBePositive(long sizeBytes)
+    {
+        var errors = GameRecordRules.Validate(ValidInput with { SizeBytes = sizeBytes });
+
+        Assert.Equal(nameof(GameRecordInput.SizeBytes), Assert.Single(errors).Field);
+    }
+
+    [Theory]
+    [InlineData(1L)]
+    [InlineData(long.MaxValue)]
+    public void PositiveSizeIsAccepted(long sizeBytes)
+    {
+        Assert.Empty(GameRecordRules.Validate(ValidInput with { SizeBytes = sizeBytes }));
+    }
+
+    [Fact]
+    public void NotesAtLimitAreAcceptedAndOneCharacterOverIsRejected()
+    {
+        Assert.Empty(GameRecordRules.Validate(ValidInput with { Notes = new string('x', 2_500) }));
+
+        var errors = GameRecordRules.Validate(ValidInput with { Notes = new string('x', 2_501) });
+
+        Assert.Equal(nameof(GameRecordInput.Notes), Assert.Single(errors).Field);
+    }
+
+    [Fact]
+    public void EmptyNotesAreAccepted()
+    {
+        Assert.Empty(GameRecordRules.Validate(ValidInput with { Notes = string.Empty }));
+    }
+
+    [Fact]
+    public void NotesLimitCountsUtf16CodeUnits()
+    {
+        var emoji = "🎮";
+
+        Assert.Empty(GameRecordRules.Validate(ValidInput with { Notes = string.Concat(Enumerable.Repeat(emoji, 1_250)) }));
+        Assert.Equal(nameof(GameRecordInput.Notes), Assert.Single(GameRecordRules.Validate(
+            ValidInput with { Notes = string.Concat(Enumerable.Repeat(emoji, 1_251)) })).Field);
+    }
 }

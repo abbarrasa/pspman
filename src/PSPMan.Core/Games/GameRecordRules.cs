@@ -4,6 +4,8 @@ public sealed record GameRecordValidationError(string Field, string Message);
 
 public static class GameRecordRules
 {
+    public static int? NormalizeDvdNumber(int? dvdNumber) => dvdNumber == 0 ? null : dvdNumber;
+
     public static IReadOnlyList<GameRecordValidationError> Validate(GameRecordInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -28,6 +30,27 @@ public static class GameRecordRules
         if (!Enum.IsDefined(input.Format))
         {
             errors.Add(new(nameof(GameRecordInput.Format), "Select a supported format."));
+        }
+
+        var dvdNumber = NormalizeDvdNumber(input.DvdNumber);
+
+        if (input.Medium == GameMedium.Dvd && dvdNumber is null or <= 0)
+        {
+            errors.Add(new(nameof(GameRecordInput.DvdNumber), "DVD number must be a positive integer."));
+        }
+        else if (input.Medium != GameMedium.Dvd && Enum.IsDefined(input.Medium) && dvdNumber is not null)
+        {
+            errors.Add(new(nameof(GameRecordInput.DvdNumber), "DVD number is only allowed for DVD records."));
+        }
+
+        if (input.SizeBytes <= 0)
+        {
+            errors.Add(new(nameof(GameRecordInput.SizeBytes), "Size must be a positive byte count."));
+        }
+
+        if (input.Notes?.Length > 2_500)
+        {
+            errors.Add(new(nameof(GameRecordInput.Notes), "Notes cannot exceed 2,500 UTF-16 code units."));
         }
 
         return errors;
