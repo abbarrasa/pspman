@@ -92,6 +92,35 @@ public class CatalogStartupTests
     }
 
     [Fact]
+    public void ConfirmDeleteRemovesOnlyTheCatalogRecordAndLeavesGameFileUntouched()
+    {
+        using var data = new TemporaryApplicationData();
+        var gameFile = System.IO.Path.Combine(data.Path, "GAMES", "Stored.rar");
+        var fileContents = new byte[] { 1, 2, 3, 4 };
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(gameFile)!);
+        File.WriteAllBytes(gameFile, fileContents);
+        var first = CatalogStartup.CreateMainViewModel(data.Path);
+        var deleted = first.CatalogService!.Create(new GameRecordInput(
+            "Deleted", GameMedium.Usb, null, "/GAMES/Stored.rar",
+            GameFormat.Iso, 1_024, null));
+        var retained = first.CatalogService.Create(new GameRecordInput(
+            "Retained", GameMedium.Usb, null, "/GAMES/Retained.rar",
+            GameFormat.Chd, 2_048, null));
+        Assert.True(deleted.IsSuccess);
+        Assert.True(retained.IsSuccess);
+
+        var viewModel = CatalogStartup.CreateMainViewModel(data.Path);
+        viewModel.SelectedGame = viewModel.Games.Single(record => record.Id == deleted.Value!.Id);
+        viewModel.DeleteSelectedCommand.Execute(null);
+        viewModel.ConfirmDeleteCommand.Execute(null);
+
+        Assert.Equal(retained.Value, Assert.Single(viewModel.Games));
+        Assert.Equal(fileContents, File.ReadAllBytes(gameFile));
+        var reopened = CatalogStartup.CreateMainViewModel(data.Path);
+        Assert.Equal(retained.Value, Assert.Single(reopened.Games));
+    }
+
+    [Fact]
     public void CorruptCatalogProducesAnErrorWithoutReplacingIt()
     {
         using var data = new TemporaryApplicationData();

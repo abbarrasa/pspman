@@ -17,14 +17,16 @@
     <Grid RowDefinitions="Auto,*" Margin="20">
         <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
         <Grid Grid.Row="1" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
-            <StackPanel Spacing="12">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding CatalogError}"
-                           IsVisible="{Binding HasStartupError}"
-                           TextWrapping="Wrap" />
-                <TextBlock Text="No games in the catalog."
-                           IsVisible="{Binding IsEmpty}" />
-                <ListBox ItemsSource="{Binding Games}"
+                <StackPanel Grid.Row="1">
+                    <TextBlock Text="{Binding CatalogError}"
+                               IsVisible="{Binding HasStartupError}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="No games in the catalog."
+                               IsVisible="{Binding IsEmpty}" />
+                </StackPanel>
+                <ListBox Grid.Row="2" ItemsSource="{Binding Games}"
                          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                          IsVisible="{Binding HasGames}">
                     <ListBox.ItemTemplate>
@@ -36,7 +38,24 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-            </StackPanel>
+                <StackPanel Grid.Row="3" Spacing="8" IsVisible="{Binding IsDeletePending}">
+                    <TextBlock Text="Delete this catalog record?"
+                               FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding PendingDeleteTitle}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Text="The game file will not be deleted."
+                               TextWrapping="Wrap" />
+                    <Button Content="Confirm delete"
+                            Command="{Binding ConfirmDeleteCommand}"
+                            HorizontalAlignment="Left" />
+                    <Button Content="Cancel"
+                            Command="{Binding CancelDeleteCommand}"
+                            HorizontalAlignment="Left" />
+                    <TextBlock Text="{Binding OperationError}"
+                               IsVisible="{Binding HasOperationError}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
 
             <TextBlock Grid.Column="1" Margin="20,0,0,0"
                        Text="Select a game to view its details."
@@ -65,6 +84,10 @@
                             Command="{Binding StartEditCommand}"
                             IsVisible="{Binding IsAdding}"
                             HorizontalAlignment="Left" Margin="0,12,0,0" />
+                    <Button Content="Delete selected"
+                            Command="{Binding DeleteSelectedCommand}"
+                            IsVisible="{Binding IsAdding}"
+                            HorizontalAlignment="Left" />
                 </StackPanel>
             </ScrollViewer>
 
