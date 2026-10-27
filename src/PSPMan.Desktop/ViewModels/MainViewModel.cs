@@ -13,6 +13,8 @@ public partial class MainViewModel : ViewModelBase
     private IReadOnlyList<GameRecord> _games = [];
     private Guid? _editingRecordId;
     private string? _editingGameTitle;
+    private Guid? _pendingDeleteRecordId;
+    private string? _pendingDeleteTitle;
 
     public MainViewModel() : this(null, null)
     {
@@ -56,6 +58,7 @@ public partial class MainViewModel : ViewModelBase
                 StartEditCommand.NotifyCanExecuteChanged();
                 SaveChangesCommand.NotifyCanExecuteChanged();
                 CancelEditCommand.NotifyCanExecuteChanged();
+                DeleteSelectedCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -64,6 +67,28 @@ public partial class MainViewModel : ViewModelBase
     {
         get => _editingGameTitle;
         private set => SetProperty(ref _editingGameTitle, value);
+    }
+
+    public Guid? PendingDeleteRecordId
+    {
+        get => _pendingDeleteRecordId;
+        private set
+        {
+            if (SetProperty(ref _pendingDeleteRecordId, value))
+            {
+                OnPropertyChanged(nameof(IsDeletePending));
+                DeleteSelectedCommand.NotifyCanExecuteChanged();
+                ConfirmDeleteCommand.NotifyCanExecuteChanged();
+                CancelDeleteCommand.NotifyCanExecuteChanged();
+                StartEditCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public string? PendingDeleteTitle
+    {
+        get => _pendingDeleteTitle;
+        private set => SetProperty(ref _pendingDeleteTitle, value);
     }
 
     public string? CatalogError { get; }
@@ -90,9 +115,15 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsEditing => EditingRecordId.HasValue;
 
+    public bool IsDeletePending => PendingDeleteRecordId.HasValue;
+
     public bool IsAdding => IsEditorAvailable && !IsEditing;
 
-    public bool CanStartEdit => IsEditorAvailable && !IsEditing && SelectedGame is not null;
+    public bool CanStartEdit => IsEditorAvailable && !IsEditing && !IsDeletePending && SelectedGame is not null;
+
+    public bool CanStartDelete => IsEditorAvailable && !IsEditing && !IsDeletePending && SelectedGame is not null;
+
+    public bool CanConfirmDelete => IsEditorAvailable && IsDeletePending;
 
     public bool CanSaveChanges => IsEditorAvailable && IsEditing;
 
@@ -155,7 +186,11 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedNotesText))]
     public partial GameRecord? SelectedGame { get; set; }
 
-    partial void OnSelectedGameChanged(GameRecord? value) => StartEditCommand.NotifyCanExecuteChanged();
+    partial void OnSelectedGameChanged(GameRecord? value)
+    {
+        StartEditCommand.NotifyCanExecuteChanged();
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(IsAdding))]
     private void AddGame()
@@ -254,6 +289,60 @@ public partial class MainViewModel : ViewModelBase
     private void CancelEdit()
     {
         EndEditing();
+        OperationError = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanStartDelete))]
+    private void DeleteSelected()
+    {
+        if (SelectedGame is null)
+        {
+            return;
+        }
+
+        PendingDeleteTitle = SelectedGame.Title;
+        PendingDeleteRecordId = SelectedGame.Id;
+        OperationError = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanConfirmDelete))]
+    private void ConfirmDelete()
+    {
+        if (PendingDeleteRecordId is not Guid id)
+        {
+            return;
+        }
+
+        OperationError = null;
+        var result = CatalogService!.Delete(id);
+        if (!result.IsSuccess)
+        {
+            OperationError = result.Error;
+            return;
+        }
+
+        var selectedId = SelectedGame?.Id;
+        var refresh = CatalogService.List();
+        Games = refresh.IsSuccess
+            ? (refresh.Value ?? []).Where(game => game.Id != id).ToArray()
+            : Games.Where(game => game.Id != id).ToArray();
+        SelectedGame = selectedId == id
+            ? null
+            : Games.FirstOrDefault(game => game.Id == selectedId);
+        PendingDeleteRecordId = null;
+        PendingDeleteTitle = null;
+
+        if (!refresh.IsSuccess)
+        {
+            OperationError = "The game record was deleted, but the catalog could not be refreshed.";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsDeletePending))]
+    private void CancelDelete()
+    {
+        PendingDeleteRecordId = null;
+        PendingDeleteTitle = null;
         OperationError = null;
     }
 

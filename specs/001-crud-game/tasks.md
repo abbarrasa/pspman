@@ -46,7 +46,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: A valid offline record appears in the list; invalid, duplicate, or failed saves show an error and do not appear as saved.
 - [x] **T18 (25 min; FR-3, FR-4, FR-6, FR-7, FR-9, FR-10):** Load a selected record into the editor and connect Save Changes to the service.
   Done when: Valid changes appear in list/details; invalid, duplicate, or failed changes leave the saved record visible and unchanged.
-- [ ] **T19 (25 min; FR-8, FR-10):** Add inline Delete, Confirm, and Cancel states with no game-file operation.
+- [x] **T19 (25 min; FR-8, FR-10):** Add inline Delete, Confirm, and Cancel states with no game-file operation.
   Done when: Cancel leaves the record; Confirm removes only its catalog row; a failed delete keeps it visible and displays an error.
 - [ ] **T20 (25 min; FR-10, FR-11):** Finish visible operation/startup errors and disable catalog mutations after corrupt-data detection.
   Done when: The user sees the failure, no unsuccessful change is presented as saved, and a corrupt catalog cannot be overwritten through the UI.
