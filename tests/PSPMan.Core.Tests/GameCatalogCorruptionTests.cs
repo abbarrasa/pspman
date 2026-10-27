@@ -26,6 +26,17 @@ public class GameCatalogCorruptionTests
     }
 
     [Fact]
+    public void CorruptRecordReadIsReportedWithoutReturningARecord()
+    {
+        var result = new GameCatalogService(new FailingRepository { Corrupt = true }).GetById(Record.Id);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.IsCorrupt);
+        Assert.Null(result.Value);
+        Assert.Contains("corrupt", result.Error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void CorruptCreatePrecheckDoesNotWrite()
     {
         var repository = new FailingRepository { Corrupt = true };
