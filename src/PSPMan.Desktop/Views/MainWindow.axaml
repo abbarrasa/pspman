@@ -29,10 +29,10 @@
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Grid.Row="1">
-                    <TextBlock Text="No games in the catalog."
+                    <TextBlock x:Name="EmptyStateText" Text="No games in the catalog."
                                IsVisible="{Binding IsEmpty}" />
                 </StackPanel>
-                <ListBox Grid.Row="2" ItemsSource="{Binding Games}"
+                <ListBox x:Name="GamesList" Grid.Row="2" ItemsSource="{Binding Games}"
                          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                          IsVisible="{Binding HasGames}">
                     <ListBox.ItemTemplate>
@@ -68,21 +68,21 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="Game details" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock Text="Title" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedTitleText}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="SelectedTitleText" Text="{Binding SelectedTitleText}" TextWrapping="Wrap" />
                     <TextBlock Text="Medium" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedMediumText}" />
+                    <TextBlock x:Name="SelectedMediumText" Text="{Binding SelectedMediumText}" />
                     <TextBlock Text="DVD number" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedDvdNumberText}" />
+                    <TextBlock x:Name="SelectedDvdNumberText" Text="{Binding SelectedDvdNumberText}" />
                     <TextBlock Text="Location" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedLocationText}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="SelectedLocationText" Text="{Binding SelectedLocationText}" TextWrapping="Wrap" />
                     <TextBlock Text="Format" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedFormatText}" />
+                    <TextBlock x:Name="SelectedFormatText" Text="{Binding SelectedFormatText}" />
                     <TextBlock Text="Decompressed size (bytes)" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedSizeText}" />
+                    <TextBlock x:Name="SelectedSizeText" Text="{Binding SelectedSizeText}" />
                     <TextBlock Text="Approximate size (binary units)" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedReadableSizeText}" />
+                    <TextBlock x:Name="SelectedReadableSizeText" Text="{Binding SelectedReadableSizeText}" />
                     <TextBlock Text="Notes" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding SelectedNotesText}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="SelectedNotesText" Text="{Binding SelectedNotesText}" TextWrapping="Wrap" />
                     <Button Content="Edit selected"
                             Command="{Binding StartEditCommand}"
                             IsVisible="{Binding IsAdding}"
@@ -105,12 +105,12 @@
                     <TextBlock Text="Fields marked * are required." TextWrapping="Wrap" />
 
                     <TextBlock Text="Title *" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBox Text="{Binding Editor.Title, Mode=TwoWay}" />
+                    <TextBox x:Name="TitleInput" Text="{Binding Editor.Title, Mode=TwoWay}" />
                     <TextBlock Text="{Binding Editor.TitleError}"
                                IsVisible="{Binding Editor.HasTitleError}" TextWrapping="Wrap" />
 
                     <TextBlock Text="Medium *" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <ComboBox ItemsSource="{Binding Editor.MediumChoices}"
+                    <ComboBox x:Name="MediumInput" ItemsSource="{Binding Editor.MediumChoices}"
                               SelectedItem="{Binding Editor.SelectedMedium, Mode=TwoWay}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:GameMediumChoice">
@@ -123,19 +123,19 @@
 
                     <TextBlock Text="DVD number *" FontWeight="SemiBold" Margin="0,8,0,0"
                                IsVisible="{Binding Editor.ShowDvdNumber}" />
-                    <TextBox Text="{Binding Editor.DvdNumberText, Mode=TwoWay}"
+                    <TextBox x:Name="DvdNumberInput" Text="{Binding Editor.DvdNumberText, Mode=TwoWay}"
                              IsVisible="{Binding Editor.ShowDvdNumber}" />
                     <TextBlock Text="{Binding Editor.DvdNumberError}"
                                IsVisible="{Binding Editor.HasDvdNumberError}" TextWrapping="Wrap" />
 
                     <TextBlock Text="Location *" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBox Text="{Binding Editor.Location, Mode=TwoWay}"
+                    <TextBox x:Name="LocationInput" Text="{Binding Editor.Location, Mode=TwoWay}"
                              PlaceholderText="/DevHook/GAMES/Game.rar" />
                     <TextBlock Text="{Binding Editor.LocationError}"
                                IsVisible="{Binding Editor.HasLocationError}" TextWrapping="Wrap" />
 
                     <TextBlock Text="Format *" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <ComboBox ItemsSource="{Binding Editor.FormatChoices}"
+                    <ComboBox x:Name="FormatInput" ItemsSource="{Binding Editor.FormatChoices}"
                               SelectedItem="{Binding Editor.SelectedFormat, Mode=TwoWay}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:GameFormatChoice">
@@ -148,14 +148,14 @@
 
                     <TextBlock Text="Decompressed size entered by you (bytes) *"
                                FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap" />
-                    <TextBox Text="{Binding Editor.SizeBytesText, Mode=TwoWay}" />
+                    <TextBox x:Name="SizeInput" Text="{Binding Editor.SizeBytesText, Mode=TwoWay}" />
                     <TextBlock Text="{Binding Editor.SizeBytesError}"
                                IsVisible="{Binding Editor.HasSizeBytesError}" TextWrapping="Wrap" />
                     <TextBlock Text="Approximate size (binary units)" />
                     <TextBlock Text="{Binding Editor.HumanReadableSizeText}" />
 
                     <TextBlock Text="Notes" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBox Text="{Binding Editor.Notes, Mode=TwoWay}"
+                    <TextBox x:Name="NotesInput" Text="{Binding Editor.Notes, Mode=TwoWay}"
                              AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
                     <TextBlock Text="{Binding Editor.NotesError}"
                                IsVisible="{Binding Editor.HasNotesError}" TextWrapping="Wrap" />
@@ -163,7 +163,7 @@
                     <Button Content="Check fields"
                             Command="{Binding Editor.CheckFieldsCommand}"
                             HorizontalAlignment="Left" Margin="0,12,0,0" />
-                    <Button Content="Add game"
+                    <Button x:Name="AddGameButton" Content="Add game"
                             Command="{Binding AddGameCommand}"
                             IsVisible="{Binding IsAdding}"
                             HorizontalAlignment="Left" />
