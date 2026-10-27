@@ -18,7 +18,7 @@
         <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
         <StackPanel Grid.Row="1" Margin="0,12,0,0" Spacing="4"
                     IsVisible="{Binding HasAnyError}">
-            <TextBlock Text="{Binding CatalogError}"
+            <TextBlock x:Name="CatalogErrorText" Text="{Binding CatalogError}"
                        IsVisible="{Binding HasStartupError}"
                        FontWeight="SemiBold" TextWrapping="Wrap" />
             <TextBlock x:Name="OperationErrorText" Text="{Binding OperationError}"
@@ -44,17 +44,17 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <StackPanel Grid.Row="3" Spacing="8" IsVisible="{Binding IsDeletePending}">
+                <StackPanel x:Name="DeleteConfirmationPanel" Grid.Row="3" Spacing="8" IsVisible="{Binding IsDeletePending}">
                     <TextBlock Text="Delete this catalog record?"
                                FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding PendingDeleteTitle}"
+                    <TextBlock x:Name="PendingDeleteTitleText" Text="{Binding PendingDeleteTitle}"
                                TextWrapping="Wrap" />
                     <TextBlock Text="The game file will not be deleted."
                                TextWrapping="Wrap" />
-                    <Button Content="Confirm delete"
+                    <Button x:Name="ConfirmDeleteButton" Content="Confirm delete"
                             Command="{Binding ConfirmDeleteCommand}"
                             HorizontalAlignment="Left" />
-                    <Button Content="Cancel"
+                    <Button x:Name="CancelDeleteButton" Content="Cancel"
                             Command="{Binding CancelDeleteCommand}"
                             HorizontalAlignment="Left" />
                 </StackPanel>
@@ -87,7 +87,7 @@
                             Command="{Binding StartEditCommand}"
                             IsVisible="{Binding IsAdding}"
                             HorizontalAlignment="Left" Margin="0,12,0,0" />
-                    <Button Content="Delete selected"
+                    <Button x:Name="DeleteSelectedButton" Content="Delete selected"
                             Command="{Binding DeleteSelectedCommand}"
                             IsVisible="{Binding IsAdding}"
                             HorizontalAlignment="Left" />

@@ -332,6 +332,151 @@ public class GameCatalogFlowTests
         Assert.Equal(original, Assert.Single(new SqliteGameRecordRepository(data.MovedCatalogPath).List()));
     }
 
+    [Fact]
+    public async Task CancelDeleteLeavesCatalogRecordAndGameFileUnchanged()
+    {
+        using var data = new TemporaryApplicationData();
+        var record = Seed(data.Path, "First", "/GAMES/First.rar");
+        var gameFile = System.IO.Path.Combine(data.Path, "GAMES", "First.rar");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(gameFile)!);
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        File.WriteAllBytes(gameFile, bytes);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<ListBox>(window, "GamesList").SelectedItem = record;
+                Click(window, "DeleteSelectedButton");
+
+                Assert.True(Control<StackPanel>(window, "DeleteConfirmationPanel").IsVisible);
+                Assert.Equal("First", Control<TextBlock>(window, "PendingDeleteTitleText").Text);
+                Assert.True(Control<Button>(window, "ConfirmDeleteButton").IsEnabled);
+                Assert.Equal(record, Assert.Single(((MainViewModel)window.DataContext!).Games));
+
+                Click(window, "CancelDeleteButton");
+
+                Assert.False(Control<StackPanel>(window, "DeleteConfirmationPanel").IsVisible);
+                Assert.Equal(record, Assert.Single(((MainViewModel)window.DataContext!).Games));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(record, Assert.Single(CatalogStartup.CreateMainViewModel(data.Path).Games));
+        Assert.Equal(bytes, File.ReadAllBytes(gameFile));
+    }
+
+    [Fact]
+    public async Task ConfirmDeleteRemovesOnlyRequestedRecordAndKeepsGameFile()
+    {
+        using var data = new TemporaryApplicationData();
+        var first = Seed(data.Path, "First", "/GAMES/First.rar");
+        var second = Seed(data.Path, "Second", "/GAMES/Second.rar");
+        var gameFile = System.IO.Path.Combine(data.Path, "GAMES", "First.rar");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(gameFile)!);
+        var bytes = new byte[] { 5, 6, 7, 8 };
+        File.WriteAllBytes(gameFile, bytes);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                var list = Control<ListBox>(window, "GamesList");
+                list.SelectedItem = first;
+                Click(window, "DeleteSelectedButton");
+                list.SelectedItem = second;
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.True(Control<StackPanel>(window, "DeleteConfirmationPanel").IsVisible);
+                Assert.Equal("First", Control<TextBlock>(window, "PendingDeleteTitleText").Text);
+                Click(window, "ConfirmDeleteButton");
+
+                Assert.False(Control<StackPanel>(window, "DeleteConfirmationPanel").IsVisible);
+                Assert.Equal(second, Assert.Single(((MainViewModel)window.DataContext!).Games));
+                Assert.Equal(second, Assert.Single(list.ItemsSource!.Cast<GameRecord>()));
+                Assert.Null(Control<TextBlock>(window, "OperationErrorText").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(second, Assert.Single(CatalogStartup.CreateMainViewModel(data.Path).Games));
+        Assert.Equal(bytes, File.ReadAllBytes(gameFile));
+    }
+
+    [Fact]
+    public async Task FailedDeleteLeavesRecordVisibleAndShowsAnError()
+    {
+        using var data = new TemporaryApplicationData();
+        var record = Seed(data.Path, "First", "/GAMES/First.rar");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<ListBox>(window, "GamesList").SelectedItem = record;
+                Click(window, "DeleteSelectedButton");
+                File.Move(data.CatalogPath, data.MovedCatalogPath);
+                Click(window, "ConfirmDeleteButton");
+
+                Assert.True(Control<StackPanel>(window, "DeleteConfirmationPanel").IsVisible);
+                Assert.Contains("Unable to delete", Control<TextBlock>(window, "OperationErrorText").Text);
+                Assert.True(Control<TextBlock>(window, "OperationErrorText").IsVisible);
+                Assert.Equal(record, Assert.Single(((MainViewModel)window.DataContext!).Games));
+                Assert.Equal(record, Control<ListBox>(window, "GamesList").SelectedItem);
+                Assert.False(File.Exists(data.CatalogPath));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(record, Assert.Single(new SqliteGameRecordRepository(data.MovedCatalogPath).List()));
+    }
+
+    [Fact]
+    public async Task CorruptCatalogStartupShowsErrorWithoutOverwritingData()
+    {
+        using var data = new TemporaryApplicationData();
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(data.CatalogPath)!);
+        var bytes = new byte[] { 0, 1, 2, 3, 4, 5 };
+        File.WriteAllBytes(data.CatalogPath, bytes);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                var error = Control<TextBlock>(window, "CatalogErrorText");
+                Assert.True(error.IsVisible);
+                Assert.Contains("corrupt", error.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.False(Control<Button>(window, "AddGameButton").IsVisible);
+                Assert.False(Control<ListBox>(window, "GamesList").IsVisible);
+                Assert.False(Control<TextBlock>(window, "EmptyStateText").IsVisible);
+                Assert.False(((MainViewModel)window.DataContext!).AddGameCommand.CanExecute(null));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(bytes, File.ReadAllBytes(data.CatalogPath));
+    }
+
     private static GameRecord Seed(string root, string title, string location)
     {
         var viewModel = CatalogStartup.CreateMainViewModel(root);
