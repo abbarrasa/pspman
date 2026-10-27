@@ -61,5 +61,5 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests prove the visible confirmation and error states and protect records when deletion is cancelled or fails.
 - [x] **T24 (30 min; FR-1–FR-11):** Run the full build/tests, produce a line-and-branch coverage report, map every FR to passing tests, and record justified coverage gaps.
   Done when: The solution builds, all tests pass, the report exists, and every FR has unit, integration, or functional evidence as applicable.
-- [ ] **T25 (25 min; FR-1–FR-11):** Demonstrate create, list/view, edit, duplicate rejection, confirmed/cancelled deletion, and offline editing on a graphical desktop; update project memory to the implemented state.
+- [x] **T25 (25 min; FR-1–FR-11):** Demonstrate create, list/view, edit, duplicate rejection, confirmed/cancelled deletion, and offline editing on a graphical desktop; update project memory to the implemented state.
   Done when: The manual flow succeeds, any deviation is recorded, and project memory reflects actual behavior rather than the proposed plan.
