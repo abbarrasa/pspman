@@ -4,6 +4,12 @@ namespace PSPMan.Core.Tests;
 
 public class GameCatalogServiceTests
 {
+    [Fact]
+    public void ConstructorRejectsMissingRepository()
+    {
+        Assert.Throws<ArgumentNullException>(() => new GameCatalogService(null!));
+    }
+
     private static readonly GameRecordInput ValidInput = new(
         "New Game",
         GameMedium.Usb,

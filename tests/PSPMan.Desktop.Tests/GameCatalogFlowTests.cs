@@ -75,6 +75,35 @@ public class GameCatalogFlowTests
     }
 
     [Fact]
+    public async Task MemoryCardRecordDisplaysSavedMediumWithoutConnectedMedia()
+    {
+        using var data = new TemporaryApplicationData();
+        var saved = CatalogStartup.CreateMainViewModel(data.Path).CatalogService!.Create(
+            new GameRecordInput("Portable", GameMedium.MemoryCard, null,
+                "/GAMES/Portable.rar", GameFormat.Chd, 2_048, null));
+        Assert.True(saved.IsSuccess);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<ListBox>(window, "GamesList").SelectedItem = saved.Value;
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("Memory Card", Control<TextBlock>(window, "SelectedMediumText").Text);
+                Assert.Equal("Not applicable", Control<TextBlock>(window, "SelectedDvdNumberText").Text);
+                Assert.Equal("CHD", Control<TextBlock>(window, "SelectedFormatText").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task EditorControlsCreateAGameThatAppearsInListAndPersists()
     {
         using var data = new TemporaryApplicationData();
