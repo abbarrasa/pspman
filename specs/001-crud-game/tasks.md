@@ -27,7 +27,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 - [x] **T10 (30 min; FR-1, FR-3, FR-11):** Add Microsoft.Data.Sqlite and the repository's schema creation plus list/read against disposable databases; add the integration test project to the solution.
   Done when: Integration tests open a fresh catalog, read an empty list, and round-trip all record fields without touching a real user catalog.
-- [ ] **T11 (25 min; FR-5, FR-6, FR-10):** Add parameterized insert and the two case-sensitive database uniqueness rules; test persistence after reopening and duplicate rejection.
+- [x] **T11 (25 min; FR-5, FR-6, FR-10):** Add parameterized insert and the two case-sensitive database uniqueness rules; test persistence after reopening and duplicate rejection.
   Done when: Integration tests reject duplicate DVD and non-DVD keys, allow case-different Locations, and preserve existing rows after rejection.
 - [ ] **T12 (30 min; FR-6, FR-7, FR-8, FR-10):** Add parameterized atomic update/delete and integration tests for changed values, edited-key conflicts, and record-only deletion.
   Done when: Reopened catalogs show successful edits/deletes, and failed or conflicting writes leave prior rows intact.

@@ -67,16 +67,157 @@ public class SqliteGameRecordRepositoryTests
         Assert.Equal(original, File.ReadAllBytes(catalog.Path));
     }
 
+    [Fact]
+    public void CreatePersistsAllFieldsAfterReopening()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        var game = DvdGame with { Title = "Game'); DROP TABLE GameRecords; --" };
+
+        repository.Create(game);
+
+        var reopened = new SqliteGameRecordRepository(catalog.Path);
+        Assert.Equal(game, reopened.GetById(game.Id));
+        Assert.Equal(game, Assert.Single(reopened.List()));
+    }
+
+    [Fact]
+    public void DuplicateDvdKeyIsRejectedWithoutChangingSavedRow()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        var duplicate = DvdGame with
+        {
+            Id = Guid.NewGuid(),
+            Title = "Other title",
+            Format = GameFormat.Chd,
+            Notes = null
+        };
+
+        Assert.Throws<SqliteException>(() => repository.Create(duplicate));
+
+        var reopened = new SqliteGameRecordRepository(catalog.Path);
+        Assert.Equal(DvdGame, Assert.Single(reopened.List()));
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Usb)]
+    [InlineData(GameMedium.MemoryCard)]
+    public void DuplicateNonDvdKeyIsRejectedWithoutChangingSavedRow(GameMedium medium)
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        var original = UsbGame with { Medium = medium };
+        repository.Create(original);
+        var duplicate = original with { Id = Guid.NewGuid(), Title = "Other title" };
+
+        Assert.Throws<SqliteException>(() => repository.Create(duplicate));
+
+        var reopened = new SqliteGameRecordRepository(catalog.Path);
+        Assert.Equal(original, Assert.Single(reopened.List()));
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Dvd)]
+    [InlineData(GameMedium.Usb)]
+    public void LocationCaseDifferenceRemainsDistinct(GameMedium medium)
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        var original = DvdGame with
+        {
+            Medium = medium,
+            DvdNumber = medium == GameMedium.Dvd ? 2 : null
+        };
+        var other = original with
+        {
+            Id = Guid.NewGuid(),
+            Location = original.Location.ToLowerInvariant()
+        };
+
+        repository.Create(original);
+        repository.Create(other);
+
+        Assert.Equal(2, new SqliteGameRecordRepository(catalog.Path).List().Count);
+    }
+
+    [Fact]
+    public void DvdNumberAndMediumDistinguishKeys()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        var otherDvd = DvdGame with { Id = Guid.NewGuid(), DvdNumber = 3 };
+        var usb = DvdGame with { Id = Guid.NewGuid(), Medium = GameMedium.Usb, DvdNumber = null };
+        var memoryCard = usb with { Id = Guid.NewGuid(), Medium = GameMedium.MemoryCard };
+
+        repository.Create(DvdGame);
+        repository.Create(otherDvd);
+        repository.Create(usb);
+        repository.Create(memoryCard);
+
+        Assert.Equal(4, new SqliteGameRecordRepository(catalog.Path).List().Count);
+    }
+
+    [Fact]
+    public void ExistingCatalogReceivesUniquenessIndexes()
+    {
+        using var catalog = new TemporaryCatalog();
+        CreateLegacyCatalog(catalog.Path);
+        Seed(catalog.Path, DvdGame);
+
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        var duplicate = DvdGame with { Id = Guid.NewGuid() };
+
+        Assert.Throws<SqliteException>(() => repository.Create(duplicate));
+        Assert.Equal(DvdGame, Assert.Single(repository.List()));
+    }
+
+    [Fact]
+    public void FailedIndexMigrationPreservesRowsAndLeavesNoPartialIndexes()
+    {
+        using var catalog = new TemporaryCatalog();
+        CreateLegacyCatalog(catalog.Path);
+        Seed(catalog.Path, UsbGame);
+        Seed(catalog.Path, UsbGame with { Id = Guid.NewGuid(), Title = "Duplicate" });
+
+        Assert.Throws<SqliteException>(() => new SqliteGameRecordRepository(catalog.Path));
+
+        using var connection = OpenConnection(catalog.Path);
+        using var countRows = connection.CreateCommand();
+        countRows.CommandText = "SELECT COUNT(*) FROM GameRecords";
+        Assert.Equal(2L, countRows.ExecuteScalar());
+        using var countIndexes = connection.CreateCommand();
+        countIndexes.CommandText = """
+            SELECT COUNT(*) FROM sqlite_master
+            WHERE type = 'index' AND tbl_name = 'GameRecords'
+              AND name NOT LIKE 'sqlite_autoindex%'
+            """;
+        Assert.Equal(0L, countIndexes.ExecuteScalar());
+    }
+
+    private static void CreateLegacyCatalog(string path)
+    {
+        using var connection = OpenConnection(path);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE GameRecords (
+                Id TEXT PRIMARY KEY NOT NULL,
+                Title TEXT NOT NULL,
+                Medium INTEGER NOT NULL,
+                DvdNumber INTEGER,
+                Location TEXT NOT NULL,
+                Format INTEGER NOT NULL,
+                SizeBytes INTEGER NOT NULL,
+                Notes TEXT
+            )
+            """;
+        command.ExecuteNonQuery();
+    }
+
     private static void Seed(string path, GameRecord record)
     {
-        var connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = path,
-            Pooling = false
-        }.ToString();
-
-        using var connection = new SqliteConnection(connectionString);
-        connection.Open();
+        using var connection = OpenConnection(path);
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO GameRecords (Id, Title, Medium, DvdNumber, Location, Format, SizeBytes, Notes)
@@ -91,6 +232,18 @@ public class SqliteGameRecordRepositoryTests
         command.Parameters.AddWithValue("$sizeBytes", record.SizeBytes);
         command.Parameters.AddWithValue("$notes", (object?)record.Notes ?? DBNull.Value);
         command.ExecuteNonQuery();
+    }
+
+    private static SqliteConnection OpenConnection(string path)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Pooling = false
+        }.ToString();
+        var connection = new SqliteConnection(connectionString);
+        connection.Open();
+        return connection;
     }
 
     private sealed class TemporaryCatalog : IDisposable
