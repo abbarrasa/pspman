@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using PSPMan.Core.Games;
 using PSPMan.Desktop.ViewModels;
 using PSPMan.Desktop.Views;
+using PSPMan.Infraestructure.Games;
 
 namespace PSPMan.Desktop.Tests;
 
@@ -132,6 +133,247 @@ public class GameCatalogFlowTests
         Assert.Equal("Offline Game", Assert.Single(reopened.Games).Title);
     }
 
+    [Fact]
+    public async Task InvalidFieldsShowErrorsAndDoNotPersist()
+    {
+        using var data = new TemporaryApplicationData();
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<TextBox>(window, "TitleInput").Text = " \t ";
+                SelectMedium(window, GameMedium.Dvd);
+                Control<TextBox>(window, "DvdNumberInput").Text = "0";
+                Control<TextBox>(window, "LocationInput").Text = "/GAMES/../Broken.rar";
+                SelectFormat(window, GameFormat.Iso);
+                Control<TextBox>(window, "SizeInput").Text = "0";
+                Control<TextBox>(window, "NotesInput").Text = new string('x', 2_501);
+                Click(window, "AddGameButton");
+
+                Assert.Equal("Title is required.", Control<TextBlock>(window, "TitleErrorText").Text);
+                Assert.True(Control<TextBlock>(window, "TitleErrorText").IsVisible);
+                Assert.Contains("DVD number", Control<TextBlock>(window, "DvdNumberErrorText").Text);
+                Assert.Contains("Location", Control<TextBlock>(window, "LocationErrorText").Text);
+                Assert.Contains("Size", Control<TextBlock>(window, "SizeErrorText").Text);
+                Assert.Contains("2,500", Control<TextBlock>(window, "NotesErrorText").Text);
+                Assert.Equal("Correct the fields above.", Control<TextBlock>(window, "OperationErrorText").Text);
+                Assert.Empty(((MainViewModel)window.DataContext!).Games);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Empty(CatalogStartup.CreateMainViewModel(data.Path).Games);
+    }
+
+    [Fact]
+    public async Task DuplicateCreateShowsConflictAndLeavesSavedRecordUnchanged()
+    {
+        using var data = new TemporaryApplicationData();
+        var original = Seed(data.Path, "Original", "/GAMES/Same.rar");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                FillUsbEditor(window, "Different title", original.Location);
+                Click(window, "AddGameButton");
+
+                Assert.Contains("same medium", Control<TextBlock>(window, "OperationErrorText").Text);
+                Assert.Equal(original, Assert.Single(((MainViewModel)window.DataContext!).Games));
+                Assert.Equal("Different title", Control<TextBox>(window, "TitleInput").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(original, Assert.Single(CatalogStartup.CreateMainViewModel(data.Path).Games));
+    }
+
+    [Fact]
+    public async Task OfflineGameCanBeEditedThroughControlsAndReopened()
+    {
+        using var data = new TemporaryApplicationData();
+        var original = Seed(data.Path, "Original", "/DISCONNECTED/GAMES/Original.rar");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<ListBox>(window, "GamesList").SelectedItem = original;
+                Click(window, "EditSelectedButton");
+                Assert.Equal("Original", Control<TextBox>(window, "TitleInput").Text);
+                Assert.Equal(original.Location, Control<TextBox>(window, "LocationInput").Text);
+
+                Control<TextBox>(window, "TitleInput").Text = "Corrected";
+                Control<TextBox>(window, "LocationInput").Text = "/DISCONNECTED/GAMES/Corrected.rar";
+                Control<TextBox>(window, "SizeInput").Text = "4096";
+                Click(window, "SaveChangesButton");
+
+                var saved = Assert.Single(((MainViewModel)window.DataContext!).Games);
+                Assert.Equal(original.Id, saved.Id);
+                Assert.Equal("Corrected", saved.Title);
+                Assert.Equal("Corrected", Control<TextBlock>(window, "SelectedTitleText").Text);
+                Assert.Equal("/DISCONNECTED/GAMES/Corrected.rar",
+                    Control<TextBlock>(window, "SelectedLocationText").Text);
+                Assert.Equal("4096", Control<TextBlock>(window, "SelectedSizeText").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal("Corrected", Assert.Single(CatalogStartup.CreateMainViewModel(data.Path).Games).Title);
+    }
+
+    [Fact]
+    public async Task DuplicateEditShowsConflictAndLeavesBothRecordsUnchanged()
+    {
+        using var data = new TemporaryApplicationData();
+        var first = Seed(data.Path, "First", "/GAMES/First.rar");
+        var second = Seed(data.Path, "Second", "/GAMES/Second.rar");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<ListBox>(window, "GamesList").SelectedItem = second;
+                Click(window, "EditSelectedButton");
+                Control<TextBox>(window, "LocationInput").Text = first.Location;
+                Click(window, "SaveChangesButton");
+
+                Assert.Contains("same medium", Control<TextBlock>(window, "OperationErrorText").Text);
+                Assert.Equal("Second", Control<TextBlock>(window, "SelectedTitleText").Text);
+                Assert.Equal(first.Location, Control<TextBox>(window, "LocationInput").Text);
+                Assert.Equal([first, second], ((MainViewModel)window.DataContext!).Games);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal([first, second], CatalogStartup.CreateMainViewModel(data.Path).Games);
+    }
+
+    [Fact]
+    public async Task FailedCreateShowsErrorAndDoesNotClaimItWasSaved()
+    {
+        using var data = new TemporaryApplicationData();
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                FillUsbEditor(window, "Draft", "/GAMES/Draft.rar");
+                File.Move(data.CatalogPath, data.MovedCatalogPath);
+                Click(window, "AddGameButton");
+
+                Assert.Contains("Unable to save", Control<TextBlock>(window, "OperationErrorText").Text);
+                Assert.Empty(((MainViewModel)window.DataContext!).Games);
+                Assert.Equal("Draft", Control<TextBox>(window, "TitleInput").Text);
+                Assert.False(File.Exists(data.CatalogPath));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Empty(new SqliteGameRecordRepository(data.MovedCatalogPath).List());
+    }
+
+    [Fact]
+    public async Task FailedEditShowsErrorAndKeepsPersistedRecordAndDraft()
+    {
+        using var data = new TemporaryApplicationData();
+        var original = Seed(data.Path, "Original", "/GAMES/Original.rar");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path);
+            try
+            {
+                Control<ListBox>(window, "GamesList").SelectedItem = original;
+                Click(window, "EditSelectedButton");
+                Control<TextBox>(window, "TitleInput").Text = "Unsaved draft";
+                File.Move(data.CatalogPath, data.MovedCatalogPath);
+                Click(window, "SaveChangesButton");
+
+                Assert.Contains("Unable to update", Control<TextBlock>(window, "OperationErrorText").Text);
+                Assert.Equal(original, Assert.Single(((MainViewModel)window.DataContext!).Games));
+                Assert.Equal("Original", Control<TextBlock>(window, "SelectedTitleText").Text);
+                Assert.Equal("Unsaved draft", Control<TextBox>(window, "TitleInput").Text);
+                Assert.False(File.Exists(data.CatalogPath));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(original, Assert.Single(new SqliteGameRecordRepository(data.MovedCatalogPath).List()));
+    }
+
+    private static GameRecord Seed(string root, string title, string location)
+    {
+        var viewModel = CatalogStartup.CreateMainViewModel(root);
+        var result = viewModel.CatalogService!.Create(new GameRecordInput(
+            title, GameMedium.Usb, null, location, GameFormat.Iso, 2_048, null));
+        Assert.True(result.IsSuccess);
+        return result.Value!;
+    }
+
+    private static void FillUsbEditor(MainWindow window, string title, string location)
+    {
+        Control<TextBox>(window, "TitleInput").Text = title;
+        SelectMedium(window, GameMedium.Usb);
+        Control<TextBox>(window, "LocationInput").Text = location;
+        SelectFormat(window, GameFormat.Iso);
+        Control<TextBox>(window, "SizeInput").Text = "2048";
+    }
+
+    private static void SelectMedium(MainWindow window, GameMedium value)
+    {
+        var combo = Control<ComboBox>(window, "MediumInput");
+        combo.SelectedItem = combo.ItemsSource!.Cast<GameMediumChoice>().Single(choice => choice.Value == value);
+    }
+
+    private static void SelectFormat(MainWindow window, GameFormat value)
+    {
+        var combo = Control<ComboBox>(window, "FormatInput");
+        combo.SelectedItem = combo.ItemsSource!.Cast<GameFormatChoice>().Single(choice => choice.Value == value);
+    }
+
+    private static void Click(MainWindow window, string buttonName)
+    {
+        Dispatcher.UIThread.RunJobs();
+        var button = Control<Button>(window, buttonName);
+        button.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(button.IsEnabled);
+        button.Focus();
+        window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static MainWindow OpenWindow(string applicationDataRoot)
     {
         var window = new MainWindow
@@ -152,6 +394,10 @@ public class GameCatalogFlowTests
             System.IO.Path.GetTempPath(), "PSPMan.Headless.Tests", Guid.NewGuid().ToString());
 
         public TemporaryApplicationData() => Directory.CreateDirectory(Path);
+
+        public string CatalogPath => System.IO.Path.Combine(Path, "PSPMan", "catalog.db");
+
+        public string MovedCatalogPath => System.IO.Path.Combine(Path, "PSPMan", "moved.db");
 
         public void Dispose() => Directory.Delete(Path, recursive: true);
     }
