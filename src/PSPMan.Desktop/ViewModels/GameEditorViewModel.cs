@@ -198,6 +198,19 @@ public partial class GameEditorViewModel : ViewModelBase
         return HasAnyFieldError ? null : input;
     }
 
+    public void Reset()
+    {
+        _hasCheckedFields = false;
+        Title = string.Empty;
+        SelectedMedium = null;
+        DvdNumberText = string.Empty;
+        Location = string.Empty;
+        SelectedFormat = null;
+        SizeBytesText = string.Empty;
+        Notes = string.Empty;
+        ClearErrors();
+    }
+
     private void RecheckFieldsIfNeeded()
     {
         if (_hasCheckedFields)

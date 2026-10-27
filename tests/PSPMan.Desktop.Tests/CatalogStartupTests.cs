@@ -40,6 +40,31 @@ public class CatalogStartupTests
     }
 
     [Fact]
+    public void AddGameCommandPersistsAnOfflineRecordAcrossStartup()
+    {
+        using var data = new TemporaryApplicationData();
+        var viewModel = CatalogStartup.CreateMainViewModel(data.Path);
+        viewModel.Editor.Title = "Offline Game";
+        viewModel.Editor.SelectedMedium = viewModel.Editor.MediumChoices.Single(choice =>
+            choice.Value == GameMedium.MemoryCard);
+        viewModel.Editor.Location = "/DISCONNECTED/GAMES/Offline.rar";
+        viewModel.Editor.SelectedFormat = viewModel.Editor.FormatChoices.Single(choice =>
+            choice.Value == GameFormat.Iso);
+        viewModel.Editor.SizeBytesText = "1048576";
+
+        viewModel.AddGameCommand.Execute(null);
+
+        var created = Assert.Single(viewModel.Games);
+        Assert.Null(viewModel.OperationError);
+        Assert.Equal(created, viewModel.SelectedGame);
+
+        var reopened = CatalogStartup.CreateMainViewModel(data.Path);
+
+        Assert.Equal(created, Assert.Single(reopened.Games));
+        Assert.Null(reopened.CatalogError);
+    }
+
+    [Fact]
     public void CorruptCatalogProducesAnErrorWithoutReplacingIt()
     {
         using var data = new TemporaryApplicationData();
