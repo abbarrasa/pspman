@@ -17,6 +17,8 @@ public class CatalogStartupTests
         Assert.False(viewModel.HasStartupError);
         Assert.True(File.Exists(data.CatalogPath));
         Assert.Empty(viewModel.CatalogService.List().Value!);
+        Assert.True(viewModel.IsEmpty);
+        Assert.Empty(viewModel.Games);
     }
 
     [Fact]
@@ -34,6 +36,7 @@ public class CatalogStartupTests
 
         Assert.True(reopened.IsCatalogAvailable);
         Assert.Equal(saved.Value, Assert.Single(reopened.CatalogService!.List().Value!));
+        Assert.Equal(saved.Value, Assert.Single(reopened.Games));
     }
 
     [Fact]
