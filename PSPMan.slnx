@@ -6,6 +6,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj" />
+    <Project Path="tests/PSPMan.Desktop.Tests/PSPMan.Desktop.Tests.csproj" />
     <Project Path="tests/PSPMan.Infraestructure.Tests/PSPMan.Infraestructure.Tests.csproj" />
   </Folder>
 </Solution>

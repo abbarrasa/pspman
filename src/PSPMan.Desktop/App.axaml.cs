@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using PSPMan.Desktop.ViewModels;
 using PSPMan.Desktop.Views;
 
 namespace PSPMan.Desktop;
@@ -19,7 +18,7 @@ public partial class App : Application
         {
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainViewModel(),
+                DataContext = CatalogStartup.CreateMainViewModel(),
             };
         }
 

@@ -15,8 +15,11 @@
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <TextBox Text="{Binding Greeting}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center" />
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBox Text="{Binding Greeting}" />
+        <TextBlock Text="{Binding CatalogError}"
+                   IsVisible="{Binding HasStartupError}"
+                   TextWrapping="Wrap" />
+    </StackPanel>
 
 </Window>

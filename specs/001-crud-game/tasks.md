@@ -36,7 +36,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 ## Desktop flow
 
-- [ ] **T14 (25 min; FR-1, FR-10, FR-11):** Compose the repository and service at startup using a local application-data catalog path; expose startup failures to the main view model.
+- [x] **T14 (25 min; FR-1, FR-10, FR-11):** Compose the repository and service at startup using a local application-data catalog path; expose startup failures to the main view model.
   Done when: The app builds, starts with a fresh catalog, and a corrupt catalog yields an error without replacing its file.
 - [ ] **T15 (25 min; FR-1, FR-3):** Replace the sample greeting with a typed-bound catalog list, selection/details, and empty state.
   Done when: A fresh catalog displays the empty state; saved records can be selected and all saved values are visible.
