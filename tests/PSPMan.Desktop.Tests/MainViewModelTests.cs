@@ -17,6 +17,8 @@ public class MainViewModelTests
         Assert.False(viewModel.HasSelection);
         Assert.Null(viewModel.SelectedGame);
         Assert.Null(viewModel.CatalogError);
+        Assert.True(viewModel.IsEditorAvailable);
+        Assert.NotNull(viewModel.Editor);
     }
 
     [Fact]
@@ -41,6 +43,7 @@ public class MainViewModelTests
         Assert.Equal("2", viewModel.SelectedDvdNumberText);
         Assert.Equal("ISO", viewModel.SelectedFormatText);
         Assert.Equal("987654321", viewModel.SelectedSizeText);
+        Assert.Equal("941.9 MiB", viewModel.SelectedReadableSizeText);
         Assert.Equal("Disc two", viewModel.SelectedNotesText);
 
         viewModel.SelectedGame = usb;
@@ -48,6 +51,7 @@ public class MainViewModelTests
         Assert.Equal("Not applicable", viewModel.SelectedDvdNumberText);
         Assert.Equal("CHD", viewModel.SelectedFormatText);
         Assert.Equal("123", viewModel.SelectedSizeText);
+        Assert.Equal("123 B", viewModel.SelectedReadableSizeText);
         Assert.Equal("None", viewModel.SelectedNotesText);
     }
 
@@ -60,6 +64,7 @@ public class MainViewModelTests
         Assert.False(viewModel.IsEmpty);
         Assert.True(viewModel.HasStartupError);
         Assert.Contains("Unable to list", viewModel.CatalogError);
+        Assert.False(viewModel.IsEditorAvailable);
     }
 
     [Fact]
@@ -71,6 +76,7 @@ public class MainViewModelTests
         Assert.False(viewModel.IsEmpty);
         Assert.Empty(viewModel.Games);
         Assert.True(viewModel.HasStartupError);
+        Assert.False(viewModel.IsEditorAvailable);
     }
 
     private sealed class FakeRepository(params GameRecord[] records) : IGameRecordRepository
