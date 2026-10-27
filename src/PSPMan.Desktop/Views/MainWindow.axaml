@@ -61,6 +61,10 @@
                     <TextBlock Text="{Binding SelectedReadableSizeText}" />
                     <TextBlock Text="Notes" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding SelectedNotesText}" TextWrapping="Wrap" />
+                    <Button Content="Edit selected"
+                            Command="{Binding StartEditCommand}"
+                            IsVisible="{Binding IsAdding}"
+                            HorizontalAlignment="Left" Margin="0,12,0,0" />
                 </StackPanel>
             </ScrollViewer>
 
@@ -68,6 +72,10 @@
                           IsVisible="{Binding IsEditorAvailable}">
                 <StackPanel Spacing="6">
                     <TextBlock Text="Game editor" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="Editing record:" IsVisible="{Binding IsEditing}" />
+                    <TextBlock Text="{Binding EditingGameTitle}"
+                               IsVisible="{Binding IsEditing}" FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
                     <TextBlock Text="Fields marked * are required." TextWrapping="Wrap" />
 
                     <TextBlock Text="Title *" FontWeight="SemiBold" Margin="0,8,0,0" />
@@ -131,6 +139,15 @@
                             HorizontalAlignment="Left" Margin="0,12,0,0" />
                     <Button Content="Add game"
                             Command="{Binding AddGameCommand}"
+                            IsVisible="{Binding IsAdding}"
+                            HorizontalAlignment="Left" />
+                    <Button Content="Save changes"
+                            Command="{Binding SaveChangesCommand}"
+                            IsVisible="{Binding IsEditing}"
+                            HorizontalAlignment="Left" />
+                    <Button Content="Cancel edit"
+                            Command="{Binding CancelEditCommand}"
+                            IsVisible="{Binding IsEditing}"
                             HorizontalAlignment="Left" />
                     <TextBlock Text="{Binding OperationError}"
                                IsVisible="{Binding HasOperationError}"

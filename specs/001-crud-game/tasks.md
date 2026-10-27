@@ -44,7 +44,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Every specified field can be entered, Medium/Format choices are constrained, and the UI displays field errors from Core.
 - [x] **T17 (25 min; FR-4, FR-5, FR-6, FR-9, FR-10):** Connect Add/Save to the service and refresh the list only after successful persistence.
   Done when: A valid offline record appears in the list; invalid, duplicate, or failed saves show an error and do not appear as saved.
-- [ ] **T18 (25 min; FR-3, FR-4, FR-6, FR-7, FR-9, FR-10):** Load a selected record into the editor and connect Save Changes to the service.
+- [x] **T18 (25 min; FR-3, FR-4, FR-6, FR-7, FR-9, FR-10):** Load a selected record into the editor and connect Save Changes to the service.
   Done when: Valid changes appear in list/details; invalid, duplicate, or failed changes leave the saved record visible and unchanged.
 - [ ] **T19 (25 min; FR-8, FR-10):** Add inline Delete, Confirm, and Cancel states with no game-file operation.
   Done when: Cancel leaves the record; Confirm removes only its catalog row; a failed delete keeps it visible and displays an error.
