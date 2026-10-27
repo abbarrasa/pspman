@@ -14,15 +14,21 @@
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,*" Margin="20">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="20">
         <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
-        <Grid Grid.Row="1" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
+        <StackPanel Grid.Row="1" Margin="0,12,0,0" Spacing="4"
+                    IsVisible="{Binding HasAnyError}">
+            <TextBlock Text="{Binding CatalogError}"
+                       IsVisible="{Binding HasStartupError}"
+                       FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding OperationError}"
+                       IsVisible="{Binding HasDistinctOperationError}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+        <Grid Grid.Row="2" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Grid.Row="1">
-                    <TextBlock Text="{Binding CatalogError}"
-                               IsVisible="{Binding HasStartupError}"
-                               TextWrapping="Wrap" />
                     <TextBlock Text="No games in the catalog."
                                IsVisible="{Binding IsEmpty}" />
                 </StackPanel>
@@ -51,9 +57,6 @@
                     <Button Content="Cancel"
                             Command="{Binding CancelDeleteCommand}"
                             HorizontalAlignment="Left" />
-                    <TextBlock Text="{Binding OperationError}"
-                               IsVisible="{Binding HasOperationError}"
-                               TextWrapping="Wrap" />
                 </StackPanel>
             </Grid>
 
@@ -172,9 +175,6 @@
                             Command="{Binding CancelEditCommand}"
                             IsVisible="{Binding IsEditing}"
                             HorizontalAlignment="Left" />
-                    <TextBlock Text="{Binding OperationError}"
-                               IsVisible="{Binding HasOperationError}"
-                               TextWrapping="Wrap" />
                 </StackPanel>
             </ScrollViewer>
         </Grid>

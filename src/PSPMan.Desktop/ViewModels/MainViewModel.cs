@@ -11,6 +11,7 @@ namespace PSPMan.Desktop.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private IReadOnlyList<GameRecord> _games = [];
+    private string? _catalogError;
     private Guid? _editingRecordId;
     private string? _editingGameTitle;
     private Guid? _pendingDeleteRecordId;
@@ -91,7 +92,27 @@ public partial class MainViewModel : ViewModelBase
         private set => SetProperty(ref _pendingDeleteTitle, value);
     }
 
-    public string? CatalogError { get; }
+    public string? CatalogError
+    {
+        get => _catalogError;
+        private set
+        {
+            if (SetProperty(ref _catalogError, value))
+            {
+                OnPropertyChanged(nameof(HasStartupError));
+                OnPropertyChanged(nameof(HasAnyError));
+                OnPropertyChanged(nameof(HasDistinctOperationError));
+                OnPropertyChanged(nameof(IsEditorAvailable));
+                OnPropertyChanged(nameof(IsAdding));
+                OnPropertyChanged(nameof(IsEmpty));
+                AddGameCommand.NotifyCanExecuteChanged();
+                StartEditCommand.NotifyCanExecuteChanged();
+                SaveChangesCommand.NotifyCanExecuteChanged();
+                DeleteSelectedCommand.NotifyCanExecuteChanged();
+                ConfirmDeleteCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
 
     public IReadOnlyList<GameRecord> Games
     {
@@ -128,6 +149,10 @@ public partial class MainViewModel : ViewModelBase
     public bool CanSaveChanges => IsEditorAvailable && IsEditing;
 
     public bool HasOperationError => !string.IsNullOrWhiteSpace(OperationError);
+
+    public bool HasAnyError => HasStartupError || HasOperationError;
+
+    public bool HasDistinctOperationError => HasOperationError && OperationError != CatalogError;
 
     public bool HasGames => Games.Count > 0;
 
@@ -171,6 +196,8 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasOperationError))]
+    [NotifyPropertyChangedFor(nameof(HasAnyError))]
+    [NotifyPropertyChangedFor(nameof(HasDistinctOperationError))]
     public partial string? OperationError { get; set; }
 
     [ObservableProperty]
@@ -206,6 +233,7 @@ public partial class MainViewModel : ViewModelBase
         var result = CatalogService!.Create(input);
         if (!result.IsSuccess)
         {
+            ReportCorruption(result);
             OperationError = result.Error;
             return;
         }
@@ -220,6 +248,7 @@ public partial class MainViewModel : ViewModelBase
         else
         {
             Games = [.. Games, saved];
+            ReportCorruption(refresh);
             OperationError = "The game record was saved, but the catalog could not be refreshed.";
         }
 
@@ -260,6 +289,7 @@ public partial class MainViewModel : ViewModelBase
         var result = CatalogService!.Edit(id, input);
         if (!result.IsSuccess)
         {
+            ReportCorruption(result);
             OperationError = result.Error;
             return;
         }
@@ -278,6 +308,7 @@ public partial class MainViewModel : ViewModelBase
             Games = Games.Any(game => game.Id == id)
                 ? Games.Select(game => game.Id == id ? saved : game).ToArray()
                 : [.. Games, saved];
+            ReportCorruption(refresh);
             OperationError = "Changes were saved, but the catalog could not be refreshed.";
         }
 
@@ -317,6 +348,7 @@ public partial class MainViewModel : ViewModelBase
         var result = CatalogService!.Delete(id);
         if (!result.IsSuccess)
         {
+            ReportCorruption(result);
             OperationError = result.Error;
             return;
         }
@@ -334,7 +366,16 @@ public partial class MainViewModel : ViewModelBase
 
         if (!refresh.IsSuccess)
         {
+            ReportCorruption(refresh);
             OperationError = "The game record was deleted, but the catalog could not be refreshed.";
+        }
+    }
+
+    private void ReportCorruption<T>(GameCatalogResult<T> result)
+    {
+        if (result.IsCorrupt)
+        {
+            CatalogError = result.Error;
         }
     }
 

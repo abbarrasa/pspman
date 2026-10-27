@@ -6,12 +6,14 @@ public sealed class GameCatalogResult<T>
         bool isSuccess,
         T? value,
         string? error,
-        IReadOnlyList<GameRecordValidationError> validationErrors)
+        IReadOnlyList<GameRecordValidationError> validationErrors,
+        bool isCorrupt)
     {
         IsSuccess = isSuccess;
         Value = value;
         Error = error;
         ValidationErrors = validationErrors;
+        IsCorrupt = isCorrupt;
     }
 
     public bool IsSuccess { get; }
@@ -22,12 +24,17 @@ public sealed class GameCatalogResult<T>
 
     public IReadOnlyList<GameRecordValidationError> ValidationErrors { get; }
 
-    public static GameCatalogResult<T> Success(T? value) => new(true, value, null, []);
+    public bool IsCorrupt { get; }
 
-    public static GameCatalogResult<T> Failure(string error) => new(false, default, error, []);
+    public static GameCatalogResult<T> Success(T? value) => new(true, value, null, [], false);
+
+    public static GameCatalogResult<T> Failure(string error) => new(false, default, error, [], false);
+
+    public static GameCatalogResult<T> Corrupt() => new(
+        false, default, "The game catalog is corrupt. Catalog changes are disabled.", [], true);
 
     public static GameCatalogResult<T> InvalidInput(IReadOnlyList<GameRecordValidationError> errors) =>
-        new(false, default, "Invalid game record.", errors.ToArray());
+        new(false, default, "Invalid game record.", errors.ToArray(), false);
 }
 
 public sealed class GameCatalogService(IGameRecordRepository repository)
@@ -41,6 +48,10 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
         {
             return GameCatalogResult<IReadOnlyList<GameRecord>>.Success(_repository.List());
         }
+        catch (InvalidDataException)
+        {
+            return GameCatalogResult<IReadOnlyList<GameRecord>>.Corrupt();
+        }
         catch (Exception)
         {
             return GameCatalogResult<IReadOnlyList<GameRecord>>.Failure("Unable to list game records.");
@@ -52,6 +63,10 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
         try
         {
             return GameCatalogResult<GameRecord>.Success(_repository.GetById(id));
+        }
+        catch (InvalidDataException)
+        {
+            return GameCatalogResult<GameRecord>.Corrupt();
         }
         catch (Exception)
         {
@@ -89,6 +104,10 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
 
             _repository.Create(record);
             return GameCatalogResult<GameRecord>.Success(record);
+        }
+        catch (InvalidDataException)
+        {
+            return GameCatalogResult<GameRecord>.Corrupt();
         }
         catch (Exception)
         {
@@ -135,6 +154,10 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
             _repository.Update(updated);
             return GameCatalogResult<GameRecord>.Success(updated);
         }
+        catch (InvalidDataException)
+        {
+            return GameCatalogResult<GameRecord>.Corrupt();
+        }
         catch (Exception)
         {
             return GameCatalogResult<GameRecord>.Failure("Unable to update the game record.");
@@ -152,6 +175,10 @@ public sealed class GameCatalogService(IGameRecordRepository repository)
 
             _repository.Delete(id);
             return GameCatalogResult<bool>.Success(true);
+        }
+        catch (InvalidDataException)
+        {
+            return GameCatalogResult<bool>.Corrupt();
         }
         catch (Exception)
         {
