@@ -31,7 +31,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Integration tests reject duplicate DVD and non-DVD keys, allow case-different Locations, and preserve existing rows after rejection.
 - [x] **T12 (30 min; FR-6, FR-7, FR-8, FR-10):** Add parameterized atomic update/delete and integration tests for changed values, edited-key conflicts, and record-only deletion.
   Done when: Reopened catalogs show successful edits/deletes, and failed or conflicting writes leave prior rows intact.
-- [ ] **T13 (25 min; FR-10, FR-11):** Add storage-failure and corrupt-catalog reporting without automatic repair or overwrite; test with disposable files.
+- [x] **T13 (25 min; FR-10, FR-11):** Add storage-failure and corrupt-catalog reporting without automatic repair or overwrite; test with disposable files.
   Done when: Integration tests show read/write failures are surfaced and the bytes of a corrupt existing catalog remain unchanged.
 
 ## Desktop flow

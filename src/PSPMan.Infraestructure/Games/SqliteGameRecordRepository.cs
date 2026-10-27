@@ -15,31 +15,42 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
 
         var isNewCatalog = !File.Exists(databasePath);
-        _connectionString = new SqliteConnectionStringBuilder
+        var connectionStringBuilder = new SqliteConnectionStringBuilder
         {
             DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
+            Mode = SqliteOpenMode.ReadWrite,
             Pooling = false
-        }.ToString();
+        };
+        _connectionString = connectionStringBuilder.ToString();
+
+        connectionStringBuilder.Mode = isNewCatalog ? SqliteOpenMode.ReadWriteCreate : SqliteOpenMode.ReadOnly;
+        using (var inspection = new SqliteConnection(connectionStringBuilder.ToString()))
+        {
+            inspection.Open();
+            if (isNewCatalog)
+            {
+                using var createCommand = inspection.CreateCommand();
+                createCommand.CommandText = """
+                    CREATE TABLE GameRecords (
+                        Id TEXT PRIMARY KEY NOT NULL,
+                        Title TEXT NOT NULL,
+                        Medium INTEGER NOT NULL,
+                        DvdNumber INTEGER,
+                        Location TEXT NOT NULL,
+                        Format INTEGER NOT NULL,
+                        SizeBytes INTEGER NOT NULL,
+                        Notes TEXT
+                    )
+                    """;
+                createCommand.ExecuteNonQuery();
+            }
+            else
+            {
+                ValidateExistingCatalog(inspection);
+            }
+        }
 
         using var connection = OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = isNewCatalog
-            ? """
-                CREATE TABLE GameRecords (
-                    Id TEXT PRIMARY KEY NOT NULL,
-                    Title TEXT NOT NULL,
-                    Medium INTEGER NOT NULL,
-                    DvdNumber INTEGER,
-                    Location TEXT NOT NULL,
-                    Format INTEGER NOT NULL,
-                    SizeBytes INTEGER NOT NULL,
-                    Notes TEXT
-                )
-                """
-            : $"SELECT {SelectFields} FROM GameRecords LIMIT 0";
-        command.ExecuteNonQuery();
-
         using var transaction = connection.BeginTransaction();
         using var indexCommand = connection.CreateCommand();
         indexCommand.Transaction = transaction;
@@ -56,6 +67,49 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
             """;
         indexCommand.ExecuteNonQuery();
         transaction.Commit();
+    }
+
+    private static void ValidateExistingCatalog(SqliteConnection connection)
+    {
+        try
+        {
+            using (var integrityCommand = connection.CreateCommand())
+            {
+                integrityCommand.CommandText = "PRAGMA integrity_check";
+                if (integrityCommand.ExecuteScalar() is not string { } result || result != "ok")
+                {
+                    throw new InvalidDataException("Catalog data is corrupt.");
+                }
+            }
+
+            using var recordsCommand = connection.CreateCommand();
+            recordsCommand.CommandText = $"SELECT {SelectFields} FROM GameRecords";
+            using var reader = recordsCommand.ExecuteReader();
+            while (reader.Read())
+            {
+                var record = ReadRecord(reader);
+                var input = new GameRecordInput(
+                    record.Title,
+                    record.Medium,
+                    record.DvdNumber,
+                    record.Location,
+                    record.Format,
+                    record.SizeBytes,
+                    record.Notes);
+                if (GameRecordRules.Validate(input).Count > 0)
+                {
+                    throw new InvalidDataException("Catalog data is corrupt.");
+                }
+            }
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode is 1 or 11 or 26)
+        {
+            throw new InvalidDataException("Catalog data is corrupt.", ex);
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or InvalidOperationException)
+        {
+            throw new InvalidDataException("Catalog data is corrupt.", ex);
+        }
     }
 
     public IReadOnlyList<GameRecord> List()
@@ -145,8 +199,16 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
     private SqliteConnection OpenConnection()
     {
         var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-        return connection;
+        try
+        {
+            connection.Open();
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
 
     private static GameRecord ReadRecord(SqliteDataReader reader) => new(

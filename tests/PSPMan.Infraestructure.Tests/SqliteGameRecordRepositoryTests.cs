@@ -293,6 +293,94 @@ public class SqliteGameRecordRepositoryTests
         Assert.Equal(DvdGame, Assert.Single(new SqliteGameRecordRepository(catalog.Path).List()));
     }
 
+    [Fact]
+    public void InvalidDatabaseIsReportedAsCorruptWithoutChangingItsBytes()
+    {
+        using var catalog = new TemporaryCatalog();
+        var original = new byte[] { 0, 1, 2, 3, 4, 5 };
+        File.WriteAllBytes(catalog.Path, original);
+
+        var error = Assert.Throws<InvalidDataException>(() => new SqliteGameRecordRepository(catalog.Path));
+
+        Assert.Contains("corrupt", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(original, File.ReadAllBytes(catalog.Path));
+    }
+
+    [Fact]
+    public void InvalidSavedFieldsAreReportedBeforeAnyCatalogWrite()
+    {
+        using var catalog = new TemporaryCatalog();
+        _ = new SqliteGameRecordRepository(catalog.Path);
+        Seed(catalog.Path, DvdGame with { Title = " " });
+        var original = File.ReadAllBytes(catalog.Path);
+
+        var error = Assert.Throws<InvalidDataException>(() => new SqliteGameRecordRepository(catalog.Path));
+
+        Assert.Contains("corrupt", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(original, File.ReadAllBytes(catalog.Path));
+    }
+
+    [Fact]
+    public void InvalidSavedIdIsReportedBeforeAnyCatalogWrite()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        using (var connection = OpenConnection(catalog.Path))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE GameRecords SET Id = 'invalid-id'";
+            command.ExecuteNonQuery();
+        }
+
+        var original = File.ReadAllBytes(catalog.Path);
+        Assert.Throws<InvalidDataException>(() => new SqliteGameRecordRepository(catalog.Path));
+        Assert.Equal(original, File.ReadAllBytes(catalog.Path));
+    }
+
+    [Fact]
+    public void MissingCatalogReadFailsWithoutRecreatingDatabase()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        var movedPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(catalog.Path)!, "moved.db");
+        File.Move(catalog.Path, movedPath);
+        var original = File.ReadAllBytes(movedPath);
+
+        Assert.ThrowsAny<Exception>(() => repository.List());
+
+        Assert.False(File.Exists(catalog.Path));
+        Assert.Equal(original, File.ReadAllBytes(movedPath));
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("update")]
+    [InlineData("delete")]
+    public void MissingCatalogWriteFailsWithoutRecreatingDatabase(string operation)
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        var movedPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(catalog.Path)!, "moved.db");
+        File.Move(catalog.Path, movedPath);
+        var original = File.ReadAllBytes(movedPath);
+
+        Assert.ThrowsAny<Exception>(() =>
+        {
+            switch (operation)
+            {
+                case "create": repository.Create(UsbGame); break;
+                case "update": repository.Update(DvdGame with { Title = "Changed" }); break;
+                case "delete": repository.Delete(DvdGame.Id); break;
+            }
+        });
+
+        Assert.False(File.Exists(catalog.Path));
+        Assert.Equal(original, File.ReadAllBytes(movedPath));
+    }
+
     private static void CreateLegacyCatalog(string path)
     {
         using var connection = OpenConnection(path);
