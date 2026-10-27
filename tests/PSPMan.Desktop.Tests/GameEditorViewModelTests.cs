@@ -135,6 +135,27 @@ public class GameEditorViewModelTests
         Assert.Equal(expected, editor.HumanReadableSizeText);
     }
 
+    [Fact]
+    public void LoadExistingRecordPopulatesEveryEditableFieldAndClearsPriorErrors()
+    {
+        var editor = new GameEditorViewModel();
+        editor.CheckFieldsCommand.Execute(null);
+        var record = new GameRecord(Guid.NewGuid(), "Key of Heaven", GameMedium.Dvd, 2,
+            "/OFFLINE/Key of Heaven.rar", GameFormat.Chd, 1_572_864, "Disc two");
+
+        editor.Load(record);
+
+        Assert.Equal(record.Title, editor.Title);
+        Assert.Equal(record.Medium, editor.SelectedMedium!.Value);
+        Assert.Equal("2", editor.DvdNumberText);
+        Assert.Equal(record.Location, editor.Location);
+        Assert.Equal(record.Format, editor.SelectedFormat!.Value);
+        Assert.Equal("1572864", editor.SizeBytesText);
+        Assert.Equal("1.5 MiB", editor.HumanReadableSizeText);
+        Assert.Equal(record.Notes, editor.Notes);
+        Assert.False(editor.HasAnyFieldError);
+    }
+
     private static GameEditorViewModel ValidUsbEditor()
     {
         var editor = new GameEditorViewModel

@@ -65,6 +65,33 @@ public class CatalogStartupTests
     }
 
     [Fact]
+    public void SaveChangesCommandPersistsAnOfflineEditAcrossStartup()
+    {
+        using var data = new TemporaryApplicationData();
+        var first = CatalogStartup.CreateMainViewModel(data.Path);
+        var created = first.CatalogService!.Create(new GameRecordInput(
+            "Original", GameMedium.Dvd, 2, "/OFFLINE/Original.rar",
+            GameFormat.Iso, 1_024, null));
+        Assert.True(created.IsSuccess);
+
+        var viewModel = CatalogStartup.CreateMainViewModel(data.Path);
+        viewModel.SelectedGame = Assert.Single(viewModel.Games);
+        viewModel.StartEditCommand.Execute(null);
+        viewModel.Editor.Title = "Corrected";
+        viewModel.Editor.Location = "/OFFLINE/Corrected.rar";
+        viewModel.Editor.SizeBytesText = "1572864";
+        viewModel.SaveChangesCommand.Execute(null);
+
+        Assert.Null(viewModel.OperationError);
+        Assert.Equal(created.Value!.Id, viewModel.SelectedGame!.Id);
+        Assert.Equal("Corrected", viewModel.SelectedGame.Title);
+        Assert.Null(viewModel.SelectedGame.Notes);
+
+        var reopened = CatalogStartup.CreateMainViewModel(data.Path);
+        Assert.Equal(viewModel.SelectedGame, Assert.Single(reopened.Games));
+    }
+
+    [Fact]
     public void CorruptCatalogProducesAnErrorWithoutReplacingIt()
     {
         using var data = new TemporaryApplicationData();

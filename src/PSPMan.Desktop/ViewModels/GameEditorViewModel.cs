@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PSPMan.Core.Games;
@@ -14,6 +15,7 @@ public sealed record GameFormatChoice(GameFormat Value, string Label);
 public partial class GameEditorViewModel : ViewModelBase
 {
     private bool _hasCheckedFields;
+    private bool _loadedNotesWereNull;
 
     public IReadOnlyList<GameMediumChoice> MediumChoices { get; } =
     [
@@ -175,7 +177,7 @@ public partial class GameEditorViewModel : ViewModelBase
             Location,
             SelectedFormat?.Value ?? (GameFormat)(-1),
             sizeBytes,
-            Notes);
+            _loadedNotesWereNull && Notes.Length == 0 ? null : Notes);
 
         foreach (var error in GameRecordRules.Validate(input))
         {
@@ -198,9 +200,26 @@ public partial class GameEditorViewModel : ViewModelBase
         return HasAnyFieldError ? null : input;
     }
 
+    public void Load(GameRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        _hasCheckedFields = false;
+        _loadedNotesWereNull = record.Notes is null;
+        Title = record.Title;
+        SelectedMedium = MediumChoices.Single(choice => choice.Value == record.Medium);
+        DvdNumberText = record.DvdNumber?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        Location = record.Location;
+        SelectedFormat = FormatChoices.Single(choice => choice.Value == record.Format);
+        SizeBytesText = record.SizeBytes.ToString(CultureInfo.InvariantCulture);
+        Notes = record.Notes ?? string.Empty;
+        ClearErrors();
+    }
+
     public void Reset()
     {
         _hasCheckedFields = false;
+        _loadedNotesWereNull = false;
         Title = string.Empty;
         SelectedMedium = null;
         DvdNumberText = string.Empty;
