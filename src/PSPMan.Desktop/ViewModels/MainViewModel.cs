@@ -1,12 +1,16 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using PSPMan.Core.Games;
 
 namespace PSPMan.Desktop.ViewModels;
 
 public partial class MainViewModel : ViewModelBase
 {
+    private IReadOnlyList<GameRecord> _games = [];
+
     public MainViewModel() : this(null, null)
     {
     }
@@ -38,13 +42,27 @@ public partial class MainViewModel : ViewModelBase
 
     public string? CatalogError { get; }
 
-    public IReadOnlyList<GameRecord> Games { get; } = [];
+    public IReadOnlyList<GameRecord> Games
+    {
+        get => _games;
+        private set
+        {
+            if (SetProperty(ref _games, value))
+            {
+                OnPropertyChanged(nameof(HasGames));
+                OnPropertyChanged(nameof(IsEmpty));
+                OnPropertyChanged(nameof(NeedsSelection));
+            }
+        }
+    }
 
     public bool HasStartupError => !string.IsNullOrWhiteSpace(CatalogError);
 
     public bool IsCatalogAvailable => CatalogService is not null;
 
     public bool IsEditorAvailable => IsCatalogAvailable && !HasStartupError;
+
+    public bool HasOperationError => !string.IsNullOrWhiteSpace(OperationError);
 
     public bool HasGames => Games.Count > 0;
 
@@ -87,6 +105,10 @@ public partial class MainViewModel : ViewModelBase
         : SelectedGame.Notes;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOperationError))]
+    public partial string? OperationError { get; set; }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     [NotifyPropertyChangedFor(nameof(NeedsSelection))]
     [NotifyPropertyChangedFor(nameof(SelectedTitleText))]
@@ -98,4 +120,39 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedReadableSizeText))]
     [NotifyPropertyChangedFor(nameof(SelectedNotesText))]
     public partial GameRecord? SelectedGame { get; set; }
+
+    [RelayCommand(CanExecute = nameof(IsEditorAvailable))]
+    private void AddGame()
+    {
+        OperationError = null;
+        var input = Editor.ValidateFields();
+        if (input is null)
+        {
+            OperationError = "Correct the fields above.";
+            return;
+        }
+
+        var result = CatalogService!.Create(input);
+        if (!result.IsSuccess)
+        {
+            OperationError = result.Error;
+            return;
+        }
+
+        var saved = result.Value!;
+        var refresh = CatalogService.List();
+        if (refresh.IsSuccess)
+        {
+            var listed = refresh.Value ?? [];
+            Games = listed.Any(game => game.Id == saved.Id) ? listed : [.. listed, saved];
+        }
+        else
+        {
+            Games = [.. Games, saved];
+            OperationError = "The game record was saved, but the catalog could not be refreshed.";
+        }
+
+        SelectedGame = Games.First(game => game.Id == saved.Id);
+        Editor.Reset();
+    }
 }

@@ -129,6 +129,12 @@
                     <Button Content="Check fields"
                             Command="{Binding Editor.CheckFieldsCommand}"
                             HorizontalAlignment="Left" Margin="0,12,0,0" />
+                    <Button Content="Add game"
+                            Command="{Binding AddGameCommand}"
+                            HorizontalAlignment="Left" />
+                    <TextBlock Text="{Binding OperationError}"
+                               IsVisible="{Binding HasOperationError}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </ScrollViewer>
         </Grid>
