@@ -1,25 +1,66 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:PSPMan.Desktop.ViewModels"
+        xmlns:games="using:PSPMan.Core.Games"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="560"
         x:Class="PSPMan.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
+        Width="900" Height="560" MinWidth="600" MinHeight="400"
         Icon="/Assets/avalonia-logo.ico"
-        Title="PSPMan.Desktop">
-
+        Title="PSPMan">
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-        <TextBox Text="{Binding Greeting}" />
-        <TextBlock Text="{Binding CatalogError}"
-                   IsVisible="{Binding HasStartupError}"
-                   TextWrapping="Wrap" />
-    </StackPanel>
+    <Grid RowDefinitions="Auto,*" Margin="20">
+        <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
+        <Grid Grid.Row="1" ColumnDefinitions="280,*" Margin="0,20,0,0">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding CatalogError}"
+                           IsVisible="{Binding HasStartupError}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="No games in the catalog."
+                           IsVisible="{Binding IsEmpty}" />
+                <ListBox ItemsSource="{Binding Games}"
+                         SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+                         IsVisible="{Binding HasGames}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="games:GameRecord">
+                            <StackPanel Margin="4" Spacing="2">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Location}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
 
+            <TextBlock Grid.Column="1" Margin="20,0,0,0"
+                       Text="Select a game to view its details."
+                       IsVisible="{Binding NeedsSelection}" />
+            <ScrollViewer Grid.Column="1" Margin="20,0,0,0"
+                          IsVisible="{Binding HasSelection}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Game details" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="Title" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedTitleText}" TextWrapping="Wrap" />
+                    <TextBlock Text="Medium" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedMediumText}" />
+                    <TextBlock Text="DVD number" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedDvdNumberText}" />
+                    <TextBlock Text="Location" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedLocationText}" TextWrapping="Wrap" />
+                    <TextBlock Text="Format" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedFormatText}" />
+                    <TextBlock Text="Decompressed size (bytes)" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedSizeText}" />
+                    <TextBlock Text="Notes" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedNotesText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
 </Window>
