@@ -4,10 +4,10 @@
         xmlns:games="using:PSPMan.Core.Games"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="560"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="650"
         x:Class="PSPMan.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Width="900" Height="560" MinWidth="600" MinHeight="400"
+        Width="1200" Height="650" MinWidth="900" MinHeight="450"
         Icon="/Assets/avalonia-logo.ico"
         Title="PSPMan">
     <Design.DataContext>
@@ -16,7 +16,7 @@
 
     <Grid RowDefinitions="Auto,*" Margin="20">
         <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
-        <Grid Grid.Row="1" ColumnDefinitions="280,*" Margin="0,20,0,0">
+        <Grid Grid.Row="1" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
             <StackPanel Spacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding CatalogError}"
@@ -57,8 +57,78 @@
                     <TextBlock Text="{Binding SelectedFormatText}" />
                     <TextBlock Text="Decompressed size (bytes)" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding SelectedSizeText}" />
+                    <TextBlock Text="Approximate size (binary units)" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedReadableSizeText}" />
                     <TextBlock Text="Notes" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding SelectedNotesText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <ScrollViewer Grid.Column="2" Margin="20,0,0,0"
+                          IsVisible="{Binding IsEditorAvailable}">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Game editor" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="Fields marked * are required." TextWrapping="Wrap" />
+
+                    <TextBlock Text="Title *" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBox Text="{Binding Editor.Title, Mode=TwoWay}" />
+                    <TextBlock Text="{Binding Editor.TitleError}"
+                               IsVisible="{Binding Editor.HasTitleError}" TextWrapping="Wrap" />
+
+                    <TextBlock Text="Medium *" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <ComboBox ItemsSource="{Binding Editor.MediumChoices}"
+                              SelectedItem="{Binding Editor.SelectedMedium, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GameMediumChoice">
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="{Binding Editor.MediumError}"
+                               IsVisible="{Binding Editor.HasMediumError}" TextWrapping="Wrap" />
+
+                    <TextBlock Text="DVD number *" FontWeight="SemiBold" Margin="0,8,0,0"
+                               IsVisible="{Binding Editor.ShowDvdNumber}" />
+                    <TextBox Text="{Binding Editor.DvdNumberText, Mode=TwoWay}"
+                             IsVisible="{Binding Editor.ShowDvdNumber}" />
+                    <TextBlock Text="{Binding Editor.DvdNumberError}"
+                               IsVisible="{Binding Editor.HasDvdNumberError}" TextWrapping="Wrap" />
+
+                    <TextBlock Text="Location *" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBox Text="{Binding Editor.Location, Mode=TwoWay}"
+                             PlaceholderText="/DevHook/GAMES/Game.rar" />
+                    <TextBlock Text="{Binding Editor.LocationError}"
+                               IsVisible="{Binding Editor.HasLocationError}" TextWrapping="Wrap" />
+
+                    <TextBlock Text="Format *" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <ComboBox ItemsSource="{Binding Editor.FormatChoices}"
+                              SelectedItem="{Binding Editor.SelectedFormat, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:GameFormatChoice">
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Text="{Binding Editor.FormatError}"
+                               IsVisible="{Binding Editor.HasFormatError}" TextWrapping="Wrap" />
+
+                    <TextBlock Text="Decompressed size entered by you (bytes) *"
+                               FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap" />
+                    <TextBox Text="{Binding Editor.SizeBytesText, Mode=TwoWay}" />
+                    <TextBlock Text="{Binding Editor.SizeBytesError}"
+                               IsVisible="{Binding Editor.HasSizeBytesError}" TextWrapping="Wrap" />
+                    <TextBlock Text="Approximate size (binary units)" />
+                    <TextBlock Text="{Binding Editor.HumanReadableSizeText}" />
+
+                    <TextBlock Text="Notes" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBox Text="{Binding Editor.Notes, Mode=TwoWay}"
+                             AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
+                    <TextBlock Text="{Binding Editor.NotesError}"
+                               IsVisible="{Binding Editor.HasNotesError}" TextWrapping="Wrap" />
+
+                    <Button Content="Check fields"
+                            Command="{Binding Editor.CheckFieldsCommand}"
+                            HorizontalAlignment="Left" Margin="0,12,0,0" />
                 </StackPanel>
             </ScrollViewer>
         </Grid>

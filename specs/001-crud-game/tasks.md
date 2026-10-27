@@ -40,7 +40,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: The app builds, starts with a fresh catalog, and a corrupt catalog yields an error without replacing its file.
 - [x] **T15 (25 min; FR-1, FR-3):** Replace the sample greeting with a typed-bound catalog list, selection/details, and empty state.
   Done when: A fresh catalog displays the empty state; saved records can be selected and all saved values are visible.
-- [ ] **T16 (30 min; FR-2, FR-3, FR-4):** Add the typed-bound editor fields and permitted choices, with DVD Number shown only for DVD and Size labeled as user-entered decompressed bytes.
+- [x] **T16 (30 min; FR-2, FR-3, FR-4):** Add the typed-bound editor fields and permitted choices, with DVD Number shown only for DVD and Size labeled as user-entered decompressed bytes.
   Done when: Every specified field can be entered, Medium/Format choices are constrained, and the UI displays field errors from Core.
 - [ ] **T17 (25 min; FR-4, FR-5, FR-6, FR-9, FR-10):** Connect Add/Save to the service and refresh the list only after successful persistence.
   Done when: A valid offline record appears in the list; invalid, duplicate, or failed saves show an error and do not appear as saved.

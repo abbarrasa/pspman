@@ -34,6 +34,8 @@ public partial class MainViewModel : ViewModelBase
 
     public GameCatalogService? CatalogService { get; }
 
+    public GameEditorViewModel Editor { get; } = new();
+
     public string? CatalogError { get; }
 
     public IReadOnlyList<GameRecord> Games { get; } = [];
@@ -41,6 +43,8 @@ public partial class MainViewModel : ViewModelBase
     public bool HasStartupError => !string.IsNullOrWhiteSpace(CatalogError);
 
     public bool IsCatalogAvailable => CatalogService is not null;
+
+    public bool IsEditorAvailable => IsCatalogAvailable && !HasStartupError;
 
     public bool HasGames => Games.Count > 0;
 
@@ -74,6 +78,10 @@ public partial class MainViewModel : ViewModelBase
 
     public string? SelectedSizeText => SelectedGame?.SizeBytes.ToString(CultureInfo.InvariantCulture);
 
+    public string? SelectedReadableSizeText => SelectedGame is null
+        ? null
+        : ByteSizeFormatter.Format(SelectedGame.SizeBytes);
+
     public string SelectedNotesText => string.IsNullOrEmpty(SelectedGame?.Notes)
         ? "None"
         : SelectedGame.Notes;
@@ -87,6 +95,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(SelectedDvdNumberText))]
     [NotifyPropertyChangedFor(nameof(SelectedFormatText))]
     [NotifyPropertyChangedFor(nameof(SelectedSizeText))]
+    [NotifyPropertyChangedFor(nameof(SelectedReadableSizeText))]
     [NotifyPropertyChangedFor(nameof(SelectedNotesText))]
     public partial GameRecord? SelectedGame { get; set; }
 }
