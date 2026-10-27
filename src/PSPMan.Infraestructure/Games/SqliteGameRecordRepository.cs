@@ -94,6 +94,44 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
             INSERT INTO GameRecords (Id, Title, Medium, DvdNumber, Location, Format, SizeBytes, Notes)
             VALUES ($id, $title, $medium, $dvdNumber, $location, $format, $sizeBytes, $notes)
             """;
+        AddRecordParameters(command, record);
+        command.ExecuteNonQuery();
+    }
+
+    public void Update(GameRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE GameRecords
+            SET Title = $title, Medium = $medium, DvdNumber = $dvdNumber,
+                Location = $location, Format = $format, SizeBytes = $sizeBytes,
+                Notes = $notes
+            WHERE Id = $id
+            """;
+        AddRecordParameters(command, record);
+        if (command.ExecuteNonQuery() == 0)
+        {
+            throw new InvalidOperationException("Game record not found.");
+        }
+    }
+
+    public void Delete(Guid id)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM GameRecords WHERE Id = $id";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        if (command.ExecuteNonQuery() == 0)
+        {
+            throw new InvalidOperationException("Game record not found.");
+        }
+    }
+
+    private static void AddRecordParameters(SqliteCommand command, GameRecord record)
+    {
         command.Parameters.AddWithValue("$id", record.Id.ToString());
         command.Parameters.AddWithValue("$title", record.Title);
         command.Parameters.AddWithValue("$medium", (int)record.Medium);
@@ -102,14 +140,7 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         command.Parameters.AddWithValue("$format", (int)record.Format);
         command.Parameters.AddWithValue("$sizeBytes", record.SizeBytes);
         command.Parameters.AddWithValue("$notes", (object?)record.Notes ?? DBNull.Value);
-        command.ExecuteNonQuery();
     }
-
-    public void Update(GameRecord record) =>
-        throw new NotSupportedException("Catalog updates are not implemented yet.");
-
-    public void Delete(Guid id) =>
-        throw new NotSupportedException("Catalog deletion is not implemented yet.");
 
     private SqliteConnection OpenConnection()
     {

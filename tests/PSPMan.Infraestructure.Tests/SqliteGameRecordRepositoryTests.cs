@@ -196,6 +196,103 @@ public class SqliteGameRecordRepositoryTests
         Assert.Equal(0L, countIndexes.ExecuteScalar());
     }
 
+    [Fact]
+    public void UpdatePersistsEveryChangedFieldAndLeavesOtherRecordsAlone()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        repository.Create(UsbGame);
+        var updated = DvdGame with
+        {
+            Title = "Changed'); DELETE FROM GameRecords; --",
+            Medium = GameMedium.MemoryCard,
+            DvdNumber = null,
+            Location = "/GAMES/Changed.rar",
+            Format = GameFormat.Chd,
+            SizeBytes = 6_000_000_000,
+            Notes = null
+        };
+
+        repository.Update(updated);
+
+        var reopened = new SqliteGameRecordRepository(catalog.Path);
+        Assert.Equal(updated, reopened.GetById(DvdGame.Id));
+        Assert.Equal(UsbGame, reopened.GetById(UsbGame.Id));
+        Assert.Equal(2, reopened.List().Count);
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Dvd)]
+    [InlineData(GameMedium.Usb)]
+    [InlineData(GameMedium.MemoryCard)]
+    public void ConflictingUpdateLeavesBothSavedRowsUnchanged(GameMedium medium)
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        var original = medium == GameMedium.Dvd ? DvdGame : UsbGame with { Medium = medium };
+        var target = original with
+        {
+            Id = Guid.NewGuid(),
+            DvdNumber = medium == GameMedium.Dvd ? 3 : null,
+            Location = "/Other/game.rar"
+        };
+        repository.Create(original);
+        repository.Create(target);
+        var conflict = target with
+        {
+            Title = "Failed change",
+            DvdNumber = original.DvdNumber,
+            Location = original.Location
+        };
+
+        Assert.Throws<SqliteException>(() => repository.Update(conflict));
+
+        var reopened = new SqliteGameRecordRepository(catalog.Path);
+        Assert.Equal(original, reopened.GetById(original.Id));
+        Assert.Equal(target, reopened.GetById(target.Id));
+    }
+
+    [Fact]
+    public void UpdateOfMissingIdFailsWithoutInsertingOrChangingRecords()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+
+        Assert.Throws<InvalidOperationException>(() => repository.Update(
+            DvdGame with { Id = Guid.NewGuid(), Title = "Missing" }));
+
+        Assert.Equal(DvdGame, Assert.Single(new SqliteGameRecordRepository(catalog.Path).List()));
+    }
+
+    [Fact]
+    public void DeleteRemovesOnlyTheSelectedCatalogRow()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        repository.Create(UsbGame);
+
+        repository.Delete(DvdGame.Id);
+
+        var reopened = new SqliteGameRecordRepository(catalog.Path);
+        Assert.Null(reopened.GetById(DvdGame.Id));
+        Assert.Equal(UsbGame, Assert.Single(reopened.List()));
+    }
+
+    [Fact]
+    public void DeleteOfMissingIdFailsWithoutChangingRecords()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+
+        Assert.Throws<InvalidOperationException>(() => repository.Delete(Guid.NewGuid()));
+
+        Assert.Equal(DvdGame, Assert.Single(new SqliteGameRecordRepository(catalog.Path).List()));
+    }
+
     private static void CreateLegacyCatalog(string path)
     {
         using var connection = OpenConnection(path);
