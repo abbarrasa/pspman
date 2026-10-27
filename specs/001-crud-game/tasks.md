@@ -55,7 +55,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 - [x] **T21 (30 min; FR-1, FR-2, FR-3, FR-5):** Add the Avalonia.Headless xUnit test project with manual session setup and cover list/empty, create, and record-details controls.
   Done when: Headless tests drive real typed bindings and pass without a graphical display.
-- [ ] **T22 (30 min; FR-4, FR-6, FR-7, FR-9, FR-10):** Add headless tests for validation, duplicate feedback, editing, offline media, and failed saves.
+- [x] **T22 (30 min; FR-4, FR-6, FR-7, FR-9, FR-10):** Add headless tests for validation, duplicate feedback, editing, offline media, and failed saves.
   Done when: Each flow shows the expected UI message/state and leaves persisted data unchanged on failure.
 - [ ] **T23 (25 min; FR-8, FR-10, FR-11):** Add headless tests for deletion confirmation/cancellation, deletion failure, and corrupt-catalog startup.
   Done when: Tests prove the visible confirmation and error states and protect records when deletion is cancelled or fails.

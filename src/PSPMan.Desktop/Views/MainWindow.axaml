@@ -21,7 +21,7 @@
             <TextBlock Text="{Binding CatalogError}"
                        IsVisible="{Binding HasStartupError}"
                        FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding OperationError}"
+            <TextBlock x:Name="OperationErrorText" Text="{Binding OperationError}"
                        IsVisible="{Binding HasDistinctOperationError}"
                        TextWrapping="Wrap" />
         </StackPanel>
@@ -83,7 +83,7 @@
                     <TextBlock x:Name="SelectedReadableSizeText" Text="{Binding SelectedReadableSizeText}" />
                     <TextBlock Text="Notes" FontWeight="SemiBold" />
                     <TextBlock x:Name="SelectedNotesText" Text="{Binding SelectedNotesText}" TextWrapping="Wrap" />
-                    <Button Content="Edit selected"
+                    <Button x:Name="EditSelectedButton" Content="Edit selected"
                             Command="{Binding StartEditCommand}"
                             IsVisible="{Binding IsAdding}"
                             HorizontalAlignment="Left" Margin="0,12,0,0" />
@@ -106,7 +106,7 @@
 
                     <TextBlock Text="Title *" FontWeight="SemiBold" Margin="0,8,0,0" />
                     <TextBox x:Name="TitleInput" Text="{Binding Editor.Title, Mode=TwoWay}" />
-                    <TextBlock Text="{Binding Editor.TitleError}"
+                    <TextBlock x:Name="TitleErrorText" Text="{Binding Editor.TitleError}"
                                IsVisible="{Binding Editor.HasTitleError}" TextWrapping="Wrap" />
 
                     <TextBlock Text="Medium *" FontWeight="SemiBold" Margin="0,8,0,0" />
@@ -125,13 +125,13 @@
                                IsVisible="{Binding Editor.ShowDvdNumber}" />
                     <TextBox x:Name="DvdNumberInput" Text="{Binding Editor.DvdNumberText, Mode=TwoWay}"
                              IsVisible="{Binding Editor.ShowDvdNumber}" />
-                    <TextBlock Text="{Binding Editor.DvdNumberError}"
+                    <TextBlock x:Name="DvdNumberErrorText" Text="{Binding Editor.DvdNumberError}"
                                IsVisible="{Binding Editor.HasDvdNumberError}" TextWrapping="Wrap" />
 
                     <TextBlock Text="Location *" FontWeight="SemiBold" Margin="0,8,0,0" />
                     <TextBox x:Name="LocationInput" Text="{Binding Editor.Location, Mode=TwoWay}"
                              PlaceholderText="/DevHook/GAMES/Game.rar" />
-                    <TextBlock Text="{Binding Editor.LocationError}"
+                    <TextBlock x:Name="LocationErrorText" Text="{Binding Editor.LocationError}"
                                IsVisible="{Binding Editor.HasLocationError}" TextWrapping="Wrap" />
 
                     <TextBlock Text="Format *" FontWeight="SemiBold" Margin="0,8,0,0" />
@@ -149,7 +149,7 @@
                     <TextBlock Text="Decompressed size entered by you (bytes) *"
                                FontWeight="SemiBold" Margin="0,8,0,0" TextWrapping="Wrap" />
                     <TextBox x:Name="SizeInput" Text="{Binding Editor.SizeBytesText, Mode=TwoWay}" />
-                    <TextBlock Text="{Binding Editor.SizeBytesError}"
+                    <TextBlock x:Name="SizeErrorText" Text="{Binding Editor.SizeBytesError}"
                                IsVisible="{Binding Editor.HasSizeBytesError}" TextWrapping="Wrap" />
                     <TextBlock Text="Approximate size (binary units)" />
                     <TextBlock Text="{Binding Editor.HumanReadableSizeText}" />
@@ -157,7 +157,7 @@
                     <TextBlock Text="Notes" FontWeight="SemiBold" Margin="0,8,0,0" />
                     <TextBox x:Name="NotesInput" Text="{Binding Editor.Notes, Mode=TwoWay}"
                              AcceptsReturn="True" TextWrapping="Wrap" Height="80" />
-                    <TextBlock Text="{Binding Editor.NotesError}"
+                    <TextBlock x:Name="NotesErrorText" Text="{Binding Editor.NotesError}"
                                IsVisible="{Binding Editor.HasNotesError}" TextWrapping="Wrap" />
 
                     <Button Content="Check fields"
@@ -167,7 +167,7 @@
                             Command="{Binding AddGameCommand}"
                             IsVisible="{Binding IsAdding}"
                             HorizontalAlignment="Left" />
-                    <Button Content="Save changes"
+                    <Button x:Name="SaveChangesButton" Content="Save changes"
                             Command="{Binding SaveChangesCommand}"
                             IsVisible="{Binding IsEditing}"
                             HorizontalAlignment="Left" />
