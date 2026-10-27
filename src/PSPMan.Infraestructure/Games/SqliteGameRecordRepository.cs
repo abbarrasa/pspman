@@ -87,19 +87,7 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
             using var reader = recordsCommand.ExecuteReader();
             while (reader.Read())
             {
-                var record = ReadRecord(reader);
-                var input = new GameRecordInput(
-                    record.Title,
-                    record.Medium,
-                    record.DvdNumber,
-                    record.Location,
-                    record.Format,
-                    record.SizeBytes,
-                    record.Notes);
-                if (GameRecordRules.Validate(input).Count > 0)
-                {
-                    throw new InvalidDataException("Catalog data is corrupt.");
-                }
+                _ = ReadRecord(reader);
             }
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 1 or 11 or 26)
@@ -112,7 +100,7 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         }
     }
 
-    public IReadOnlyList<GameRecord> List()
+    public IReadOnlyList<GameRecord> List() => ReportCorruption(() =>
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
@@ -126,9 +114,9 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         }
 
         return records;
-    }
+    });
 
-    public GameRecord? GetById(Guid id)
+    public GameRecord? GetById(Guid id) => ReportCorruption(() =>
     {
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
@@ -136,52 +124,61 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         command.Parameters.AddWithValue("$id", id.ToString());
         using var reader = command.ExecuteReader();
         return reader.Read() ? ReadRecord(reader) : null;
-    }
+    });
 
     public void Create(GameRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
 
-        using var connection = OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO GameRecords (Id, Title, Medium, DvdNumber, Location, Format, SizeBytes, Notes)
-            VALUES ($id, $title, $medium, $dvdNumber, $location, $format, $sizeBytes, $notes)
-            """;
-        AddRecordParameters(command, record);
-        command.ExecuteNonQuery();
+        ReportCorruption(() =>
+        {
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO GameRecords (Id, Title, Medium, DvdNumber, Location, Format, SizeBytes, Notes)
+                VALUES ($id, $title, $medium, $dvdNumber, $location, $format, $sizeBytes, $notes)
+                """;
+            AddRecordParameters(command, record);
+            command.ExecuteNonQuery();
+        });
     }
 
     public void Update(GameRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
 
-        using var connection = OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            UPDATE GameRecords
-            SET Title = $title, Medium = $medium, DvdNumber = $dvdNumber,
-                Location = $location, Format = $format, SizeBytes = $sizeBytes,
-                Notes = $notes
-            WHERE Id = $id
-            """;
-        AddRecordParameters(command, record);
-        if (command.ExecuteNonQuery() == 0)
+        ReportCorruption(() =>
         {
-            throw new InvalidOperationException("Game record not found.");
-        }
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE GameRecords
+                SET Title = $title, Medium = $medium, DvdNumber = $dvdNumber,
+                    Location = $location, Format = $format, SizeBytes = $sizeBytes,
+                    Notes = $notes
+                WHERE Id = $id
+                """;
+            AddRecordParameters(command, record);
+            if (command.ExecuteNonQuery() == 0)
+            {
+                throw new InvalidOperationException("Game record not found.");
+            }
+        });
     }
 
     public void Delete(Guid id)
     {
-        using var connection = OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM GameRecords WHERE Id = $id";
-        command.Parameters.AddWithValue("$id", id.ToString());
-        if (command.ExecuteNonQuery() == 0)
+        ReportCorruption(() =>
         {
-            throw new InvalidOperationException("Game record not found.");
-        }
+            using var connection = OpenConnection();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM GameRecords WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            if (command.ExecuteNonQuery() == 0)
+            {
+                throw new InvalidOperationException("Game record not found.");
+            }
+        });
     }
 
     private static void AddRecordParameters(SqliteCommand command, GameRecord record)
@@ -211,13 +208,51 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         }
     }
 
-    private static GameRecord ReadRecord(SqliteDataReader reader) => new(
-        Guid.Parse(reader.GetString(0)),
-        reader.GetString(1),
-        (GameMedium)reader.GetInt32(2),
-        reader.IsDBNull(3) ? null : reader.GetInt32(3),
-        reader.GetString(4),
-        (GameFormat)reader.GetInt32(5),
-        reader.GetInt64(6),
-        reader.IsDBNull(7) ? null : reader.GetString(7));
+    private static GameRecord ReadRecord(SqliteDataReader reader)
+    {
+        try
+        {
+            var record = new GameRecord(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                (GameMedium)reader.GetInt32(2),
+                reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                reader.GetString(4),
+                (GameFormat)reader.GetInt32(5),
+                reader.GetInt64(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7));
+            var input = new GameRecordInput(
+                record.Title, record.Medium, record.DvdNumber, record.Location,
+                record.Format, record.SizeBytes, record.Notes);
+            if (GameRecordRules.Validate(input).Count > 0)
+            {
+                throw new InvalidDataException("Catalog data is corrupt.");
+            }
+
+            return record;
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or InvalidOperationException)
+        {
+            throw new InvalidDataException("Catalog data is corrupt.", ex);
+        }
+    }
+
+    private static T ReportCorruption<T>(Func<T> operation)
+    {
+        try
+        {
+            return operation();
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode is 1 or 11 or 26)
+        {
+            throw new InvalidDataException("Catalog data is corrupt.", ex);
+        }
+    }
+
+    private static void ReportCorruption(Action operation) =>
+        ReportCorruption(() =>
+        {
+            operation();
+            return true;
+        });
 }

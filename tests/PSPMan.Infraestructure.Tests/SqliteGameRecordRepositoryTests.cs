@@ -339,6 +339,40 @@ public class SqliteGameRecordRepositoryTests
     }
 
     [Fact]
+    public void CorruptRecordIntroducedAfterStartupIsReportedOnRead()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        repository.Create(DvdGame);
+        using (var connection = OpenConnection(catalog.Path))
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE GameRecords SET Title = ' ' WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", DvdGame.Id.ToString());
+            command.ExecuteNonQuery();
+        }
+
+        var original = File.ReadAllBytes(catalog.Path);
+
+        Assert.Throws<InvalidDataException>(() => repository.List());
+        Assert.Throws<InvalidDataException>(() => repository.GetById(DvdGame.Id));
+        Assert.Equal(original, File.ReadAllBytes(catalog.Path));
+    }
+
+    [Fact]
+    public void DatabaseDamageAfterStartupIsReportedAsCorrupt()
+    {
+        using var catalog = new TemporaryCatalog();
+        var repository = new SqliteGameRecordRepository(catalog.Path);
+        File.WriteAllBytes(catalog.Path, [0, 1, 2, 3, 4, 5]);
+        var original = File.ReadAllBytes(catalog.Path);
+
+        Assert.Throws<InvalidDataException>(() => repository.List());
+        Assert.Throws<InvalidDataException>(() => repository.Create(DvdGame));
+        Assert.Equal(original, File.ReadAllBytes(catalog.Path));
+    }
+
+    [Fact]
     public void MissingCatalogReadFailsWithoutRecreatingDatabase()
     {
         using var catalog = new TemporaryCatalog();
