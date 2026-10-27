@@ -39,6 +39,23 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
                 """
             : $"SELECT {SelectFields} FROM GameRecords LIMIT 0";
         command.ExecuteNonQuery();
+
+        using var transaction = connection.BeginTransaction();
+        using var indexCommand = connection.CreateCommand();
+        indexCommand.Transaction = transaction;
+        indexCommand.CommandText = """
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_GameRecords_Dvd
+            ON GameRecords (Medium, DvdNumber, Location COLLATE BINARY)
+            WHERE Medium = 0
+            """;
+        indexCommand.ExecuteNonQuery();
+        indexCommand.CommandText = """
+            CREATE UNIQUE INDEX IF NOT EXISTS UX_GameRecords_NonDvd
+            ON GameRecords (Medium, Location COLLATE BINARY)
+            WHERE Medium <> 0
+            """;
+        indexCommand.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     public IReadOnlyList<GameRecord> List()
@@ -67,8 +84,26 @@ public sealed class SqliteGameRecordRepository : IGameRecordRepository
         return reader.Read() ? ReadRecord(reader) : null;
     }
 
-    public void Create(GameRecord record) =>
-        throw new NotSupportedException("Catalog creation is not implemented yet.");
+    public void Create(GameRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO GameRecords (Id, Title, Medium, DvdNumber, Location, Format, SizeBytes, Notes)
+            VALUES ($id, $title, $medium, $dvdNumber, $location, $format, $sizeBytes, $notes)
+            """;
+        command.Parameters.AddWithValue("$id", record.Id.ToString());
+        command.Parameters.AddWithValue("$title", record.Title);
+        command.Parameters.AddWithValue("$medium", (int)record.Medium);
+        command.Parameters.AddWithValue("$dvdNumber", (object?)record.DvdNumber ?? DBNull.Value);
+        command.Parameters.AddWithValue("$location", record.Location);
+        command.Parameters.AddWithValue("$format", (int)record.Format);
+        command.Parameters.AddWithValue("$sizeBytes", record.SizeBytes);
+        command.Parameters.AddWithValue("$notes", (object?)record.Notes ?? DBNull.Value);
+        command.ExecuteNonQuery();
+    }
 
     public void Update(GameRecord record) =>
         throw new NotSupportedException("Catalog updates are not implemented yet.");
