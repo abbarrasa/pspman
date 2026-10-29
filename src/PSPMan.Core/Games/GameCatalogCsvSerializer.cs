@@ -21,7 +21,8 @@ public static class GameCatalogCsvSerializer
         foreach (var record in records)
         {
             var fields = ProjectRecord(record);
-            csv.AppendJoin(';', fields.Select(EscapeCsvField)).Append("\r\n");
+            csv.AppendJoin(';', fields.Select((field, index) =>
+                EscapeCsvField(index is 2 or 5 ? field : ProtectExcelText(field)))).Append("\r\n");
         }
 
         return [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(csv.ToString())];
@@ -60,9 +61,27 @@ public static class GameCatalogCsvSerializer
         ];
     }
 
+    private static bool NeedsExcelTextProtection(string text)
+    {
+        foreach (var character in text)
+        {
+            if (!char.IsWhiteSpace(character))
+            {
+                return character is '=' or '+' or '-' or '@';
+            }
+        }
+
+        return false;
+    }
+
+    private static string ProtectExcelText(string text)
+    {
+        return NeedsExcelTextProtection(text) ? $"\t{text}" : text;
+    }
+
     private static string EscapeCsvField(string field)
     {
-        return field.IndexOfAny([';', '"', '\r', '\n']) >= 0
+        return field.IndexOfAny([';', '"', '\r', '\n', '\t']) >= 0
             ? $"\"{field.Replace("\"", "\"\"")}\""
             : field;
     }

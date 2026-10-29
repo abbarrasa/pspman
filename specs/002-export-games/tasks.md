@@ -12,7 +12,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests verify every visible field, invariant integer bytes, the shared readable size, empty non-DVD DVD cells, and one ordered row per record.
 - [x] **T04 (25 min; FR-3, FR-4):** Add CSV field escaping and tests for semicolons, quotes, commas, colons, Unicode, line breaks, and empty Notes.
   Done when: Tests parse the output into the original cell values, with embedded quotes doubled and no extra logical rows.
-- [ ] **T05 (25 min; FR-4, FR-5):** Protect formula-like text in exported cells, including triggers after leading whitespace; test protected and ordinary values.
+- [x] **T05 (25 min; FR-4, FR-5):** Protect formula-like text in exported cells, including triggers after leading whitespace; test protected and ordinary values.
   Done when: Tests cover `=`, `+`, `-`, and `@`, verify the planned protective tab and quoting, and prove the catalog values remain unchanged.
 
 ## Destination and safe publication
