@@ -117,6 +117,7 @@ public partial class MainViewModel : ViewModelBase
                 OpenExportCommand.NotifyCanExecuteChanged();
                 ChooseExportFolderCommand.NotifyCanExecuteChanged();
                 ExportCatalogCommand.NotifyCanExecuteChanged();
+                ConfirmExportReplacementCommand.NotifyCanExecuteChanged();
                 StartEditCommand.NotifyCanExecuteChanged();
                 SaveChangesCommand.NotifyCanExecuteChanged();
                 DeleteSelectedCommand.NotifyCanExecuteChanged();

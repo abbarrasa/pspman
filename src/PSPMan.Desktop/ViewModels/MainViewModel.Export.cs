@@ -17,6 +17,10 @@ public partial class MainViewModel
     private string _exportFileName = "pspman-games.csv";
     private string? _exportError;
     private string? _exportedPath;
+    private PendingExportReplacement? _pendingExportReplacement;
+
+    private sealed record PendingExportReplacement(
+        string DestinationPath, byte[] Content, ExportDestinationSnapshot Snapshot);
 
     public bool IsExportFormOpen
     {
@@ -31,6 +35,7 @@ public partial class MainViewModel
                 ChooseExportFolderCommand.NotifyCanExecuteChanged();
                 CancelExportCommand.NotifyCanExecuteChanged();
                 ExportCatalogCommand.NotifyCanExecuteChanged();
+                ConfirmExportReplacementCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -42,6 +47,7 @@ public partial class MainViewModel
         {
             if (SetProperty(ref _exportFolderPath, value))
             {
+                PendingReplacement = null;
                 OnPropertyChanged(nameof(CanExportCatalog));
                 ExportCatalogCommand.NotifyCanExecuteChanged();
             }
@@ -51,7 +57,13 @@ public partial class MainViewModel
     public string ExportFileName
     {
         get => _exportFileName;
-        set => SetProperty(ref _exportFileName, value);
+        set
+        {
+            if (SetProperty(ref _exportFileName, value))
+            {
+                PendingReplacement = null;
+            }
+        }
     }
 
     public string? ExportError
@@ -66,12 +78,36 @@ public partial class MainViewModel
         private set => SetProperty(ref _exportedPath, value);
     }
 
+    private PendingExportReplacement? PendingReplacement
+    {
+        get => _pendingExportReplacement;
+        set
+        {
+            if (SetProperty(ref _pendingExportReplacement, value))
+            {
+                OnPropertyChanged(nameof(IsReplacementPending));
+                OnPropertyChanged(nameof(PendingReplacementPath));
+                OnPropertyChanged(nameof(CanExportCatalog));
+                ConfirmExportReplacementCommand.NotifyCanExecuteChanged();
+                CancelExportReplacementCommand.NotifyCanExecuteChanged();
+                ExportCatalogCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsReplacementPending => PendingReplacement is not null;
+
+    public string? PendingReplacementPath => PendingReplacement?.DestinationPath;
+
     public bool CanOpenExport => IsEditorAvailable && _exportFolderPicker is not null && !IsExportFormOpen;
 
     public bool CanChooseExportFolder => IsEditorAvailable && _exportFolderPicker is not null && IsExportFormOpen;
 
     public bool CanExportCatalog => IsEditorAvailable && IsExportFormOpen
-        && ExportFolderPath is not null && _exportWriter is not null && _catalogPath is not null;
+        && !IsReplacementPending && ExportFolderPath is not null
+        && _exportWriter is not null && _catalogPath is not null;
+
+    public bool CanConfirmExportReplacement => IsEditorAvailable && IsExportFormOpen && IsReplacementPending;
 
     [RelayCommand(CanExecute = nameof(CanOpenExport))]
     private void OpenExport()
@@ -80,6 +116,7 @@ public partial class MainViewModel
         ExportFolderPath = null;
         ExportError = null;
         ExportedPath = null;
+        PendingReplacement = null;
         IsExportFormOpen = true;
     }
 
@@ -88,6 +125,7 @@ public partial class MainViewModel
     {
         ExportedPath = null;
         ExportError = null;
+        PendingReplacement = null;
 
         if (!GameExportDestination.TryResolve(ExportFolderPath, ExportFileName, _catalogPath,
                 out var destinationPath, out var error))
@@ -110,7 +148,7 @@ public partial class MainViewModel
             var snapshot = _exportWriter!.Capture(destinationPath!);
             if (snapshot.Exists)
             {
-                ExportError = "Replacing an existing export requires confirmation.";
+                PendingReplacement = new PendingExportReplacement(destinationPath!, bytes, snapshot);
                 return;
             }
 
@@ -122,6 +160,37 @@ public partial class MainViewModel
         {
             ExportError = "Unable to save the catalog export.";
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanConfirmExportReplacement))]
+    private void ConfirmExportReplacement()
+    {
+        if (PendingReplacement is not { } pending)
+        {
+            return;
+        }
+
+        ExportError = null;
+        ExportedPath = null;
+        try
+        {
+            _exportWriter!.Publish(pending.DestinationPath, pending.Content,
+                pending.Snapshot, overwriteApproved: true);
+            PendingReplacement = null;
+            ExportedPath = pending.DestinationPath;
+            IsExportFormOpen = false;
+        }
+        catch (Exception)
+        {
+            PendingReplacement = null;
+            ExportError = "Unable to replace the catalog export.";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsReplacementPending))]
+    private void CancelExportReplacement()
+    {
+        PendingReplacement = null;
     }
 
     [RelayCommand(CanExecute = nameof(CanChooseExportFolder))]
@@ -154,6 +223,7 @@ public partial class MainViewModel
     private void CancelExport()
     {
         IsExportFormOpen = false;
+        PendingReplacement = null;
         ExportFolderPath = null;
         ExportError = null;
     }

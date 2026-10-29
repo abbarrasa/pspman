@@ -1,11 +1,140 @@
 using PSPMan.Core.Games;
 using PSPMan.Desktop.Services;
 using PSPMan.Desktop.ViewModels;
+using PSPMan.Infraestructure.Games;
 
 namespace PSPMan.Desktop.Tests;
 
 public class MainViewModelExportTests
 {
+    [Fact]
+    public async Task ExistingDestinationRequiresConfirmationAndDeclinePreservesBytes()
+    {
+        var folder = CreateExportFolder();
+        try
+        {
+            var destination = Path.Combine(folder, "pspman-games.csv");
+            var original = new byte[] { 0, 1, 2, 255 };
+            File.WriteAllBytes(destination, original);
+            var viewModel = CreateViewModelWithRealWriter(folder);
+
+            viewModel.OpenExportCommand.Execute(null);
+            await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+            viewModel.ExportCatalogCommand.Execute(null);
+
+            Assert.True(viewModel.IsReplacementPending);
+            Assert.Equal(destination, viewModel.PendingReplacementPath);
+            Assert.Null(viewModel.ExportedPath);
+            Assert.Equal(original, File.ReadAllBytes(destination));
+
+            viewModel.CancelExportReplacementCommand.Execute(null);
+
+            Assert.False(viewModel.IsReplacementPending);
+            Assert.True(viewModel.IsExportFormOpen);
+            Assert.Null(viewModel.ExportedPath);
+            Assert.Equal(original, File.ReadAllBytes(destination));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ApprovalReplacesTheInspectedFileAndReportsSuccess()
+    {
+        var folder = CreateExportFolder();
+        try
+        {
+            var destination = Path.Combine(folder, "pspman-games.csv");
+            File.WriteAllText(destination, "previous export");
+            var viewModel = CreateViewModelWithRealWriter(folder);
+
+            viewModel.OpenExportCommand.Execute(null);
+            await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+            viewModel.ExportCatalogCommand.Execute(null);
+            viewModel.ConfirmExportReplacementCommand.Execute(null);
+
+            Assert.Equal(GameCatalogCsvSerializer.SerializeEmptyCatalog(), File.ReadAllBytes(destination));
+            Assert.Equal(destination, viewModel.ExportedPath);
+            Assert.False(viewModel.IsReplacementPending);
+            Assert.False(viewModel.IsExportFormOpen);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ChangingFileNameInvalidatesPendingReplacement()
+    {
+        var folder = CreateExportFolder();
+        try
+        {
+            var destination = Path.Combine(folder, "pspman-games.csv");
+            File.WriteAllText(destination, "previous export");
+            var viewModel = CreateViewModelWithRealWriter(folder);
+
+            viewModel.OpenExportCommand.Execute(null);
+            await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+            viewModel.ExportCatalogCommand.Execute(null);
+            Assert.True(viewModel.IsReplacementPending);
+
+            viewModel.ExportFileName = "another.csv";
+
+            Assert.False(viewModel.IsReplacementPending);
+            Assert.False(viewModel.ConfirmExportReplacementCommand.CanExecute(null));
+            Assert.Equal("previous export", File.ReadAllText(destination));
+            Assert.False(File.Exists(Path.Combine(folder, "another.csv")));
+            Assert.Null(viewModel.ExportedPath);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ChangedFileAfterPromptIsNotReplacedByOldConsent()
+    {
+        var folder = CreateExportFolder();
+        try
+        {
+            var destination = Path.Combine(folder, "pspman-games.csv");
+            File.WriteAllText(destination, "original export");
+            var viewModel = CreateViewModelWithRealWriter(folder);
+
+            viewModel.OpenExportCommand.Execute(null);
+            await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+            viewModel.ExportCatalogCommand.Execute(null);
+            File.WriteAllText(destination, "newer export");
+
+            viewModel.ConfirmExportReplacementCommand.Execute(null);
+
+            Assert.Equal("newer export", File.ReadAllText(destination));
+            Assert.Null(viewModel.ExportedPath);
+            Assert.NotNull(viewModel.ExportError);
+            Assert.False(viewModel.IsReplacementPending);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    private static string CreateExportFolder()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Replace.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    private static MainViewModel CreateViewModelWithRealWriter(string folder) =>
+        new(new GameCatalogService(new EmptyRepository()), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)),
+            new AtomicCsvExportWriter(), Path.Combine(folder, "catalog.db"));
+
     [Fact]
     public async Task ExportReadsEverySavedRecordAfreshRegardlessOfSelectionOrOfflineMedia()
     {
