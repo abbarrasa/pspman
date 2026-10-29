@@ -156,6 +156,62 @@ public class GameCatalogCsvSerializerTests
         Assert.Equal(string.Empty, rows[1][7]);
     }
 
+    [Theory]
+    [InlineData("=1+1", "\"\t=1+1\"")]
+    [InlineData("+SUM(1;2)", "\"\t+SUM(1;2)\"")]
+    [InlineData("-10", "\"\t-10\"")]
+    [InlineData("@CMD", "\"\t@CMD\"")]
+    [InlineData(" \u2003=1+1", "\"\t \u2003=1+1\"")]
+    [InlineData("\u00A0+1", "\"\t\u00A0+1\"")]
+    [InlineData("\t@CMD", "\"\t\t@CMD\"")]
+    public void ProtectsFormulaLikeTitlesWithoutChangingTheRecord(string title, string encodedTitle)
+    {
+        var record = new GameRecord(Guid.NewGuid(), title, GameMedium.Dvd, 1,
+            "/game.iso", GameFormat.Iso, 1_572_864, null);
+
+        var bytes = GameCatalogCsvSerializer.SerializeCatalog([record]);
+        var csv = Encoding.UTF8.GetString(bytes);
+        var rows = ParseRows(bytes);
+
+        Assert.Contains($"{encodedTitle};DVD;1;", csv);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal($"\t{title}", rows[1][0]);
+        Assert.Equal(title, record.Title);
+        Assert.Equal("1", rows[1][2]);
+        Assert.Equal("1572864", rows[1][5]);
+    }
+
+    [Fact]
+    public void ProtectsFormulaLikeNotesAndStillDoublesQuotes()
+    {
+        const string notes = " \u2003=SUM(1;2) \"quoted\"";
+        var record = new GameRecord(Guid.NewGuid(), "Game", GameMedium.Usb, null,
+            "/game.iso", GameFormat.Iso, 1, notes);
+
+        var bytes = GameCatalogCsvSerializer.SerializeCatalog([record]);
+        var csv = Encoding.UTF8.GetString(bytes);
+        var rows = ParseRows(bytes);
+
+        Assert.Contains(";\"\t \u2003=SUM(1;2) \"\"quoted\"\"\"\r\n", csv);
+        Assert.Equal($"\t{notes}", rows[1][7]);
+        Assert.Equal(notes, record.Notes);
+    }
+
+    [Theory]
+    [InlineData("Ordinary title")]
+    [InlineData("a=1")]
+    [InlineData("0-1")]
+    [InlineData(" \tNormal")]
+    public void DoesNotPrefixSafeText(string title)
+    {
+        var record = new GameRecord(Guid.NewGuid(), title, GameMedium.Dvd, 1,
+            "/game.iso", GameFormat.Iso, 1, null);
+
+        var rows = ParseRows(GameCatalogCsvSerializer.SerializeCatalog([record]));
+
+        Assert.Equal(title, rows[1][0]);
+    }
+
     private static List<string[]> ParseRows(byte[] bytes)
     {
         using var reader = new StringReader(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'));
