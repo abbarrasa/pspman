@@ -1,0 +1,35 @@
+name: Auto Create Pull Request
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - dev
+
+jobs:
+  create-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Pull Request to Dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if there is already a PR for this branch towards 'dev'
+          PR_EXISTS=$(gh pr list --head "${GITHUB_REF_NAME}" --base dev --json number --jq '..number')
+          
+          if [ -z "$PR_EXISTS" ]; then
+            echo "Creating Pull Request for ${GITHUB_REF_NAME} towards dev..."
+            gh pr create \
+              --base dev \
+              --head "${GITHUB_REF_NAME}" \
+              --title "Merge ${GITHUB_REF_NAME} into dev" \
+              --body "PR generated automatically on push. Lista para invocar @codex review." \
+              --assignee "${{ github.repository_owner }}" \
+              --label "review-pending"
+          else
+            echo "A Pull Request already exists (#$PR_EXISTS) for this branch."
+          fi
+          
