@@ -49,7 +49,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 ## End-to-end acceptance
 
-- [ ] **T19 (30 min; FR-2, FR-3, FR-7, FR-9):** Add SQLite-backed functional tests for full saved-order export and a header-only empty export, including offline records and no selected game.
+- [x] **T19 (30 min; FR-2, FR-3, FR-7, FR-9):** Add SQLite-backed functional tests for full saved-order export and a header-only empty export, including offline records and no selected game.
   Done when: Tests inspect the exported bytes and prove the saved catalog and game files are unchanged.
 - [ ] **T20 (25 min; FR-3, FR-4, FR-5):** Add a functional test that exports punctuation, quoted multiline Notes, Unicode, and formula-like text to a real CSV file.
   Done when: The file retains each value in one logical cell and contains the planned Excel text protection without changing catalog values.
