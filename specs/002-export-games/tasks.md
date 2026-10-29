@@ -55,7 +55,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: The file retains each value in one logical cell and contains the planned Excel text protection without changing catalog values.
 - [x] **T21 (30 min; FR-1, FR-6, FR-8):** Add functional cancellation and failure tests using disposable destinations and a corrupt catalog.
   Done when: Tests cover cancelled selection, declined replacement, corrupt reads, and failed writes without false success or changed existing bytes.
-- [ ] **T22 (25 min; FR-1–FR-9):** Run the full solution build and tests, measure line and branch coverage, and record FR-to-test evidence and justified gaps in the coverage report.
+- [x] **T22 (25 min; FR-1–FR-9):** Run the full solution build and tests, measure line and branch coverage, and record FR-to-test evidence and justified gaps in the coverage report.
   Done when: The build and tests pass, coverage numbers are recorded, and every FR has linked automated evidence.
 - [ ] **T23 (30 min; FR-1–FR-9):** Perform the manual Spanish-Excel walkthrough, record observed results, and update project memory to the implemented state.
   Done when: The validation record checks nonempty and empty files, special Notes, literal formula-like text, cancellation and replacement, and memory reflects the verified behavior; any unavailable Excel check remains explicitly pending.
