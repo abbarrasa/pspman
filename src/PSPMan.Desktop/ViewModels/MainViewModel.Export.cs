@@ -138,28 +138,41 @@ public partial class MainViewModel
         if (!result.IsSuccess)
         {
             ReportCorruption(result);
-            ExportError = result.Error;
+            ExportError = result.IsCorrupt
+                ? result.Error
+                : "Unable to read the game catalog for export. Try again.";
             return;
         }
 
+        byte[] bytes;
         try
         {
-            var bytes = GameCatalogCsvSerializer.SerializeCatalog(result.Value ?? []);
-            var snapshot = _exportWriter!.Capture(destinationPath!);
-            if (snapshot.Exists)
-            {
-                PendingReplacement = new PendingExportReplacement(destinationPath!, bytes, snapshot);
-                return;
-            }
-
-            _exportWriter.Publish(destinationPath!, bytes, snapshot, overwriteApproved: false);
-            ExportedPath = destinationPath;
-            IsExportFormOpen = false;
+            bytes = GameCatalogCsvSerializer.SerializeCatalog(result.Value ?? []);
         }
         catch (Exception)
         {
-            ExportError = "Unable to save the catalog export.";
+            ExportError = "Unable to prepare the catalog export.";
+            return;
         }
+
+        ExportDestinationSnapshot snapshot;
+        try
+        {
+            snapshot = _exportWriter!.Capture(destinationPath!);
+        }
+        catch (Exception)
+        {
+            ExportError = "Unable to inspect the export destination. Check access and try again.";
+            return;
+        }
+
+        if (snapshot.Exists)
+        {
+            PendingReplacement = new PendingExportReplacement(destinationPath!, bytes, snapshot);
+            return;
+        }
+
+        PublishExport(destinationPath!, bytes, snapshot, overwriteApproved: false);
     }
 
     [RelayCommand(CanExecute = nameof(CanConfirmExportReplacement))]
@@ -170,20 +183,28 @@ public partial class MainViewModel
             return;
         }
 
+        PublishExport(pending.DestinationPath, pending.Content, pending.Snapshot,
+            overwriteApproved: true);
+    }
+
+    private void PublishExport(string destinationPath, byte[] content,
+        ExportDestinationSnapshot snapshot, bool overwriteApproved)
+    {
         ExportError = null;
         ExportedPath = null;
         try
         {
-            _exportWriter!.Publish(pending.DestinationPath, pending.Content,
-                pending.Snapshot, overwriteApproved: true);
+            _exportWriter!.Publish(destinationPath, content, snapshot, overwriteApproved);
             PendingReplacement = null;
-            ExportedPath = pending.DestinationPath;
+            ExportedPath = destinationPath;
             IsExportFormOpen = false;
         }
         catch (Exception)
         {
             PendingReplacement = null;
-            ExportError = "Unable to replace the catalog export.";
+            ExportError = overwriteApproved
+                ? "Unable to write the replacement export. The destination was left unchanged; try again."
+                : "Unable to write the export file. Check the destination and try again.";
         }
     }
 
