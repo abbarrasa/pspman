@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PSPMan.Core.Games;
+using PSPMan.Desktop.Services;
 
 namespace PSPMan.Desktop.ViewModels;
 
@@ -21,8 +22,10 @@ public partial class MainViewModel : ViewModelBase
     {
     }
 
-    public MainViewModel(GameCatalogService? catalogService, string? catalogError)
+    public MainViewModel(GameCatalogService? catalogService, string? catalogError,
+        IGameExportFolderPicker? exportFolderPicker = null)
     {
+        _exportFolderPicker = exportFolderPicker;
         CatalogService = catalogService;
         CatalogError = catalogError;
 
@@ -105,7 +108,10 @@ public partial class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsEditorAvailable));
                 OnPropertyChanged(nameof(IsAdding));
                 OnPropertyChanged(nameof(IsEmpty));
+                OnPropertyChanged(nameof(CanOpenExport));
                 AddGameCommand.NotifyCanExecuteChanged();
+                OpenExportCommand.NotifyCanExecuteChanged();
+                ChooseExportFolderCommand.NotifyCanExecuteChanged();
                 StartEditCommand.NotifyCanExecuteChanged();
                 SaveChangesCommand.NotifyCanExecuteChanged();
                 DeleteSelectedCommand.NotifyCanExecuteChanged();
