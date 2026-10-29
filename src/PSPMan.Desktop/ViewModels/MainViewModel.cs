@@ -113,6 +113,7 @@ public partial class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsEmpty));
                 OnPropertyChanged(nameof(CanOpenExport));
                 OnPropertyChanged(nameof(CanExportCatalog));
+                OnPropertyChanged(nameof(CanConfirmExportReplacement));
                 AddGameCommand.NotifyCanExecuteChanged();
                 OpenExportCommand.NotifyCanExecuteChanged();
                 ChooseExportFolderCommand.NotifyCanExecuteChanged();

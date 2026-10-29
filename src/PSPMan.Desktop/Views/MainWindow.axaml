@@ -14,7 +14,7 @@
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="20">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="20">
         <Grid ColumnDefinitions="*,Auto">
             <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
             <Button x:Name="ExportCatalogButton" Grid.Column="1" Content="Export catalog"
@@ -35,12 +35,37 @@
                 <TextBox x:Name="ExportFileNameInput" Width="280"
                          Text="{Binding ExportFileName, Mode=TwoWay}" />
                 <Button x:Name="ExportFileButton" Content="Export"
-                        Command="{Binding ExportCatalogCommand}" />
+                        Command="{Binding ExportCatalogCommand}"
+                        IsEnabled="{Binding CanExportCatalog}" />
                 <Button x:Name="CancelExportButton" Content="Cancel"
                         Command="{Binding CancelExportCommand}" />
             </StackPanel>
+            <StackPanel x:Name="ExportReplacementPanel" Spacing="6"
+                        IsVisible="{Binding IsReplacementPending}">
+                <TextBlock Text="The export file already exists. Replace it?"
+                           FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock x:Name="PendingExportPathText" Text="{Binding PendingReplacementPath}"
+                           TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ReplaceExportButton" Content="Replace"
+                            Command="{Binding ConfirmExportReplacementCommand}"
+                            IsEnabled="{Binding CanConfirmExportReplacement}" />
+                    <Button x:Name="DeclineExportButton" Content="Keep existing file"
+                            Command="{Binding CancelExportReplacementCommand}"
+                            IsEnabled="{Binding IsReplacementPending}" />
+                </StackPanel>
+            </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Row="2" Margin="0,12,0,0" Spacing="4"
+        <StackPanel x:Name="ExportSuccessPanel" Grid.Row="2" Margin="0,12,0,0" Spacing="4"
+                    IsVisible="{Binding HasExportSuccess}">
+            <TextBlock Text="Catalog exported to:" FontWeight="SemiBold" />
+            <TextBlock x:Name="ExportSuccessPathText" Text="{Binding ExportedPath}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+        <TextBlock x:Name="ExportErrorText" Grid.Row="2" Margin="0,12,0,0"
+                   Text="{Binding ExportError}" IsVisible="{Binding HasExportError}"
+                   TextWrapping="Wrap" />
+        <StackPanel Grid.Row="3" Margin="0,12,0,0" Spacing="4"
                     IsVisible="{Binding HasAnyError}">
             <TextBlock x:Name="CatalogErrorText" Text="{Binding CatalogError}"
                        IsVisible="{Binding HasStartupError}"
@@ -49,7 +74,7 @@
                        IsVisible="{Binding HasDistinctOperationError}"
                        TextWrapping="Wrap" />
         </StackPanel>
-        <Grid Grid.Row="3" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
+        <Grid Grid.Row="4" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Grid.Row="1">

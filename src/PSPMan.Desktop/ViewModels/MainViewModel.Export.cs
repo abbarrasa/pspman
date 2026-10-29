@@ -31,6 +31,7 @@ public partial class MainViewModel
             {
                 OnPropertyChanged(nameof(CanOpenExport));
                 OnPropertyChanged(nameof(CanExportCatalog));
+                OnPropertyChanged(nameof(CanConfirmExportReplacement));
                 OpenExportCommand.NotifyCanExecuteChanged();
                 ChooseExportFolderCommand.NotifyCanExecuteChanged();
                 CancelExportCommand.NotifyCanExecuteChanged();
@@ -69,14 +70,30 @@ public partial class MainViewModel
     public string? ExportError
     {
         get => _exportError;
-        private set => SetProperty(ref _exportError, value);
+        private set
+        {
+            if (SetProperty(ref _exportError, value))
+            {
+                OnPropertyChanged(nameof(HasExportError));
+            }
+        }
     }
+
+    public bool HasExportError => !string.IsNullOrWhiteSpace(ExportError);
 
     public string? ExportedPath
     {
         get => _exportedPath;
-        private set => SetProperty(ref _exportedPath, value);
+        private set
+        {
+            if (SetProperty(ref _exportedPath, value))
+            {
+                OnPropertyChanged(nameof(HasExportSuccess));
+            }
+        }
     }
+
+    public bool HasExportSuccess => !string.IsNullOrWhiteSpace(ExportedPath);
 
     private PendingExportReplacement? PendingReplacement
     {
@@ -88,6 +105,7 @@ public partial class MainViewModel
                 OnPropertyChanged(nameof(IsReplacementPending));
                 OnPropertyChanged(nameof(PendingReplacementPath));
                 OnPropertyChanged(nameof(CanExportCatalog));
+                OnPropertyChanged(nameof(CanConfirmExportReplacement));
                 ConfirmExportReplacementCommand.NotifyCanExecuteChanged();
                 CancelExportReplacementCommand.NotifyCanExecuteChanged();
                 ExportCatalogCommand.NotifyCanExecuteChanged();
