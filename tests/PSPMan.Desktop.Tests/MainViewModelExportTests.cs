@@ -114,7 +114,7 @@ public class MainViewModelExportTests
 
             Assert.Equal("newer export", File.ReadAllText(destination));
             Assert.Null(viewModel.ExportedPath);
-            Assert.NotNull(viewModel.ExportError);
+            Assert.Contains("write", viewModel.ExportError, StringComparison.OrdinalIgnoreCase);
             Assert.False(viewModel.IsReplacementPending);
         }
         finally
@@ -134,6 +134,105 @@ public class MainViewModelExportTests
         new(new GameCatalogService(new EmptyRepository()), null,
             new FakePicker(() => Task.FromResult<string?>(folder)),
             new AtomicCsvExportWriter(), Path.Combine(folder, "catalog.db"));
+
+    [Fact]
+    public async Task InvalidDestinationIsReportedBeforeCatalogReadOrWriterAccess()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var repository = new MutableRepository([]);
+        var writer = new FakeWriter();
+        var viewModel = new MainViewModel(new GameCatalogService(repository), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, Path.Combine(folder, "catalog.db"));
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportFileName = "../outside.csv";
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Contains("valid .csv file name", viewModel.ExportError);
+        Assert.Equal(1, repository.ListCalls);
+        Assert.Equal(0, writer.CaptureCalls);
+        Assert.Equal(0, writer.PublishCalls);
+        Assert.Null(viewModel.ExportedPath);
+    }
+
+    [Fact]
+    public async Task OrdinaryCatalogReadFailureIsReportedAndCanBeRetried()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var repository = new MutableRepository([]);
+        var writer = new FakeWriter();
+        var viewModel = new MainViewModel(new GameCatalogService(repository), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, Path.Combine(folder, "catalog.db"));
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        repository.ListFailure = new IOException("Offline catalog storage.");
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Contains("read", viewModel.ExportError, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(viewModel.CatalogError);
+        Assert.True(viewModel.ExportCatalogCommand.CanExecute(null));
+        Assert.Equal(0, writer.CaptureCalls);
+        Assert.Null(viewModel.ExportedPath);
+    }
+
+    [Fact]
+    public async Task CorruptCatalogReadReportsCorruptionAndBlocksFurtherExport()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var repository = new MutableRepository([]);
+        var writer = new FakeWriter();
+        var viewModel = new MainViewModel(new GameCatalogService(repository), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, Path.Combine(folder, "catalog.db"));
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        repository.ListFailure = new InvalidDataException("Corrupt catalog data.");
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Contains("corrupt", viewModel.ExportError, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(viewModel.ExportError, viewModel.CatalogError);
+        Assert.False(viewModel.ExportCatalogCommand.CanExecute(null));
+        Assert.False(viewModel.OpenExportCommand.CanExecute(null));
+        Assert.Equal(0, writer.CaptureCalls);
+        Assert.Null(viewModel.ExportedPath);
+    }
+
+    [Fact]
+    public async Task DestinationInspectionFailureIsDistinctFromWriteFailure()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var writer = new FakeWriter { CaptureFailure = new UnauthorizedAccessException("Access denied.") };
+        var viewModel = new MainViewModel(new GameCatalogService(new EmptyRepository()), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, Path.Combine(folder, "catalog.db"));
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Contains("inspect", viewModel.ExportError, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, writer.CaptureCalls);
+        Assert.Equal(0, writer.PublishCalls);
+        Assert.Null(viewModel.ExportedPath);
+    }
+
+    [Fact]
+    public async Task MissingExportFolderReportsWriteFailureWithoutPartialFile()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var destination = Path.Combine(folder, "pspman-games.csv");
+        var viewModel = CreateViewModelWithRealWriter(folder);
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Contains("write", viewModel.ExportError, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(viewModel.ExportedPath);
+        Assert.False(File.Exists(destination));
+        Assert.False(Directory.Exists(folder));
+    }
 
     [Fact]
     public async Task ExportReadsEverySavedRecordAfreshRegardlessOfSelectionOrOfflineMedia()
@@ -196,7 +295,7 @@ public class MainViewModelExportTests
         viewModel.ExportCatalogCommand.Execute(null);
 
         Assert.Null(viewModel.ExportedPath);
-        Assert.NotNull(viewModel.ExportError);
+        Assert.Contains("write", viewModel.ExportError, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -320,11 +419,16 @@ public class MainViewModelExportTests
     private sealed class MutableRepository(IReadOnlyList<GameRecord> records) : IGameRecordRepository
     {
         public IReadOnlyList<GameRecord> Records { get; set; } = records;
+        public Exception? ListFailure { get; set; }
         public int ListCalls { get; private set; }
 
         public IReadOnlyList<GameRecord> List()
         {
             ListCalls++;
+            if (ListFailure is not null)
+            {
+                throw ListFailure;
+            }
             return Records;
         }
 
@@ -337,14 +441,26 @@ public class MainViewModelExportTests
     private sealed class FakeWriter : IGameCatalogExportWriter
     {
         public bool FailPublication { get; set; }
+        public Exception? CaptureFailure { get; set; }
+        public int CaptureCalls { get; private set; }
+        public int PublishCalls { get; private set; }
         public string? PublishedPath { get; private set; }
         public byte[]? PublishedBytes { get; private set; }
 
-        public ExportDestinationSnapshot Capture(string destinationPath) => new(destinationPath, null);
+        public ExportDestinationSnapshot Capture(string destinationPath)
+        {
+            CaptureCalls++;
+            if (CaptureFailure is not null)
+            {
+                throw CaptureFailure;
+            }
+            return new(destinationPath, null);
+        }
 
         public void Publish(string destinationPath, ReadOnlyMemory<byte> content,
             ExportDestinationSnapshot inspectedDestination, bool overwriteApproved)
         {
+            PublishCalls++;
             Assert.False(overwriteApproved);
             if (FailPublication)
             {

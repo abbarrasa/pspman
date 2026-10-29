@@ -38,7 +38,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests export every saved row despite selection or disconnected media, export a header-only empty catalog, and report the saved path after success.
 - [x] **T14 (25 min; FR-6):** Add pending replacement confirmation in the view model and route only an approved choice to the writer.
   Done when: Tests show an existing destination prompts for confirmation and decline leaves it byte-for-byte unchanged without success feedback.
-- [ ] **T15 (25 min; FR-1, FR-8):** Surface invalid destination, catalog read/corruption, and writer failures in the view model without a false success state.
+- [x] **T15 (25 min; FR-1, FR-8):** Surface invalid destination, catalog read/corruption, and writer failures in the view model without a false success state.
   Done when: Tests distinguish these failures, leave destination bytes unchanged, and preserve the catalog's existing corruption behavior.
 - [ ] **T16 (20 min; FR-1, FR-7, FR-8):** Compose the picker and writer at Desktop startup while preserving the temporary-root test seam.
   Done when: A startup test resolves the export dependencies against a disposable root and existing catalog startup tests pass.
