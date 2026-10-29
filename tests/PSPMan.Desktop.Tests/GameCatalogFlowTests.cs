@@ -175,9 +175,44 @@ public class GameCatalogFlowTests
     }
 
     [Fact]
+    public async Task CancelledFolderSelectionLeavesCatalogAndDestinationUnchangedWithoutSuccess()
+    {
+        using var data = new TemporaryApplicationData();
+        Assert.Empty(CatalogStartup.CreateMainViewModel(data.Path).Games);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
+        var destination = System.IO.Path.Combine(data.Path, "pspman-games.csv");
+        var destinationBefore = new byte[] { 0, 1, 2, 255 };
+        File.WriteAllBytes(destination, destinationBefore);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(null));
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+
+                Assert.False(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.Null(((MainViewModel)window.DataContext!).ExportedPath);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(destinationBefore, File.ReadAllBytes(destination));
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
+    }
+
+    [Fact]
     public async Task ExistingExportShowsConfirmationAndDeclinePreservesFileWithoutSuccess()
     {
         using var data = new TemporaryApplicationData();
+        Assert.Empty(CatalogStartup.CreateMainViewModel(data.Path).Games);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
         var destination = System.IO.Path.Combine(data.Path, "pspman-games.csv");
         var original = new byte[] { 0, 1, 2, 255 };
         File.WriteAllBytes(destination, original);
@@ -203,6 +238,7 @@ public class GameCatalogFlowTests
                 Assert.False(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
                 Assert.True(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
                 Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.Null(((MainViewModel)window.DataContext!).ExportedPath);
                 Assert.Equal(original, File.ReadAllBytes(destination));
             }
             finally
@@ -210,6 +246,46 @@ public class GameCatalogFlowTests
                 window.Close();
             }
         }, CancellationToken.None);
+
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
+    }
+
+    [Fact]
+    public async Task CorruptCatalogReadReportsErrorAndPreservesExistingDestination()
+    {
+        using var data = new TemporaryApplicationData();
+        Assert.Empty(CatalogStartup.CreateMainViewModel(data.Path).Games);
+        var destination = System.IO.Path.Combine(data.Path, "pspman-games.csv");
+        var destinationBefore = new byte[] { 5, 6, 7, 8 };
+        File.WriteAllBytes(destination, destinationBefore);
+        var corruptCatalog = new byte[] { 0, 1, 2, 3, 4, 5 };
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                File.WriteAllBytes(data.CatalogPath, corruptCatalog);
+                Click(window, "ExportFileButton");
+
+                var error = Control<TextBlock>(window, "ExportErrorText");
+                Assert.True(error.IsVisible);
+                Assert.Contains("corrupt", error.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.False(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
+                Assert.False(Control<Button>(window, "ExportCatalogButton").IsEnabled);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(destinationBefore, File.ReadAllBytes(destination));
+        Assert.Equal(corruptCatalog, File.ReadAllBytes(data.CatalogPath));
     }
 
     [Fact]
@@ -272,6 +348,50 @@ public class GameCatalogFlowTests
                 window.Close();
             }
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FailedReplacementWriteShowsErrorAndPreservesExistingBytes()
+    {
+        using var data = new TemporaryApplicationData();
+        Assert.Empty(CatalogStartup.CreateMainViewModel(data.Path).Games);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
+        var destination = System.IO.Path.Combine(data.Path, "pspman-games.csv");
+        var destinationBefore = new byte[] { 9, 8, 7, 6 };
+        File.WriteAllBytes(destination, destinationBefore);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var viewModel = new MainViewModel(
+                new GameCatalogService(new SqliteGameRecordRepository(data.CatalogPath)), null,
+                new FixedExportFolderPicker(data.Path), new FailingExportWriter(), data.CatalogPath);
+            var window = new MainWindow { DataContext = viewModel };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Click(window, "ExportFileButton");
+                Assert.True(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
+                Click(window, "ReplaceExportButton");
+
+                var error = Control<TextBlock>(window, "ExportErrorText");
+                Assert.True(error.IsVisible);
+                Assert.Contains("write", error.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.False(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
+                Assert.Null(viewModel.ExportedPath);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(destinationBefore, File.ReadAllBytes(destination));
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
     }
 
     [Fact]
@@ -892,9 +1012,23 @@ public class GameCatalogFlowTests
     private static T Control<T>(MainWindow window, string name) where T : Control =>
         Assert.IsType<T>(window.FindControl<T>(name));
 
-    private sealed class FixedExportFolderPicker(string folderPath) : IGameExportFolderPicker
+    private sealed class FixedExportFolderPicker(string? folderPath) : IGameExportFolderPicker
     {
         public Task<string?> PickFolderAsync() => Task.FromResult<string?>(folderPath);
+    }
+
+    private sealed class FailingExportWriter : IGameCatalogExportWriter
+    {
+        private readonly AtomicCsvExportWriter _writer = new();
+
+        public ExportDestinationSnapshot Capture(string destinationPath) => _writer.Capture(destinationPath);
+
+        public void Publish(string destinationPath, ReadOnlyMemory<byte> content,
+            ExportDestinationSnapshot inspectedDestination, bool overwriteApproved)
+        {
+            Assert.True(overwriteApproved);
+            throw new IOException("Simulated replacement write failure.");
+        }
     }
 
     private sealed class TemporaryApplicationData : IDisposable

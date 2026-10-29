@@ -53,7 +53,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests inspect the exported bytes and prove the saved catalog and game files are unchanged.
 - [x] **T20 (25 min; FR-3, FR-4, FR-5):** Add a functional test that exports punctuation, quoted multiline Notes, Unicode, and formula-like text to a real CSV file.
   Done when: The file retains each value in one logical cell and contains the planned Excel text protection without changing catalog values.
-- [ ] **T21 (30 min; FR-1, FR-6, FR-8):** Add functional cancellation and failure tests using disposable destinations and a corrupt catalog.
+- [x] **T21 (30 min; FR-1, FR-6, FR-8):** Add functional cancellation and failure tests using disposable destinations and a corrupt catalog.
   Done when: Tests cover cancelled selection, declined replacement, corrupt reads, and failed writes without false success or changed existing bytes.
 - [ ] **T22 (25 min; FR-1–FR-9):** Run the full solution build and tests, measure line and branch coverage, and record FR-to-test evidence and justified gaps in the coverage report.
   Done when: The build and tests pass, coverage numbers are recorded, and every FR has linked automated evidence.
