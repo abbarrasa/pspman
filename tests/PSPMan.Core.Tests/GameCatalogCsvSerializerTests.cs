@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Microsoft.VisualBasic.FileIO;
 using PSPMan.Core.Games;
 
 namespace PSPMan.Core.Tests;
@@ -91,16 +92,87 @@ public class GameCatalogCsvSerializerTests
     }
 
     [Theory]
-    [InlineData("One;Two")]
-    [InlineData("A\"B")]
-    [InlineData("Line\nbreak")]
-    public void RejectsFieldsThatNeedEscapingUntilEscapingIsImplemented(string notes)
+    [InlineData("One;Two", "\"One;Two\"")]
+    [InlineData("A\"B", "\"A\"\"B\"")]
+    [InlineData("Line\nbreak", "\"Line\nbreak\"")]
+    [InlineData("Line\rbreak", "\"Line\rbreak\"")]
+    [InlineData("Line\r\nbreak", "\"Line\r\nbreak\"")]
+    public void EscapesSpecialNotesAndPreservesOneLogicalRow(string notes, string encodedNotes)
     {
         GameRecord[] records =
         [
             new(Guid.NewGuid(), "Game", GameMedium.Dvd, 1, "/game.iso", GameFormat.Iso, 1, notes)
         ];
 
-        Assert.Throws<ArgumentException>(() => GameCatalogCsvSerializer.SerializeCatalog(records));
+        var bytes = GameCatalogCsvSerializer.SerializeCatalog(records);
+        var csv = Encoding.UTF8.GetString(bytes);
+        var rows = ParseRows(bytes);
+
+        Assert.Contains($";{encodedNotes}\r\n", csv);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(8, rows[1].Length);
+        Assert.Equal(notes, rows[1][7]);
+    }
+
+    [Fact]
+    public void EscapesPunctuationAndMultilineFieldsWithoutChangingOtherValues()
+    {
+        const string title = "El Niño; Vol. 2: \"Return\"";
+        const string location = "/GAMES/árcade;redux.iso";
+        const string notes = "First; second, third: \"quoted\"\r\nNext line\nFinal line";
+        GameRecord[] records =
+        [
+            new(Guid.NewGuid(), title, GameMedium.Dvd, 2, location, GameFormat.Iso, 1_572_864, notes),
+            new(Guid.NewGuid(), "Plain, Game: Vol. 2", GameMedium.Usb, null,
+                "/GAMES/plain.iso", GameFormat.Iso, 2_048, string.Empty)
+        ];
+
+        var bytes = GameCatalogCsvSerializer.SerializeCatalog(records);
+        var csv = Encoding.UTF8.GetString(bytes);
+        var rows = ParseRows(bytes);
+
+        Assert.Contains("\"El Niño; Vol. 2: \"\"Return\"\"\"", csv);
+        Assert.Contains("\"/GAMES/árcade;redux.iso\"", csv);
+        Assert.Equal(3, rows.Count);
+        Assert.All(rows, row => Assert.Equal(8, row.Length));
+        Assert.Equal(title, rows[1][0]);
+        Assert.Equal(location, rows[1][3]);
+        Assert.Equal(notes, rows[1][7]);
+        Assert.Equal("Plain, Game: Vol. 2", rows[2][0]);
+        Assert.Equal(string.Empty, rows[2][7]);
+    }
+
+    [Fact]
+    public void NullNotesRemainAnEmptyCell()
+    {
+        GameRecord[] records =
+        [
+            new(Guid.NewGuid(), "Game", GameMedium.Usb, null, "/game.iso", GameFormat.Iso, 1, null)
+        ];
+
+        var rows = ParseRows(GameCatalogCsvSerializer.SerializeCatalog(records));
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(string.Empty, rows[1][7]);
+    }
+
+    private static List<string[]> ParseRows(byte[] bytes)
+    {
+        using var reader = new StringReader(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'));
+        using var parser = new TextFieldParser(reader)
+        {
+            TextFieldType = FieldType.Delimited,
+            HasFieldsEnclosedInQuotes = true,
+            TrimWhiteSpace = false
+        };
+        parser.SetDelimiters(";");
+
+        var rows = new List<string[]>();
+        while (!parser.EndOfData)
+        {
+            rows.Add(parser.ReadFields() ?? []);
+        }
+
+        return rows;
     }
 }

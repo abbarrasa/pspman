@@ -21,12 +21,7 @@ public static class GameCatalogCsvSerializer
         foreach (var record in records)
         {
             var fields = ProjectRecord(record);
-            if (fields.Any(field => field.IndexOfAny([';', '"', '\r', '\n']) >= 0))
-            {
-                throw new ArgumentException("A catalog field requires CSV escaping.", nameof(records));
-            }
-
-            csv.AppendJoin(';', fields).Append("\r\n");
+            csv.AppendJoin(';', fields.Select(EscapeCsvField)).Append("\r\n");
         }
 
         return [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(csv.ToString())];
@@ -63,5 +58,12 @@ public static class GameCatalogCsvSerializer
             ByteSizeFormatter.Format(record.SizeBytes),
             record.Notes ?? string.Empty
         ];
+    }
+
+    private static string EscapeCsvField(string field)
+    {
+        return field.IndexOfAny([';', '"', '\r', '\n']) >= 0
+            ? $"\"{field.Replace("\"", "\"\"")}\""
+            : field;
     }
 }
