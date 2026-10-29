@@ -2,7 +2,8 @@ namespace PSPMan.Core.Games;
 
 public interface IGameCatalogExportWriter
 {
-    bool Exists(string destinationPath);
+    ExportDestinationSnapshot Capture(string destinationPath);
 
-    void Publish(string destinationPath, ReadOnlyMemory<byte> content, bool overwriteApproved);
+    void Publish(string destinationPath, ReadOnlyMemory<byte> content,
+        ExportDestinationSnapshot inspectedDestination, bool overwriteApproved);
 }
