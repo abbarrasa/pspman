@@ -14,6 +14,106 @@ namespace PSPMan.Desktop.Tests;
 public class GameCatalogFlowTests
 {
     [Fact]
+    public async Task ExistingExportShowsConfirmationAndDeclinePreservesFileWithoutSuccess()
+    {
+        using var data = new TemporaryApplicationData();
+        var destination = System.IO.Path.Combine(data.Path, "pspman-games.csv");
+        var original = new byte[] { 0, 1, 2, 255 };
+        File.WriteAllBytes(destination, original);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Click(window, "ExportFileButton");
+
+                Assert.True(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
+                Assert.Equal(destination, Control<TextBlock>(window, "PendingExportPathText").Text);
+                Assert.True(Control<Button>(window, "ReplaceExportButton").IsEnabled);
+                Assert.True(Control<Button>(window, "DeclineExportButton").IsEnabled);
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+
+                Click(window, "DeclineExportButton");
+
+                Assert.False(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
+                Assert.True(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.Equal(original, File.ReadAllBytes(destination));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ApprovedReplacementShowsSavedPathAfterPublication()
+    {
+        using var data = new TemporaryApplicationData();
+        var destination = System.IO.Path.Combine(data.Path, "pspman-games.csv");
+        File.WriteAllText(destination, "previous export");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Click(window, "ExportFileButton");
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+
+                Click(window, "ReplaceExportButton");
+
+                Assert.Equal(GameCatalogCsvSerializer.SerializeEmptyCatalog(), File.ReadAllBytes(destination));
+                Assert.True(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.Equal(destination, Control<TextBlock>(window, "ExportSuccessPathText").Text);
+                Assert.False(Control<TextBlock>(window, "ExportErrorText").IsVisible);
+                Assert.False(Control<StackPanel>(window, "ExportReplacementPanel").IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FailedWriteShowsVisibleErrorWithoutSuccess()
+    {
+        using var data = new TemporaryApplicationData();
+        var missingFolder = System.IO.Path.Combine(data.Path, "missing-export-folder");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(missingFolder));
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Click(window, "ExportFileButton");
+
+                var error = Control<TextBlock>(window, "ExportErrorText");
+                Assert.True(error.IsVisible);
+                Assert.Contains("write", error.Text, StringComparison.OrdinalIgnoreCase);
+                Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                Assert.False(Directory.Exists(missingFolder));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExportFormCanChooseFolderRenameAndCancelWithoutSelection()
     {
         using var data = new TemporaryApplicationData();

@@ -44,7 +44,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: A startup test resolves the export dependencies against a disposable root and existing catalog startup tests pass.
 - [x] **T17 (25 min; FR-1, FR-2, FR-9):** Add a typed-bound Export catalog action, folder choice, and filename form to the main window.
   Done when: Headless UI tests can open the form, enter a name, cancel it, and start an empty-catalog export without a selected game.
-- [ ] **T18 (25 min; FR-6, FR-7, FR-8):** Add typed-bound replacement confirmation and English success/error feedback to the main window.
+- [x] **T18 (25 min; FR-6, FR-7, FR-8):** Add typed-bound replacement confirmation and English success/error feedback to the main window.
   Done when: Headless UI tests verify visible Replace/Cancel choices, an unchanged file on decline, a success path only after publication, and visible failure text.
 
 ## End-to-end acceptance
