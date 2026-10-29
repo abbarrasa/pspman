@@ -21,7 +21,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests reject separators, traversal, unusable names, and the catalog destination while accepting a normal CSV filename.
 - [x] **T07 (25 min; FR-7, FR-8):** Define the Core export-writer contract and implement staged publication for a new destination in Infraestructure.
   Done when: An integration test writes complete bytes to a new file through the contract, with no staging file left behind.
-- [ ] **T08 (25 min; FR-8):** Handle failed staging writes and publication errors, cleaning owned temporary files and preserving any existing destination.
+- [x] **T08 (25 min; FR-8):** Handle failed staging writes and publication errors, cleaning owned temporary files and preserving any existing destination.
   Done when: Deterministic failure tests show no partial new export, unchanged existing bytes, and a reported error.
 - [ ] **T09 (25 min; FR-6, FR-8):** Require explicit overwrite consent in the writer and replace an approved existing file only after staging completes.
   Done when: Tests show refusal without consent, successful approved replacement, and unchanged original bytes when replacement fails.
