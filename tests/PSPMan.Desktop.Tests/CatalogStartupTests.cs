@@ -1,9 +1,33 @@
 using PSPMan.Core.Games;
+using PSPMan.Desktop.Services;
 
 namespace PSPMan.Desktop.Tests;
 
 public class CatalogStartupTests
 {
+    [Fact]
+    public async Task StartupComposesExportAgainstDisposableApplicationData()
+    {
+        using var data = new TemporaryApplicationData();
+        var picker = new FixedExportFolderPicker(data.Path);
+        var viewModel = CatalogStartup.CreateMainViewModel(data.Path, picker);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
+
+        Assert.True(viewModel.OpenExportCommand.CanExecute(null));
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportFileName = "catalog-export.csv";
+        Assert.True(viewModel.ExportCatalogCommand.CanExecute(null));
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        var exportedPath = System.IO.Path.Combine(data.Path, "catalog-export.csv");
+        Assert.Equal(exportedPath, viewModel.ExportedPath);
+        Assert.Equal(GameCatalogCsvSerializer.SerializeEmptyCatalog(), File.ReadAllBytes(exportedPath));
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
+        Assert.Equal(1, picker.CallCount);
+        Assert.Null(viewModel.ExportError);
+    }
+
     [Fact]
     public void FreshApplicationDataCreatesAnAvailableEmptyCatalog()
     {
@@ -162,5 +186,16 @@ public class CatalogStartupTests
         public string CatalogPath => System.IO.Path.Combine(Path, "PSPMan", "catalog.db");
 
         public void Dispose() => Directory.Delete(Path, recursive: true);
+    }
+
+    private sealed class FixedExportFolderPicker(string folderPath) : IGameExportFolderPicker
+    {
+        public int CallCount { get; private set; }
+
+        public Task<string?> PickFolderAsync()
+        {
+            CallCount++;
+            return Task.FromResult<string?>(folderPath);
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using PSPMan.Core.Games;
+using PSPMan.Desktop.Services;
 using PSPMan.Desktop.ViewModels;
 using PSPMan.Infraestructure.Games;
 
@@ -8,7 +9,8 @@ namespace PSPMan.Desktop;
 
 public static class CatalogStartup
 {
-    public static MainViewModel CreateMainViewModel(string? applicationDataRoot = null)
+    public static MainViewModel CreateMainViewModel(string? applicationDataRoot = null,
+        IGameExportFolderPicker? exportFolderPicker = null)
     {
         try
         {
@@ -21,8 +23,10 @@ public static class CatalogStartup
 
             var catalogDirectory = Path.Combine(root, "PSPMan");
             Directory.CreateDirectory(catalogDirectory);
-            var repository = new SqliteGameRecordRepository(Path.Combine(catalogDirectory, "catalog.db"));
-            return new MainViewModel(new GameCatalogService(repository), null);
+            var catalogPath = Path.Combine(catalogDirectory, "catalog.db");
+            var repository = new SqliteGameRecordRepository(catalogPath);
+            return new MainViewModel(new GameCatalogService(repository), null,
+                exportFolderPicker, new AtomicCsvExportWriter(), catalogPath);
         }
         catch (InvalidDataException)
         {
