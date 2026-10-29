@@ -40,5 +40,4 @@ jobs:
             --head "$GITHUB_REF_NAME" \
             --title "Merge $GITHUB_REF_NAME into dev" \
             --body "Automatically created on the first eligible push. Ready for review." \
-            --assignee "$PUSH_ACTOR" \
-            --label review-pending
+            --assignee "$PUSH_ACTOR"
