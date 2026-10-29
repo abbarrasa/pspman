@@ -13,11 +13,11 @@ public class AtomicCsvExportWriterTests
         byte[] bytes = [0xEF, 0xBB, 0xBF, (byte)'A', (byte)';', (byte)'B', 0x0D, 0x0A];
         IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
 
-        Assert.False(writer.Exists(destination));
+        Assert.False(writer.Capture(destination).Exists);
 
-        writer.Publish(destination, bytes, overwriteApproved: false);
+        writer.Publish(destination, bytes, writer.Capture(destination), overwriteApproved: false);
 
-        Assert.True(writer.Exists(destination));
+        Assert.True(writer.Capture(destination).Exists);
         Assert.Equal(bytes, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
     }
@@ -31,9 +31,9 @@ public class AtomicCsvExportWriterTests
         File.WriteAllBytes(destination, original);
         IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
 
-        Assert.True(writer.Exists(destination));
+        Assert.True(writer.Capture(destination).Exists);
 
-        Assert.Throws<IOException>(() => { writer.Publish(destination, new byte[] { 4, 5, 6 }, overwriteApproved: false); });
+        Assert.Throws<IOException>(() => { writer.Publish(destination, new byte[] { 4, 5, 6 }, writer.Capture(destination), overwriteApproved: false); });
 
         Assert.Equal(original, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
@@ -51,10 +51,10 @@ public class AtomicCsvExportWriterTests
             throw failure;
         });
 
-        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, overwriteApproved: false));
+        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, writer.Capture(destination), overwriteApproved: false));
 
         Assert.Same(failure, reported);
-        Assert.False(writer.Exists(destination));
+        Assert.False(writer.Capture(destination).Exists);
         Assert.Empty(Directory.GetFiles(directory.Path));
     }
 
@@ -70,7 +70,7 @@ public class AtomicCsvExportWriterTests
             File.WriteAllBytes(destination, original);
         });
 
-        Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, overwriteApproved: false));
+        Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, writer.Capture(destination), overwriteApproved: false));
 
         Assert.Equal(original, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
@@ -85,7 +85,7 @@ public class AtomicCsvExportWriterTests
         byte[] replacement = [4, 5, 6, 7];
         IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
 
-        writer.Publish(destination, replacement, overwriteApproved: true);
+        writer.Publish(destination, replacement, writer.Capture(destination), overwriteApproved: true);
 
         Assert.Equal(replacement, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
@@ -99,7 +99,7 @@ public class AtomicCsvExportWriterTests
         byte[] content = [4, 5, 6];
         IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
 
-        writer.Publish(destination, content, overwriteApproved: true);
+        writer.Publish(destination, content, writer.Capture(destination), overwriteApproved: true);
 
         Assert.Equal(content, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
@@ -119,7 +119,7 @@ public class AtomicCsvExportWriterTests
             throw failure;
         });
 
-        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 4, 5, 6 }, overwriteApproved: true));
+        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 4, 5, 6 }, writer.Capture(destination), overwriteApproved: true));
 
         Assert.Same(failure, reported);
         Assert.Equal(original, File.ReadAllBytes(destination));
@@ -144,10 +144,46 @@ public class AtomicCsvExportWriterTests
                 throw failure;
             });
 
-        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, replacement, overwriteApproved: true));
+        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, replacement, writer.Capture(destination), overwriteApproved: true));
 
         Assert.Same(failure, reported);
         Assert.Equal(original, File.ReadAllBytes(destination));
+        Assert.Equal([destination], Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public void ApprovedExportRejectsDestinationCreatedAfterInspection()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Path.Combine(directory.Path, "games.csv");
+        IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
+        var inspected = writer.Capture(destination);
+        byte[] otherContent = [9, 8, 7];
+        File.WriteAllBytes(destination, otherContent);
+
+        Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, inspected, overwriteApproved: true));
+
+        Assert.Equal(otherContent, File.ReadAllBytes(destination));
+        Assert.Equal([destination], Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public void ApprovedReplacementRejectsSameLengthChangeDuringStaging()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Path.Combine(directory.Path, "games.csv");
+        File.WriteAllBytes(destination, [1, 2, 3]);
+        byte[] otherContent = [9, 8, 7];
+        IGameCatalogExportWriter writer = new AtomicCsvExportWriter((stagingPath, content) =>
+        {
+            File.WriteAllBytes(stagingPath, content.ToArray());
+            File.WriteAllBytes(destination, otherContent);
+        });
+        var inspected = writer.Capture(destination);
+
+        Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 4, 5, 6 }, inspected, overwriteApproved: true));
+
+        Assert.Equal(otherContent, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
     }
 
