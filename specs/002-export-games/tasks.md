@@ -34,7 +34,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests cover local selection, cancellation, and an unusable nonlocal result; the solution builds.
 - [x] **T12 (25 min; FR-1, FR-8, FR-9):** Add export form state and commands to the main view model for opening, choosing a folder, naming the file, and cancelling; block export when the catalog is unavailable or corrupt.
   Done when: View-model tests prove cancellation changes no file, empty catalogs may proceed, and unavailable catalogs cannot export.
-- [ ] **T13 (30 min; FR-2, FR-7, FR-9):** Coordinate a fresh catalog read, serialization, and new-file publication from the view model, with success reported only after the writer succeeds.
+- [x] **T13 (30 min; FR-2, FR-7, FR-9):** Coordinate a fresh catalog read, serialization, and new-file publication from the view model, with success reported only after the writer succeeds.
   Done when: Tests export every saved row despite selection or disconnected media, export a header-only empty catalog, and report the saved path after success.
 - [ ] **T14 (25 min; FR-6):** Add pending replacement confirmation in the view model and route only an approved choice to the writer.
   Done when: Tests show an existing destination prompts for confirmation and decline leaves it byte-for-byte unchanged without success feedback.

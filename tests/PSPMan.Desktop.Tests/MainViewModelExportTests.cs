@@ -7,6 +7,70 @@ namespace PSPMan.Desktop.Tests;
 public class MainViewModelExportTests
 {
     [Fact]
+    public async Task ExportReadsEverySavedRecordAfreshRegardlessOfSelectionOrOfflineMedia()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var catalog = Path.Combine(folder, "catalog.db");
+        var first = new GameRecord(Guid.NewGuid(), "First", GameMedium.Dvd, 1,
+            "/disconnected/DVD/first.rar", GameFormat.Iso, 1024, null);
+        var second = new GameRecord(Guid.NewGuid(), "Second", GameMedium.Usb, null,
+            "/disconnected/USB/second.rar", GameFormat.Chd, 2048, "Offline");
+        var repository = new MutableRepository([first]);
+        var writer = new FakeWriter();
+        var viewModel = new MainViewModel(new GameCatalogService(repository), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, catalog);
+        viewModel.SelectedGame = first;
+        repository.Records = [first, second];
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Equal(2, repository.ListCalls);
+        Assert.Equal(Path.Combine(folder, "pspman-games.csv"), writer.PublishedPath);
+        Assert.Equal(GameCatalogCsvSerializer.SerializeCatalog([first, second]), writer.PublishedBytes);
+        var csv = System.Text.Encoding.UTF8.GetString(writer.PublishedBytes!);
+        Assert.Equal(1, csv.Split("First;").Length - 1);
+        Assert.Equal(1, csv.Split("Second;").Length - 1);
+        Assert.True(csv.IndexOf("First;", StringComparison.Ordinal) <
+            csv.IndexOf("Second;", StringComparison.Ordinal));
+        Assert.Equal(writer.PublishedPath, viewModel.ExportedPath);
+        Assert.Null(viewModel.ExportError);
+    }
+
+    [Fact]
+    public async Task EmptyCatalogExportsHeaderOnly()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var writer = new FakeWriter();
+        var viewModel = new MainViewModel(new GameCatalogService(new EmptyRepository()), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, Path.Combine(folder, "catalog.db"));
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Equal(GameCatalogCsvSerializer.SerializeEmptyCatalog(), writer.PublishedBytes);
+        Assert.Equal(writer.PublishedPath, viewModel.ExportedPath);
+    }
+
+    [Fact]
+    public async Task PublicationFailureDoesNotReportSuccess()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Tests", Guid.NewGuid().ToString("N"));
+        var writer = new FakeWriter { FailPublication = true };
+        var viewModel = new MainViewModel(new GameCatalogService(new EmptyRepository()), null,
+            new FakePicker(() => Task.FromResult<string?>(folder)), writer, Path.Combine(folder, "catalog.db"));
+
+        viewModel.OpenExportCommand.Execute(null);
+        await viewModel.ChooseExportFolderCommand.ExecuteAsync(null);
+        viewModel.ExportCatalogCommand.Execute(null);
+
+        Assert.Null(viewModel.ExportedPath);
+        Assert.NotNull(viewModel.ExportError);
+    }
+
+    [Fact]
     public async Task EmptyCatalogCanOpenChooseFolderAndCancelWithoutWriting()
     {
         var folder = Path.Combine(Path.GetTempPath(), "PSPMan.Export.Form.Tests", Guid.NewGuid().ToString("N"));
@@ -122,5 +186,44 @@ public class MainViewModelExportTests
         public void Update(GameRecord record) => throw new NotSupportedException();
 
         public void Delete(Guid id) => throw new NotSupportedException();
+    }
+
+    private sealed class MutableRepository(IReadOnlyList<GameRecord> records) : IGameRecordRepository
+    {
+        public IReadOnlyList<GameRecord> Records { get; set; } = records;
+        public int ListCalls { get; private set; }
+
+        public IReadOnlyList<GameRecord> List()
+        {
+            ListCalls++;
+            return Records;
+        }
+
+        public GameRecord? GetById(Guid id) => Records.FirstOrDefault(record => record.Id == id);
+        public void Create(GameRecord record) => throw new NotSupportedException();
+        public void Update(GameRecord record) => throw new NotSupportedException();
+        public void Delete(Guid id) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeWriter : IGameCatalogExportWriter
+    {
+        public bool FailPublication { get; set; }
+        public string? PublishedPath { get; private set; }
+        public byte[]? PublishedBytes { get; private set; }
+
+        public ExportDestinationSnapshot Capture(string destinationPath) => new(destinationPath, null);
+
+        public void Publish(string destinationPath, ReadOnlyMemory<byte> content,
+            ExportDestinationSnapshot inspectedDestination, bool overwriteApproved)
+        {
+            Assert.False(overwriteApproved);
+            if (FailPublication)
+            {
+                throw new IOException("Cannot publish export.");
+            }
+
+            PublishedPath = destinationPath;
+            PublishedBytes = content.ToArray();
+        }
     }
 }

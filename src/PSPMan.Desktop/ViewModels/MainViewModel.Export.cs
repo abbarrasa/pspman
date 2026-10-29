@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using PSPMan.Core.Games;
 using PSPMan.Desktop.Services;
 
 namespace PSPMan.Desktop.ViewModels;
@@ -9,10 +10,13 @@ namespace PSPMan.Desktop.ViewModels;
 public partial class MainViewModel
 {
     private readonly IGameExportFolderPicker? _exportFolderPicker;
+    private readonly IGameCatalogExportWriter? _exportWriter;
+    private readonly string? _catalogPath;
     private bool _isExportFormOpen;
     private string? _exportFolderPath;
     private string _exportFileName = "pspman-games.csv";
     private string? _exportError;
+    private string? _exportedPath;
 
     public bool IsExportFormOpen
     {
@@ -22,9 +26,11 @@ public partial class MainViewModel
             if (SetProperty(ref _isExportFormOpen, value))
             {
                 OnPropertyChanged(nameof(CanOpenExport));
+                OnPropertyChanged(nameof(CanExportCatalog));
                 OpenExportCommand.NotifyCanExecuteChanged();
                 ChooseExportFolderCommand.NotifyCanExecuteChanged();
                 CancelExportCommand.NotifyCanExecuteChanged();
+                ExportCatalogCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -32,7 +38,14 @@ public partial class MainViewModel
     public string? ExportFolderPath
     {
         get => _exportFolderPath;
-        private set => SetProperty(ref _exportFolderPath, value);
+        private set
+        {
+            if (SetProperty(ref _exportFolderPath, value))
+            {
+                OnPropertyChanged(nameof(CanExportCatalog));
+                ExportCatalogCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
 
     public string ExportFileName
@@ -47,9 +60,18 @@ public partial class MainViewModel
         private set => SetProperty(ref _exportError, value);
     }
 
+    public string? ExportedPath
+    {
+        get => _exportedPath;
+        private set => SetProperty(ref _exportedPath, value);
+    }
+
     public bool CanOpenExport => IsEditorAvailable && _exportFolderPicker is not null && !IsExportFormOpen;
 
     public bool CanChooseExportFolder => IsEditorAvailable && _exportFolderPicker is not null && IsExportFormOpen;
+
+    public bool CanExportCatalog => IsEditorAvailable && IsExportFormOpen
+        && ExportFolderPath is not null && _exportWriter is not null && _catalogPath is not null;
 
     [RelayCommand(CanExecute = nameof(CanOpenExport))]
     private void OpenExport()
@@ -57,7 +79,49 @@ public partial class MainViewModel
         ExportFileName = "pspman-games.csv";
         ExportFolderPath = null;
         ExportError = null;
+        ExportedPath = null;
         IsExportFormOpen = true;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExportCatalog))]
+    private void ExportCatalog()
+    {
+        ExportedPath = null;
+        ExportError = null;
+
+        if (!GameExportDestination.TryResolve(ExportFolderPath, ExportFileName, _catalogPath,
+                out var destinationPath, out var error))
+        {
+            ExportError = error;
+            return;
+        }
+
+        var result = CatalogService!.List();
+        if (!result.IsSuccess)
+        {
+            ReportCorruption(result);
+            ExportError = result.Error;
+            return;
+        }
+
+        try
+        {
+            var bytes = GameCatalogCsvSerializer.SerializeCatalog(result.Value ?? []);
+            var snapshot = _exportWriter!.Capture(destinationPath!);
+            if (snapshot.Exists)
+            {
+                ExportError = "Replacing an existing export requires confirmation.";
+                return;
+            }
+
+            _exportWriter.Publish(destinationPath!, bytes, snapshot, overwriteApproved: false);
+            ExportedPath = destinationPath;
+            IsExportFormOpen = false;
+        }
+        catch (Exception)
+        {
+            ExportError = "Unable to save the catalog export.";
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanChooseExportFolder))]
