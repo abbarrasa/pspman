@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using System.Text;
+using Microsoft.VisualBasic.FileIO;
 using PSPMan.Core.Games;
 using PSPMan.Desktop.Services;
 using PSPMan.Desktop.ViewModels;
@@ -16,6 +17,73 @@ public class GameCatalogFlowTests
 {
     private const string ExportHeader =
         "Title;Medium;DVD Number;Location;Format;Decompressed Size (bytes);Approximate Size (binary units);Notes\r\n";
+
+    [Fact]
+    public async Task SqliteExportKeepsSpecialTextInSingleCellsAndProtectsFormulaLikeValues()
+    {
+        const string formulaTitle = " \u2003=SUM(1;2)";
+        const string multilineNotes = "Éxito; commas, colons: \"quoted\"\r\nSecond line";
+        const string formulaNotes = " \u2003+SUM(1;2) \"quoted\"";
+        using var data = new TemporaryApplicationData();
+        var service = CatalogStartup.CreateMainViewModel(data.Path).CatalogService!;
+        var first = service.Create(new GameRecordInput(formulaTitle, GameMedium.Dvd, 1,
+            "/GAMES/first.rar", GameFormat.Iso, 1_024, multilineNotes));
+        var second = service.Create(new GameRecordInput("Pokémon, azul: edición", GameMedium.Usb, null,
+            "/GAMES/second.rar", GameFormat.Chd, 2_048, formulaNotes));
+        Assert.True(first.IsSuccess);
+        Assert.True(second.IsSuccess);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
+        var destination = System.IO.Path.Combine(data.Path, "special-games.csv");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Control<TextBox>(window, "ExportFileNameInput").Text = "special-games.csv";
+                Dispatcher.UIThread.RunJobs();
+                Click(window, "ExportFileButton");
+                Assert.Equal(destination, Control<TextBlock>(window, "ExportSuccessPathText").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        var bytes = File.ReadAllBytes(destination);
+        Assert.Equal([0xEF, 0xBB, 0xBF], bytes[..3]);
+        var csv = Encoding.UTF8.GetString(bytes);
+        Assert.Contains("\"\t \u2003=SUM(1;2)\"", csv);
+        Assert.Contains("\"Éxito; commas, colons: \"\"quoted\"\"\r\nSecond line\"", csv);
+        Assert.Contains("\"\t \u2003+SUM(1;2) \"\"quoted\"\"\"", csv);
+
+        using var reader = new StringReader(csv[1..]);
+        using var parser = new TextFieldParser(reader)
+        {
+            TextFieldType = FieldType.Delimited,
+            HasFieldsEnclosedInQuotes = true,
+            TrimWhiteSpace = false
+        };
+        parser.SetDelimiters(";");
+        var rows = new List<string[]>();
+        while (!parser.EndOfData)
+        {
+            rows.Add(parser.ReadFields()!);
+        }
+
+        Assert.Equal(3, rows.Count);
+        Assert.All(rows, row => Assert.Equal(8, row.Length));
+        Assert.Equal($"\t{formulaTitle}", rows[1][0]);
+        Assert.Equal(multilineNotes, rows[1][7]);
+        Assert.Equal("Pokémon, azul: edición", rows[2][0]);
+        Assert.Equal($"\t{formulaNotes}", rows[2][7]);
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
+        Assert.Equal([first.Value!, second.Value!], new SqliteGameRecordRepository(data.CatalogPath).List());
+    }
 
     [Fact]
     public async Task SavedSqliteCatalogExportsEveryOfflineRecordInSavedOrderWithoutChangingSources()
