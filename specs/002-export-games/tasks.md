@@ -42,7 +42,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: Tests distinguish these failures, leave destination bytes unchanged, and preserve the catalog's existing corruption behavior.
 - [x] **T16 (20 min; FR-1, FR-7, FR-8):** Compose the picker and writer at Desktop startup while preserving the temporary-root test seam.
   Done when: A startup test resolves the export dependencies against a disposable root and existing catalog startup tests pass.
-- [ ] **T17 (25 min; FR-1, FR-2, FR-9):** Add a typed-bound Export catalog action, folder choice, and filename form to the main window.
+- [x] **T17 (25 min; FR-1, FR-2, FR-9):** Add a typed-bound Export catalog action, folder choice, and filename form to the main window.
   Done when: Headless UI tests can open the form, enter a name, cancel it, and start an empty-catalog export without a selected game.
 - [ ] **T18 (25 min; FR-6, FR-7, FR-8):** Add typed-bound replacement confirmation and English success/error feedback to the main window.
   Done when: Headless UI tests verify visible Replace/Cancel choices, an unchanged file on decline, a success path only after publication, and visible failure text.
