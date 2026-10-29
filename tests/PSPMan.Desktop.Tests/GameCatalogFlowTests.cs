@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using System.Text;
 using PSPMan.Core.Games;
 using PSPMan.Desktop.Services;
 using PSPMan.Desktop.ViewModels;
@@ -13,6 +14,98 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public class GameCatalogFlowTests
 {
+    private const string ExportHeader =
+        "Title;Medium;DVD Number;Location;Format;Decompressed Size (bytes);Approximate Size (binary units);Notes\r\n";
+
+    [Fact]
+    public async Task SavedSqliteCatalogExportsEveryOfflineRecordInSavedOrderWithoutChangingSources()
+    {
+        using var data = new TemporaryApplicationData();
+        var service = CatalogStartup.CreateMainViewModel(data.Path).CatalogService!;
+        var dvd = service.Create(new GameRecordInput(
+            "First disc", GameMedium.Dvd, 2, "/GAMES/disc.rar", GameFormat.Iso, 1_024, "Disc 2"));
+        var usb = service.Create(new GameRecordInput(
+            "Second USB", GameMedium.Usb, null, "/GAMES/usb.rar", GameFormat.Chd, 2_048, null));
+        var card = service.Create(new GameRecordInput(
+            "Third card", GameMedium.MemoryCard, null, "/GAMES/card.rar", GameFormat.Iso, 3_072, "Stored"));
+        Assert.True(dvd.IsSuccess);
+        Assert.True(usb.IsSuccess);
+        Assert.True(card.IsSuccess);
+
+        var gameFile = System.IO.Path.Combine(data.Path, "media", "GAMES", "disc.rar");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(gameFile)!);
+        File.WriteAllBytes(gameFile, [0, 1, 2, 255]);
+        var gameFileBefore = File.ReadAllBytes(gameFile);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
+        var destination = System.IO.Path.Combine(data.Path, "saved-games.csv");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                var list = Control<ListBox>(window, "GamesList");
+                Assert.Equal([dvd.Value, usb.Value, card.Value], list.ItemsSource!.Cast<GameRecord>());
+                list.SelectedItem = usb.Value;
+                Dispatcher.UIThread.RunJobs();
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Control<TextBox>(window, "ExportFileNameInput").Text = "saved-games.csv";
+                Dispatcher.UIThread.RunJobs();
+                Click(window, "ExportFileButton");
+                Assert.Equal(destination, Control<TextBlock>(window, "ExportSuccessPathText").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        var expected = ExportHeader
+            + "First disc;DVD;2;/GAMES/disc.rar;ISO;1024;1 KiB;Disc 2\r\n"
+            + "Second USB;USB;;/GAMES/usb.rar;CHD;2048;2 KiB;\r\n"
+            + "Third card;Memory Card;;/GAMES/card.rar;ISO;3072;3 KiB;Stored\r\n";
+        Assert.Equal([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(expected)], File.ReadAllBytes(destination));
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
+        Assert.Equal(gameFileBefore, File.ReadAllBytes(gameFile));
+        Assert.False(File.Exists(System.IO.Path.Combine(data.Path, "media", "GAMES", "usb.rar")));
+    }
+
+    [Fact]
+    public async Task EmptySqliteCatalogExportsOnlyHeaderWithoutSelectionOrSourceChanges()
+    {
+        using var data = new TemporaryApplicationData();
+        Assert.Empty(CatalogStartup.CreateMainViewModel(data.Path).Games);
+        var catalogBefore = File.ReadAllBytes(data.CatalogPath);
+        var destination = System.IO.Path.Combine(data.Path, "empty-saved-games.csv");
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                var viewModel = (MainViewModel)window.DataContext!;
+                Assert.Empty(viewModel.Games);
+                Assert.Null(viewModel.SelectedGame);
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Control<TextBox>(window, "ExportFileNameInput").Text = "empty-saved-games.csv";
+                Dispatcher.UIThread.RunJobs();
+                Click(window, "ExportFileButton");
+                Assert.Equal(destination, Control<TextBlock>(window, "ExportSuccessPathText").Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(ExportHeader)], File.ReadAllBytes(destination));
+        Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
+    }
+
     [Fact]
     public async Task ExistingExportShowsConfirmationAndDeclinePreservesFileWithoutSuccess()
     {
