@@ -15,7 +15,7 @@ public class AtomicCsvExportWriterTests
 
         Assert.False(writer.Exists(destination));
 
-        writer.PublishNew(destination, bytes);
+        writer.Publish(destination, bytes, overwriteApproved: false);
 
         Assert.True(writer.Exists(destination));
         Assert.Equal(bytes, File.ReadAllBytes(destination));
@@ -33,7 +33,7 @@ public class AtomicCsvExportWriterTests
 
         Assert.True(writer.Exists(destination));
 
-        Assert.Throws<IOException>(() => { writer.PublishNew(destination, new byte[] { 4, 5, 6 }); });
+        Assert.Throws<IOException>(() => { writer.Publish(destination, new byte[] { 4, 5, 6 }, overwriteApproved: false); });
 
         Assert.Equal(original, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
@@ -51,7 +51,7 @@ public class AtomicCsvExportWriterTests
             throw failure;
         });
 
-        var reported = Assert.Throws<IOException>(() => writer.PublishNew(destination, new byte[] { 1, 2, 3 }));
+        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, overwriteApproved: false));
 
         Assert.Same(failure, reported);
         Assert.False(writer.Exists(destination));
@@ -70,8 +70,83 @@ public class AtomicCsvExportWriterTests
             File.WriteAllBytes(destination, original);
         });
 
-        Assert.Throws<IOException>(() => writer.PublishNew(destination, new byte[] { 1, 2, 3 }));
+        Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 1, 2, 3 }, overwriteApproved: false));
 
+        Assert.Equal(original, File.ReadAllBytes(destination));
+        Assert.Equal([destination], Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public void ApprovedReplacementPublishesCompleteBytesAndRemovesStagingFile()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Path.Combine(directory.Path, "games.csv");
+        File.WriteAllBytes(destination, [1, 2, 3]);
+        byte[] replacement = [4, 5, 6, 7];
+        IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
+
+        writer.Publish(destination, replacement, overwriteApproved: true);
+
+        Assert.Equal(replacement, File.ReadAllBytes(destination));
+        Assert.Equal([destination], Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public void OverwriteApprovalAlsoAllowsPublishingToANewDestination()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Path.Combine(directory.Path, "games.csv");
+        byte[] content = [4, 5, 6];
+        IGameCatalogExportWriter writer = new AtomicCsvExportWriter();
+
+        writer.Publish(destination, content, overwriteApproved: true);
+
+        Assert.Equal(content, File.ReadAllBytes(destination));
+        Assert.Equal([destination], Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public void ApprovedReplacementPreservesOriginalWhenStagingWriteFails()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Path.Combine(directory.Path, "games.csv");
+        byte[] original = [1, 2, 3];
+        File.WriteAllBytes(destination, original);
+        var failure = new IOException("Simulated staging failure.");
+        IGameCatalogExportWriter writer = new AtomicCsvExportWriter((stagingPath, _) =>
+        {
+            File.WriteAllBytes(stagingPath, [4]);
+            throw failure;
+        });
+
+        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, new byte[] { 4, 5, 6 }, overwriteApproved: true));
+
+        Assert.Same(failure, reported);
+        Assert.Equal(original, File.ReadAllBytes(destination));
+        Assert.Equal([destination], Directory.GetFiles(directory.Path));
+    }
+
+    [Fact]
+    public void ApprovedReplacementPreservesOriginalWhenPublicationFails()
+    {
+        using var directory = new TemporaryDirectory();
+        var destination = Path.Combine(directory.Path, "games.csv");
+        byte[] original = [1, 2, 3];
+        byte[] replacement = [4, 5, 6];
+        File.WriteAllBytes(destination, original);
+        var failure = new IOException("Simulated replacement failure.");
+        IGameCatalogExportWriter writer = new AtomicCsvExportWriter(
+            (stagingPath, content) => File.WriteAllBytes(stagingPath, content.ToArray()),
+            (stagingPath, targetPath) =>
+            {
+                Assert.Equal(replacement, File.ReadAllBytes(stagingPath));
+                Assert.Equal(original, File.ReadAllBytes(targetPath));
+                throw failure;
+            });
+
+        var reported = Assert.Throws<IOException>(() => writer.Publish(destination, replacement, overwriteApproved: true));
+
+        Assert.Same(failure, reported);
         Assert.Equal(original, File.ReadAllBytes(destination));
         Assert.Equal([destination], Directory.GetFiles(directory.Path));
     }

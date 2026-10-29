@@ -5,14 +5,23 @@ namespace PSPMan.Infraestructure.Games;
 public sealed class AtomicCsvExportWriter : IGameCatalogExportWriter
 {
     private readonly Action<string, ReadOnlyMemory<byte>> _writeStagingFile;
+    private readonly Action<string, string> _replaceFile;
 
-    public AtomicCsvExportWriter() : this(WriteStagingFile)
+    public AtomicCsvExportWriter() : this(WriteStagingFile, ReplaceFile)
     {
     }
 
     internal AtomicCsvExportWriter(Action<string, ReadOnlyMemory<byte>> writeStagingFile)
+        : this(writeStagingFile, ReplaceFile)
+    {
+    }
+
+    internal AtomicCsvExportWriter(
+        Action<string, ReadOnlyMemory<byte>> writeStagingFile,
+        Action<string, string> replaceFile)
     {
         _writeStagingFile = writeStagingFile ?? throw new ArgumentNullException(nameof(writeStagingFile));
+        _replaceFile = replaceFile ?? throw new ArgumentNullException(nameof(replaceFile));
     }
 
     public bool Exists(string destinationPath)
@@ -20,11 +29,11 @@ public sealed class AtomicCsvExportWriter : IGameCatalogExportWriter
         return File.Exists(destinationPath);
     }
 
-    public void PublishNew(string destinationPath, ReadOnlyMemory<byte> content)
+    public void Publish(string destinationPath, ReadOnlyMemory<byte> content, bool overwriteApproved)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
 
-        if (File.Exists(destinationPath))
+        if (File.Exists(destinationPath) && !overwriteApproved)
         {
             throw new IOException("The export destination already exists.");
         }
@@ -37,7 +46,19 @@ public sealed class AtomicCsvExportWriter : IGameCatalogExportWriter
         try
         {
             _writeStagingFile(stagingPath, content);
-            File.Move(stagingPath, destinationPath);
+            if (File.Exists(destinationPath))
+            {
+                if (!overwriteApproved)
+                {
+                    throw new IOException("The export destination already exists.");
+                }
+
+                _replaceFile(stagingPath, destinationPath);
+            }
+            else
+            {
+                File.Move(stagingPath, destinationPath);
+            }
         }
         finally
         {
@@ -50,5 +71,10 @@ public sealed class AtomicCsvExportWriter : IGameCatalogExportWriter
         using var stream = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         stream.Write(content.Span);
         stream.Flush(flushToDisk: true);
+    }
+
+    private static void ReplaceFile(string stagingPath, string destinationPath)
+    {
+        File.Replace(stagingPath, destinationPath, destinationBackupFileName: null);
     }
 }

@@ -23,7 +23,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: An integration test writes complete bytes to a new file through the contract, with no staging file left behind.
 - [x] **T08 (25 min; FR-8):** Handle failed staging writes and publication errors, cleaning owned temporary files and preserving any existing destination.
   Done when: Deterministic failure tests show no partial new export, unchanged existing bytes, and a reported error.
-- [ ] **T09 (25 min; FR-6, FR-8):** Require explicit overwrite consent in the writer and replace an approved existing file only after staging completes.
+- [x] **T09 (25 min; FR-6, FR-8):** Require explicit overwrite consent in the writer and replace an approved existing file only after staging completes.
   Done when: Tests show refusal without consent, successful approved replacement, and unchanged original bytes when replacement fails.
 - [ ] **T10 (20 min; FR-6, FR-8):** Recheck destination state before publication so a file created or changed after consent is not silently overwritten.
   Done when: A deterministic race test reports the conflict, preserves the other file, and removes the owned staging file.
