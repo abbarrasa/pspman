@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using PSPMan.Core.Games;
+using PSPMan.Desktop.Services;
 using PSPMan.Desktop.ViewModels;
 using PSPMan.Desktop.Views;
 using PSPMan.Infraestructure.Games;
@@ -12,6 +13,72 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public class GameCatalogFlowTests
 {
+    [Fact]
+    public async Task ExportFormCanChooseFolderRenameAndCancelWithoutSelection()
+    {
+        using var data = new TemporaryApplicationData();
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                Assert.Null(((MainViewModel)window.DataContext!).SelectedGame);
+                Assert.False(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
+                Click(window, "ExportCatalogButton");
+
+                Assert.True(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
+                Assert.Equal("pspman-games.csv", Control<TextBox>(window, "ExportFileNameInput").Text);
+                Click(window, "ChooseExportFolderButton");
+                Assert.Equal(data.Path, Control<TextBlock>(window, "ExportFolderPathText").Text);
+
+                Control<TextBox>(window, "ExportFileNameInput").Text = "my-games.csv";
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("my-games.csv", ((MainViewModel)window.DataContext!).ExportFileName);
+                Click(window, "CancelExportButton");
+
+                Assert.False(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
+                Assert.False(File.Exists(System.IO.Path.Combine(data.Path, "my-games.csv")));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task EmptyCatalogCanExportFromWindowWithoutSelection()
+    {
+        using var data = new TemporaryApplicationData();
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+
+        await session.Dispatch(() =>
+        {
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
+            try
+            {
+                Assert.True(Control<TextBlock>(window, "EmptyStateText").IsVisible);
+                Assert.Null(((MainViewModel)window.DataContext!).SelectedGame);
+                Click(window, "ExportCatalogButton");
+                Click(window, "ChooseExportFolderButton");
+                Control<TextBox>(window, "ExportFileNameInput").Text = "empty-games.csv";
+                Dispatcher.UIThread.RunJobs();
+                Click(window, "ExportFileButton");
+
+                var destination = System.IO.Path.Combine(data.Path, "empty-games.csv");
+                Assert.Equal(GameCatalogCsvSerializer.SerializeEmptyCatalog(), File.ReadAllBytes(destination));
+                Assert.Equal(destination, ((MainViewModel)window.DataContext!).ExportedPath);
+                Assert.False(Control<StackPanel>(window, "ExportFormPanel").IsVisible);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Fact]
     public async Task EmptyCatalogDisplaysEmptyStateWithoutAVisibleList()
     {
@@ -486,7 +553,7 @@ public class GameCatalogFlowTests
 
         await session.Dispatch(() =>
         {
-            var window = OpenWindow(data.Path);
+            var window = OpenWindow(data.Path, new FixedExportFolderPicker(data.Path));
             try
             {
                 var error = Control<TextBlock>(window, "CatalogErrorText");
@@ -495,6 +562,7 @@ public class GameCatalogFlowTests
                 Assert.False(Control<Button>(window, "AddGameButton").IsVisible);
                 Assert.False(Control<ListBox>(window, "GamesList").IsVisible);
                 Assert.False(Control<TextBlock>(window, "EmptyStateText").IsVisible);
+                Assert.False(Control<Button>(window, "ExportCatalogButton").IsEnabled);
                 Assert.False(((MainViewModel)window.DataContext!).AddGameCommand.CanExecute(null));
             }
             finally
@@ -548,11 +616,12 @@ public class GameCatalogFlowTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static MainWindow OpenWindow(string applicationDataRoot)
+    private static MainWindow OpenWindow(string applicationDataRoot,
+        IGameExportFolderPicker? exportFolderPicker = null)
     {
         var window = new MainWindow
         {
-            DataContext = CatalogStartup.CreateMainViewModel(applicationDataRoot)
+            DataContext = CatalogStartup.CreateMainViewModel(applicationDataRoot, exportFolderPicker)
         };
         window.Show();
         Dispatcher.UIThread.RunJobs();
@@ -561,6 +630,11 @@ public class GameCatalogFlowTests
 
     private static T Control<T>(MainWindow window, string name) where T : Control =>
         Assert.IsType<T>(window.FindControl<T>(name));
+
+    private sealed class FixedExportFolderPicker(string folderPath) : IGameExportFolderPicker
+    {
+        public Task<string?> PickFolderAsync() => Task.FromResult<string?>(folderPath);
+    }
 
     private sealed class TemporaryApplicationData : IDisposable
     {

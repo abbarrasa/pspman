@@ -14,9 +14,33 @@
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="20">
-        <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
-        <StackPanel Grid.Row="1" Margin="0,12,0,0" Spacing="4"
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="20">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
+            <Button x:Name="ExportCatalogButton" Grid.Column="1" Content="Export catalog"
+                    Command="{Binding OpenExportCommand}"
+                    IsEnabled="{Binding CanOpenExport}" />
+        </Grid>
+        <StackPanel x:Name="ExportFormPanel" Grid.Row="1" Margin="0,12,0,0" Spacing="8"
+                    IsVisible="{Binding IsExportFormOpen}">
+            <TextBlock Text="Export catalog to CSV" FontSize="18" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="ChooseExportFolderButton" Content="Choose folder"
+                        Command="{Binding ChooseExportFolderCommand}" />
+                <TextBlock x:Name="ExportFolderPathText" Text="{Binding ExportFolderPath}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="CSV file name" VerticalAlignment="Center" />
+                <TextBox x:Name="ExportFileNameInput" Width="280"
+                         Text="{Binding ExportFileName, Mode=TwoWay}" />
+                <Button x:Name="ExportFileButton" Content="Export"
+                        Command="{Binding ExportCatalogCommand}" />
+                <Button x:Name="CancelExportButton" Content="Cancel"
+                        Command="{Binding CancelExportCommand}" />
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Grid.Row="2" Margin="0,12,0,0" Spacing="4"
                     IsVisible="{Binding HasAnyError}">
             <TextBlock x:Name="CatalogErrorText" Text="{Binding CatalogError}"
                        IsVisible="{Binding HasStartupError}"
@@ -25,7 +49,7 @@
                        IsVisible="{Binding HasDistinctOperationError}"
                        TextWrapping="Wrap" />
         </StackPanel>
-        <Grid Grid.Row="2" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
+        <Grid Grid.Row="3" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Grid.Row="1">
