@@ -23,9 +23,12 @@ public partial class MainViewModel : ViewModelBase
     }
 
     public MainViewModel(GameCatalogService? catalogService, string? catalogError,
-        IGameExportFolderPicker? exportFolderPicker = null)
+        IGameExportFolderPicker? exportFolderPicker = null,
+        IGameCatalogExportWriter? exportWriter = null, string? catalogPath = null)
     {
         _exportFolderPicker = exportFolderPicker;
+        _exportWriter = exportWriter;
+        _catalogPath = catalogPath;
         CatalogService = catalogService;
         CatalogError = catalogError;
 
@@ -109,9 +112,11 @@ public partial class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsAdding));
                 OnPropertyChanged(nameof(IsEmpty));
                 OnPropertyChanged(nameof(CanOpenExport));
+                OnPropertyChanged(nameof(CanExportCatalog));
                 AddGameCommand.NotifyCanExecuteChanged();
                 OpenExportCommand.NotifyCanExecuteChanged();
                 ChooseExportFolderCommand.NotifyCanExecuteChanged();
+                ExportCatalogCommand.NotifyCanExecuteChanged();
                 StartEditCommand.NotifyCanExecuteChanged();
                 SaveChangesCommand.NotifyCanExecuteChanged();
                 DeleteSelectedCommand.NotifyCanExecuteChanged();
