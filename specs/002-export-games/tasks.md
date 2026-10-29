@@ -30,7 +30,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 ## Desktop export flow
 
-- [ ] **T11 (20 min; FR-1, FR-8):** Add a Desktop folder-picker abstraction and Avalonia adapter that return a local folder path or cancellation without creating files.
+- [x] **T11 (20 min; FR-1, FR-8):** Add a Desktop folder-picker abstraction and Avalonia adapter that return a local folder path or cancellation without creating files.
   Done when: Tests cover local selection, cancellation, and an unusable nonlocal result; the solution builds.
 - [ ] **T12 (25 min; FR-1, FR-8, FR-9):** Add export form state and commands to the main view model for opening, choosing a folder, naming the file, and cancelling; block export when the catalog is unavailable or corrupt.
   Done when: View-model tests prove cancellation changes no file, empty catalogs may proceed, and unavailable catalogs cannot export.
