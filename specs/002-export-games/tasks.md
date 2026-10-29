@@ -36,7 +36,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
   Done when: View-model tests prove cancellation changes no file, empty catalogs may proceed, and unavailable catalogs cannot export.
 - [x] **T13 (30 min; FR-2, FR-7, FR-9):** Coordinate a fresh catalog read, serialization, and new-file publication from the view model, with success reported only after the writer succeeds.
   Done when: Tests export every saved row despite selection or disconnected media, export a header-only empty catalog, and report the saved path after success.
-- [ ] **T14 (25 min; FR-6):** Add pending replacement confirmation in the view model and route only an approved choice to the writer.
+- [x] **T14 (25 min; FR-6):** Add pending replacement confirmation in the view model and route only an approved choice to the writer.
   Done when: Tests show an existing destination prompts for confirmation and decline leaves it byte-for-byte unchanged without success feedback.
 - [ ] **T15 (25 min; FR-1, FR-8):** Surface invalid destination, catalog read/corruption, and writer failures in the view model without a false success state.
   Done when: Tests distinguish these failures, leave destination bytes unchanged, and preserve the catalog's existing corruption behavior.
