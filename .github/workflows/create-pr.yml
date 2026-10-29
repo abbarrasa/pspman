@@ -17,6 +17,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # We explicitly configure the token for the GitHub CLI.
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
           # Check if there is already a PR for this branch towards 'dev'
           PR_EXISTS=$(gh pr list --head "${GITHUB_REF_NAME}" --base dev --json number --jq '..number')
           
@@ -32,4 +35,3 @@ jobs:
           else
             echo "A Pull Request already exists (#$PR_EXISTS) for this branch."
           fi
-          
