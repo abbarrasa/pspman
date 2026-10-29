@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="PSPMan.Desktop.Tests" />
     <ProjectReference Include="..\PSPMan.Core\PSPMan.Core.csproj" />
     <ProjectReference Include="..\PSPMan.Infraestructure\PSPMan.Infraestructure.csproj" />
   </ItemGroup>
