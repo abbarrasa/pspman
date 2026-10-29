@@ -6,6 +6,10 @@ on:
       - main
       - dev
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   create-pull-request:
     runs-on: ubuntu-latest
@@ -15,23 +19,26 @@ jobs:
 
       - name: Create Pull Request to Dev
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          PUSH_ACTOR: ${{ github.actor }}
         run: |
-          # We explicitly configure the token for the GitHub CLI.
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          set -euo pipefail
 
-          # Check if there is already a PR for this branch towards 'dev'
-          PR_EXISTS=$(gh pr list --head "${GITHUB_REF_NAME}" --base dev --json number --jq '..number')
-          
-          if [ -z "$PR_EXISTS" ]; then
-            echo "Creating Pull Request for ${GITHUB_REF_NAME} towards dev..."
-            gh pr create \
-              --base dev \
-              --head "${GITHUB_REF_NAME}" \
-              --title "Merge ${GITHUB_REF_NAME} into dev" \
-              --body "PR generated automatically on push. Lista para invocar @codex review." \
-              --assignee "${{ github.repository_owner }}" \
-              --label "review-pending"
-          else
+          # A rerun or later push must not create a second PR for the branch.
+          PR_EXISTS=$(gh pr list --head "$GITHUB_REF_NAME" --base dev --state all --json number --jq '.[0].number // empty')
+          if [ -n "$PR_EXISTS" ]; then
             echo "A Pull Request already exists (#$PR_EXISTS) for this branch."
+            exit 0
           fi
+
+          if [ "$(gh label list --limit 1000 --json name --jq 'any(.[]; .name == "review-pending")')" != "true" ]; then
+            gh label create review-pending --color D4C5F9 --description "Awaiting review"
+          fi
+
+          gh pr create \
+            --base dev \
+            --head "$GITHUB_REF_NAME" \
+            --title "Merge $GITHUB_REF_NAME into dev" \
+            --body "Automatically created on the first eligible push. Ready for review." \
+            --assignee "$PUSH_ACTOR" \
+            --label review-pending

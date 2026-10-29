@@ -19,7 +19,7 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 - [x] **T06 (20 min; FR-1, FR-7, FR-8):** Add pure export filename validation for one nonempty `.csv` name and safe resolution within the chosen folder.
   Done when: Tests reject separators, traversal, unusable names, and the catalog destination while accepting a normal CSV filename.
-- [ ] **T07 (25 min; FR-7, FR-8):** Define the Core export-writer contract and implement staged publication for a new destination in Infraestructure.
+- [x] **T07 (25 min; FR-7, FR-8):** Define the Core export-writer contract and implement staged publication for a new destination in Infraestructure.
   Done when: An integration test writes complete bytes to a new file through the contract, with no staging file left behind.
 - [ ] **T08 (25 min; FR-8):** Handle failed staging writes and publication errors, cleaning owned temporary files and preserving any existing destination.
   Done when: Deterministic failure tests show no partial new export, unchanged existing bytes, and a reported error.
