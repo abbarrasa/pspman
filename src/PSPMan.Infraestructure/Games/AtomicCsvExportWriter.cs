@@ -4,6 +4,17 @@ namespace PSPMan.Infraestructure.Games;
 
 public sealed class AtomicCsvExportWriter : IGameCatalogExportWriter
 {
+    private readonly Action<string, ReadOnlyMemory<byte>> _writeStagingFile;
+
+    public AtomicCsvExportWriter() : this(WriteStagingFile)
+    {
+    }
+
+    internal AtomicCsvExportWriter(Action<string, ReadOnlyMemory<byte>> writeStagingFile)
+    {
+        _writeStagingFile = writeStagingFile ?? throw new ArgumentNullException(nameof(writeStagingFile));
+    }
+
     public bool Exists(string destinationPath)
     {
         return File.Exists(destinationPath);
@@ -25,17 +36,19 @@ public sealed class AtomicCsvExportWriter : IGameCatalogExportWriter
 
         try
         {
-            using (var stream = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                stream.Write(content.Span);
-                stream.Flush(flushToDisk: true);
-            }
-
+            _writeStagingFile(stagingPath, content);
             File.Move(stagingPath, destinationPath);
         }
         finally
         {
             File.Delete(stagingPath);
         }
+    }
+
+    private static void WriteStagingFile(string stagingPath, ReadOnlyMemory<byte> content)
+    {
+        using var stream = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        stream.Write(content.Span);
+        stream.Flush(flushToDisk: true);
     }
 }
