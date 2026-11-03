@@ -16,7 +16,7 @@ namespace PSPMan.Desktop.Tests;
 public class GameCatalogFlowTests
 {
     private const string ExportHeader =
-        "Title;Medium;DVD Number;Location;Format;Decompressed Size (bytes);Approximate Size (binary units);Notes\r\n";
+        "Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes\r\n";
 
     [Fact]
     public async Task SqliteExportKeepsSpecialTextInSingleCellsAndProtectsFormulaLikeValues()
@@ -76,11 +76,11 @@ public class GameCatalogFlowTests
         }
 
         Assert.Equal(3, rows.Count);
-        Assert.All(rows, row => Assert.Equal(8, row.Length));
+        Assert.All(rows, row => Assert.Equal(7, row.Length));
         Assert.Equal($"\t{formulaTitle}", rows[1][0]);
-        Assert.Equal(multilineNotes, rows[1][7]);
+        Assert.Equal(multilineNotes, rows[1][6]);
         Assert.Equal("Pokémon, azul: edición", rows[2][0]);
-        Assert.Equal($"\t{formulaNotes}", rows[2][7]);
+        Assert.Equal($"\t{formulaNotes}", rows[2][6]);
         Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
         Assert.Equal([first.Value!, second.Value!], new SqliteGameRecordRepository(data.CatalogPath).List());
     }
@@ -131,9 +131,9 @@ public class GameCatalogFlowTests
         }, CancellationToken.None);
 
         var expected = ExportHeader
-            + "First disc;DVD;2;/GAMES/disc.rar;ISO;1024;1 KiB;Disc 2\r\n"
-            + "Second USB;USB;;/GAMES/usb.rar;CHD;2048;2 KiB;\r\n"
-            + "Third card;Memory Card;;/GAMES/card.rar;ISO;3072;3 KiB;Stored\r\n";
+            + "First disc;DVD;2;/GAMES/disc.rar;ISO;1024;Disc 2\r\n"
+            + "Second USB;USB;;/GAMES/usb.rar;CHD;2048;\r\n"
+            + "Third card;Memory Card;;/GAMES/card.rar;ISO;3072;Stored\r\n";
         Assert.Equal([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(expected)], File.ReadAllBytes(destination));
         Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
         Assert.Equal(gameFileBefore, File.ReadAllBytes(gameFile));

@@ -10,7 +10,7 @@ public class GameCatalogCsvSerializerTests
     [Fact]
     public void EmptyCatalogProducesExactUtf8CsvWithBomAndHeaderOnly()
     {
-        const string header = "Title;Medium;DVD Number;Location;Format;Decompressed Size (bytes);Approximate Size (binary units);Notes\r\n";
+        const string header = "Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes\r\n";
         byte[] expected = [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(header)];
 
         var actual = GameCatalogCsvSerializer.SerializeEmptyCatalog();
@@ -19,7 +19,7 @@ public class GameCatalogCsvSerializerTests
     }
 
     [Fact]
-    public void EmptyCatalogHasExactlyEightEnglishColumnsAndNoDataRows()
+    public void EmptyCatalogHasExactlySevenEnglishColumnsAndNoDataRows()
     {
         var csv = Encoding.UTF8.GetString(GameCatalogCsvSerializer.SerializeEmptyCatalog());
         var lines = csv.TrimStart('\uFEFF').Split("\r\n", StringSplitOptions.None);
@@ -27,8 +27,7 @@ public class GameCatalogCsvSerializerTests
         Assert.Equal(2, lines.Length);
         Assert.Equal(string.Empty, lines[1]);
         Assert.Equal(
-            ["Title", "Medium", "DVD Number", "Location", "Format", "Decompressed Size (bytes)",
-                "Approximate Size (binary units)", "Notes"],
+            ["Title", "Medium", "DvdNumber", "Location", "Format", "SizeBytes", "Notes"],
             lines[0].Split(';'));
     }
 
@@ -51,10 +50,10 @@ public class GameCatalogCsvSerializerTests
         var csv = Encoding.UTF8.GetString(GameCatalogCsvSerializer.SerializeCatalog(records));
 
         Assert.Equal(
-            "\uFEFFTitle;Medium;DVD Number;Location;Format;Decompressed Size (bytes);Approximate Size (binary units);Notes\r\n"
-            + "Shared Title;DVD;2;/GAMES/disc-two.iso;ISO;1572864;1.5 MiB;Disc two\r\n"
-            + "Shared Title;USB;;/GAMES/usb.chd;CHD;2048;2 KiB;\r\n"
-            + "Card Game;Memory Card;;/GAMES/card.iso;ISO;1;1 B;\r\n",
+            "\uFEFFTitle;Medium;DvdNumber;Location;Format;SizeBytes;Notes\r\n"
+            + "Shared Title;DVD;2;/GAMES/disc-two.iso;ISO;1572864;Disc two\r\n"
+            + "Shared Title;USB;;/GAMES/usb.chd;CHD;2048;\r\n"
+            + "Card Game;Memory Card;;/GAMES/card.iso;ISO;1;\r\n",
             csv);
         Assert.DoesNotContain(dvdId.ToString(), csv);
         Assert.DoesNotContain(usbId.ToString(), csv);
@@ -83,7 +82,7 @@ public class GameCatalogCsvSerializerTests
 
             var csv = Encoding.UTF8.GetString(GameCatalogCsvSerializer.SerializeCatalog(records));
 
-            Assert.Contains(";1572864;1.5 MiB;\r\n", csv);
+            Assert.Contains(";1572864;\r\n", csv);
         }
         finally
         {
@@ -110,8 +109,8 @@ public class GameCatalogCsvSerializerTests
 
         Assert.Contains($";{encodedNotes}\r\n", csv);
         Assert.Equal(2, rows.Count);
-        Assert.Equal(8, rows[1].Length);
-        Assert.Equal(notes, rows[1][7]);
+        Assert.Equal(7, rows[1].Length);
+        Assert.Equal(notes, rows[1][6]);
     }
 
     [Fact]
@@ -134,12 +133,12 @@ public class GameCatalogCsvSerializerTests
         Assert.Contains("\"El Niño; Vol. 2: \"\"Return\"\"\"", csv);
         Assert.Contains("\"/GAMES/árcade;redux.iso\"", csv);
         Assert.Equal(3, rows.Count);
-        Assert.All(rows, row => Assert.Equal(8, row.Length));
+        Assert.All(rows, row => Assert.Equal(7, row.Length));
         Assert.Equal(title, rows[1][0]);
         Assert.Equal(location, rows[1][3]);
-        Assert.Equal(notes, rows[1][7]);
+        Assert.Equal(notes, rows[1][6]);
         Assert.Equal("Plain, Game: Vol. 2", rows[2][0]);
-        Assert.Equal(string.Empty, rows[2][7]);
+        Assert.Equal(string.Empty, rows[2][6]);
     }
 
     [Fact]
@@ -153,7 +152,7 @@ public class GameCatalogCsvSerializerTests
         var rows = ParseRows(GameCatalogCsvSerializer.SerializeCatalog(records));
 
         Assert.Equal(2, rows.Count);
-        Assert.Equal(string.Empty, rows[1][7]);
+        Assert.Equal(string.Empty, rows[1][6]);
     }
 
     [Theory]
@@ -193,7 +192,7 @@ public class GameCatalogCsvSerializerTests
         var rows = ParseRows(bytes);
 
         Assert.Contains(";\"\t \u2003=SUM(1;2) \"\"quoted\"\"\"\r\n", csv);
-        Assert.Equal($"\t{notes}", rows[1][7]);
+        Assert.Equal($"\t{notes}", rows[1][6]);
         Assert.Equal(notes, record.Notes);
     }
 

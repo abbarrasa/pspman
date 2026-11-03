@@ -17,8 +17,8 @@ Collection owners need a portable copy of their game catalog that they can inspe
 ## Functional requirements and acceptance criteria
 
 - FR-1: WHEN the user requests a catalog export, THE SYSTEM SHALL ask where to save the CSV and under what name; WHEN the user cancels this choice, THE SYSTEM SHALL leave the catalog and destination files unchanged.
-- FR-2: WHEN the user confirms a destination, THE SYSTEM SHALL export every saved game record exactly once, regardless of selection or media availability, in catalog display order. THE SYSTEM SHALL include a header row and these columns in this order: Title, Medium, DVD Number, Location, Format, Decompressed Size (bytes), Approximate Size (binary units), and Notes. THE SYSTEM SHALL NOT include internal identifiers.
-- FR-3: THE SYSTEM SHALL produce a CSV that opens as separate columns in Excel configured for Spanish regional settings: UTF-8 with a byte-order mark, semicolon-separated fields, and English column headings. THE SYSTEM SHALL represent decompressed size as an ungrouped integer byte count and the approximate size as the same human-readable binary-unit value shown in the catalog; a non-DVD record SHALL have an empty DVD Number cell.
+- FR-2: WHEN the user confirms a destination, THE SYSTEM SHALL export every saved game record exactly once, regardless of selection or media availability, in catalog display order. THE SYSTEM SHALL include a header row and these columns in this order: Title, Medium, DvdNumber, Location, Format, SizeBytes, and Notes. THE SYSTEM SHALL NOT include internal identifiers or an approximate-size column.
+- FR-3: THE SYSTEM SHALL produce a CSV that opens as separate columns in Excel configured for Spanish regional settings: UTF-8 with a byte-order mark, semicolon-separated fields, and English column headings. Medium SHALL contain Dvd, Usb, or MemoryCard; Format SHALL contain ISO or CHD. THE SYSTEM SHALL represent SizeBytes as an ungrouped integer decompressed byte count; a non-DVD record SHALL have an empty DvdNumber cell.
 - FR-4: WHEN a field contains a semicolon, double quote, or line break, THE SYSTEM SHALL preserve its complete value in one Excel cell by quoting that field and doubling embedded double quotes. Other punctuation, including commas and colons, SHALL be preserved. Empty Notes SHALL produce an empty cell.
 - FR-5: WHEN a text field could be interpreted by Excel as a formula because its first non-whitespace character is `=`, `+`, `-`, or `@`, THE SYSTEM SHALL make Excel display it as literal text without executing a formula or hiding its original visible content.
 - FR-6: IF the chosen destination already contains a file, THEN THE SYSTEM SHALL request confirmation before replacing it; IF the user declines, THEN THE SYSTEM SHALL leave that file unchanged and SHALL NOT report a successful export.
@@ -35,7 +35,7 @@ Collection owners need a portable copy of their game catalog that they can inspe
 ## Edge cases
 
 - Notes and other text may contain semicolons, commas, colons, double quotes, and line breaks; each exported record must still occupy one logical CSV row, and each field one Excel cell.
-- An empty catalog exports a header without data rows. Empty Notes and non-DVD DVD Numbers export as empty cells.
+- An empty catalog exports a header without data rows. Empty Notes and non-DVD DvdNumber values export as empty cells.
 - Distinct records with identical titles or similar locations remain distinct exported rows; export does not deduplicate or filter records.
 - A disconnected medium or missing game file does not prevent export. Export never reads or modifies a game file.
 - Cancelling destination selection or declining replacement changes no destination file. Read errors, corruption, permission errors, insufficient space, and interrupted writes are reported without a partial file being presented as complete.
@@ -51,7 +51,7 @@ Collection owners need a portable copy of their game catalog that they can inspe
 ## Completion criteria
 
 - Every FR has passing tests at the applicable unit, integration, or functional level; coverage is measured and significant gaps are justified.
-- A manual demonstration opens an exported non-empty catalog in Spanish-configured Excel and checks headings, sizes, Notes with semicolons, quotes and line breaks, and literal formula-like text. It also checks empty export, cancellation, and replacement confirmation.
+- A manual demonstration opens an exported non-empty catalog in Spanish-configured Excel and checks the seven headings, SizeBytes, Notes with semicolons, quotes and line breaks, and literal formula-like text. It also checks empty export, cancellation, and replacement confirmation.
 - Failed export and corrupt-catalog scenarios leave existing destination content unchanged in automated acceptance tests.
 
 ## Open questions
