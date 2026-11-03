@@ -4,7 +4,7 @@ namespace PSPMan.Core.Games;
 
 public sealed record GameCatalogCsvRecord(long StartLine, IReadOnlyList<string> Cells);
 
-// Incremental foundation for ordinary cells; quoted-field support is added separately.
+// Blank-line filtering and malformed-CSV reporting are added separately.
 public sealed class GameCatalogCsvTokenizer
 {
     private readonly StringBuilder cell = new();
@@ -14,6 +14,14 @@ public sealed class GameCatalogCsvTokenizer
     private bool skipLineFeed;
     private bool hasRecord;
     private bool completed;
+    private FieldState fieldState;
+
+    private enum FieldState
+    {
+        Unquoted,
+        Quoted,
+        AfterQuote
+    }
 
     public void Push(ReadOnlySpan<char> characters, Action<GameCatalogCsvRecord> emit)
     {
@@ -27,8 +35,41 @@ public sealed class GameCatalogCsvTokenizer
                 skipLineFeed = false;
                 if (character == '\n')
                 {
+                    if (fieldState == FieldState.Quoted)
+                    {
+                        cell.Append(character);
+                    }
                     continue;
                 }
+            }
+
+            if (fieldState == FieldState.Quoted)
+            {
+                if (character == '"')
+                {
+                    fieldState = FieldState.AfterQuote;
+                }
+                else
+                {
+                    cell.Append(character);
+                    if (character is '\r' or '\n')
+                    {
+                        currentLine++;
+                        skipLineFeed = character == '\r';
+                    }
+                }
+                continue;
+            }
+
+            if (fieldState == FieldState.AfterQuote)
+            {
+                if (character == '"')
+                {
+                    cell.Append(character);
+                    fieldState = FieldState.Quoted;
+                    continue;
+                }
+                fieldState = FieldState.Unquoted;
             }
 
             if (character is '\r' or '\n')
@@ -44,6 +85,10 @@ public sealed class GameCatalogCsvTokenizer
                 if (character == ';')
                 {
                     FinishCell();
+                }
+                else if (character == '"' && cell.Length == 0)
+                {
+                    fieldState = FieldState.Quoted;
                 }
                 else
                 {
@@ -68,6 +113,7 @@ public sealed class GameCatalogCsvTokenizer
     {
         cells.Add(cell.ToString());
         cell.Clear();
+        fieldState = FieldState.Unquoted;
     }
 
     private void EmitRecord(Action<GameCatalogCsvRecord> emit)
