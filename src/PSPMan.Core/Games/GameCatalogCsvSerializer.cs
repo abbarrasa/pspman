@@ -31,9 +31,9 @@ public static class GameCatalogCsvSerializer
 
         var medium = record.Medium switch
         {
-            GameMedium.Dvd => "DVD",
-            GameMedium.Usb => "USB",
-            GameMedium.MemoryCard => "Memory Card",
+            GameMedium.Dvd => "Dvd",
+            GameMedium.Usb => "Usb",
+            GameMedium.MemoryCard => "MemoryCard",
             _ => throw new ArgumentOutOfRangeException(nameof(record), "Unsupported game medium.")
         };
         var format = record.Format switch

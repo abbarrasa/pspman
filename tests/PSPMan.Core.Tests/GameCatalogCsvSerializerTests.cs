@@ -51,9 +51,9 @@ public class GameCatalogCsvSerializerTests
 
         Assert.Equal(
             "\uFEFFTitle;Medium;DvdNumber;Location;Format;SizeBytes;Notes\r\n"
-            + "Shared Title;DVD;2;/GAMES/disc-two.iso;ISO;1572864;Disc two\r\n"
-            + "Shared Title;USB;;/GAMES/usb.chd;CHD;2048;\r\n"
-            + "Card Game;Memory Card;;/GAMES/card.iso;ISO;1;\r\n",
+            + "Shared Title;Dvd;2;/GAMES/disc-two.iso;ISO;1572864;Disc two\r\n"
+            + "Shared Title;Usb;;/GAMES/usb.chd;CHD;2048;\r\n"
+            + "Card Game;MemoryCard;;/GAMES/card.iso;ISO;1;\r\n",
             csv);
         Assert.DoesNotContain(dvdId.ToString(), csv);
         Assert.DoesNotContain(usbId.ToString(), csv);
@@ -172,7 +172,7 @@ public class GameCatalogCsvSerializerTests
         var csv = Encoding.UTF8.GetString(bytes);
         var rows = ParseRows(bytes);
 
-        Assert.Contains($"{encodedTitle};DVD;1;", csv);
+        Assert.Contains($"{encodedTitle};Dvd;1;", csv);
         Assert.Equal(2, rows.Count);
         Assert.Equal($"\t{title}", rows[1][0]);
         Assert.Equal(title, record.Title);

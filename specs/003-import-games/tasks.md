@@ -6,7 +6,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
 
 - [x] **T01 (25 min; FR-2, FR-3):** Introduce the shared seven-heading CSV schema and change export to write the seven columns in the specified order without approximate size.
   Done when: Exact-byte tests verify the BOM, seven headings, row order, SizeBytes, and header-only empty export; the solution builds.
-- [ ] **T02 (25 min; FR-2, FR-3):** Export Medium as `Dvd`/`Usb`/`MemoryCard` and Format as `ISO`/`CHD`, preserving CSV escaping and formula protection; reconcile the old export plan/task acceptance text with the revised specification.
+- [x] **T02 (25 min; FR-2, FR-3):** Export Medium as `Dvd`/`Usb`/`MemoryCard` and Format as `ISO`/`CHD`, preserving CSV escaping and formula protection; reconcile the old export plan/task acceptance text with the revised specification.
   Done when: Export regression tests cover every label and special text, the old eight-column expectations are gone, and the relevant tests pass.
 - [ ] **T03 (25 min; FR-13):** Generate the illustrative CSV template from the shared schema, showing every permitted Medium and Format value with other required game fields empty.
   Done when: Exact-byte tests verify its seven headings and allowed labels, and parsing its rows cannot produce a valid game record.
