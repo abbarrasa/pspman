@@ -4,12 +4,14 @@ Source: [specification](./spec.md) and [implementation plan](./plan.md). Tasks a
 
 ## Shared formatting and CSV rules
 
+The completed task identifiers below retain their original history; CSV acceptance text reflects the seven-column contract revised by import T01–T02. Earlier coverage and manual-validation reports describe their recorded runs.
+
 - [x] **T01 (20 min; FR-3):** Move the existing binary-size formatter to Core, use it from the game editor, and pin its current output with unit tests.
   Done when: The editor still displays the same binary-unit values, formatter tests pass, and the solution builds.
 - [x] **T02 (25 min; FR-2, FR-3, FR-9):** Add a pure CSV serializer for the fixed English header, UTF-8 BOM, semicolon separator, and header-only empty catalog; test exact bytes.
-  Done when: Unit tests verify the BOM, eight headers in order, and a header-only export for zero records.
-- [x] **T03 (25 min; FR-2, FR-3):** Project each saved record into the eight export columns, preserving input order and excluding the internal ID; test DVD and non-DVD values.
-  Done when: Tests verify every visible field, invariant integer bytes, the shared readable size, empty non-DVD DVD cells, and one ordered row per record.
+  Done when: Unit tests verify the BOM, seven headers in order (Title, Medium, DvdNumber, Location, Format, SizeBytes, Notes), and a header-only export for zero records.
+- [x] **T03 (25 min; FR-2, FR-3):** Project each saved record into the seven export columns, preserving input order and excluding the internal ID and approximate size; test DVD and non-DVD values.
+  Done when: Tests verify every specified field, Medium labels Dvd/Usb/MemoryCard, Format labels ISO/CHD, invariant integer SizeBytes, empty non-DVD DvdNumber cells, and one ordered row per record.
 - [x] **T04 (25 min; FR-3, FR-4):** Add CSV field escaping and tests for semicolons, quotes, commas, colons, Unicode, line breaks, and empty Notes.
   Done when: Tests parse the output into the original cell values, with embedded quotes doubled and no extra logical rows.
 - [x] **T05 (25 min; FR-4, FR-5):** Protect formula-like text in exported cells, including triggers after leading whitespace; test protected and ordinary values.

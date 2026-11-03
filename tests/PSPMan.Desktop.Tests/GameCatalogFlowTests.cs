@@ -78,8 +78,12 @@ public class GameCatalogFlowTests
         Assert.Equal(3, rows.Count);
         Assert.All(rows, row => Assert.Equal(7, row.Length));
         Assert.Equal($"\t{formulaTitle}", rows[1][0]);
+        Assert.Equal("Dvd", rows[1][1]);
+        Assert.Equal("ISO", rows[1][4]);
         Assert.Equal(multilineNotes, rows[1][6]);
         Assert.Equal("Pokémon, azul: edición", rows[2][0]);
+        Assert.Equal("Usb", rows[2][1]);
+        Assert.Equal("CHD", rows[2][4]);
         Assert.Equal($"\t{formulaNotes}", rows[2][6]);
         Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
         Assert.Equal([first.Value!, second.Value!], new SqliteGameRecordRepository(data.CatalogPath).List());
@@ -131,9 +135,9 @@ public class GameCatalogFlowTests
         }, CancellationToken.None);
 
         var expected = ExportHeader
-            + "First disc;DVD;2;/GAMES/disc.rar;ISO;1024;Disc 2\r\n"
-            + "Second USB;USB;;/GAMES/usb.rar;CHD;2048;\r\n"
-            + "Third card;Memory Card;;/GAMES/card.rar;ISO;3072;Stored\r\n";
+            + "First disc;Dvd;2;/GAMES/disc.rar;ISO;1024;Disc 2\r\n"
+            + "Second USB;Usb;;/GAMES/usb.rar;CHD;2048;\r\n"
+            + "Third card;MemoryCard;;/GAMES/card.rar;ISO;3072;Stored\r\n";
         Assert.Equal([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(expected)], File.ReadAllBytes(destination));
         Assert.Equal(catalogBefore, File.ReadAllBytes(data.CatalogPath));
         Assert.Equal(gameFileBefore, File.ReadAllBytes(gameFile));
