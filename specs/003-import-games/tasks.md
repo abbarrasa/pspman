@@ -13,7 +13,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
 
 ## Parse and validate CSV without file access in Core
 
-- [ ] **T04 (25 min; FR-2, FR-3):** Add an incremental tokenizer for semicolon-separated logical records and source line tracking.
+- [x] **T04 (25 min; FR-2, FR-3):** Add an incremental tokenizer for semicolon-separated logical records and source line tracking.
   Done when: Unit tests recover ordinary cells and record start lines from chunked CRLF/LF input without loading the complete file.
 - [ ] **T05 (25 min; FR-2, FR-3):** Extend the tokenizer for quoted semicolons, doubled quotes, Unicode, and line breaks inside quoted Notes.
   Done when: Tests show each multiline record remains one logical row with its exact decoded cell values.
