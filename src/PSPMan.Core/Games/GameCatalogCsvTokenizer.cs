@@ -4,7 +4,6 @@ namespace PSPMan.Core.Games;
 
 public sealed record GameCatalogCsvRecord(long StartLine, IReadOnlyList<string> Cells);
 
-// Blank-line filtering and malformed-CSV reporting are added separately.
 public sealed class GameCatalogCsvTokenizer
 {
     private readonly StringBuilder cell = new();
@@ -14,6 +13,8 @@ public sealed class GameCatalogCsvTokenizer
     private bool skipLineFeed;
     private bool hasRecord;
     private bool completed;
+    private bool failed;
+    private bool blankLine = true;
     private FieldState fieldState;
 
     private enum FieldState
@@ -43,6 +44,11 @@ public sealed class GameCatalogCsvTokenizer
                 }
             }
 
+            if (character is not (' ' or '\t' or '\r' or '\n'))
+            {
+                blankLine = false;
+            }
+
             if (fieldState == FieldState.Quoted)
             {
                 if (character == '"')
@@ -69,6 +75,10 @@ public sealed class GameCatalogCsvTokenizer
                     fieldState = FieldState.Quoted;
                     continue;
                 }
+                if (character is not (';' or '\r' or '\n'))
+                {
+                    Fail("Unexpected character after a closing quote.");
+                }
                 fieldState = FieldState.Unquoted;
             }
 
@@ -86,8 +96,12 @@ public sealed class GameCatalogCsvTokenizer
                 {
                     FinishCell();
                 }
-                else if (character == '"' && cell.Length == 0)
+                else if (character == '"')
                 {
+                    if (cell.Length != 0)
+                    {
+                        Fail("Unexpected quote in an unquoted field.");
+                    }
                     fieldState = FieldState.Quoted;
                 }
                 else
@@ -102,6 +116,10 @@ public sealed class GameCatalogCsvTokenizer
     {
         ArgumentNullException.ThrowIfNull(emit);
         ThrowIfCompleted();
+        if (fieldState == FieldState.Quoted)
+        {
+            Fail("Unterminated quoted field.");
+        }
         completed = true;
         if (hasRecord)
         {
@@ -118,15 +136,32 @@ public sealed class GameCatalogCsvTokenizer
 
     private void EmitRecord(Action<GameCatalogCsvRecord> emit)
     {
+        if (blankLine)
+        {
+            cell.Clear();
+            hasRecord = false;
+            return;
+        }
         FinishCell();
         var record = new GameCatalogCsvRecord(recordStartLine, Array.AsReadOnly(cells.ToArray()));
         cells.Clear();
         hasRecord = false;
+        blankLine = true;
         emit(record);
+    }
+
+    private void Fail(string reason)
+    {
+        failed = true;
+        throw new FormatException($"CSV record starting on line {recordStartLine}: {reason}");
     }
 
     private void ThrowIfCompleted()
     {
+        if (failed)
+        {
+            throw new InvalidOperationException("The CSV tokenizer cannot continue after a structure error.");
+        }
         if (completed)
         {
             throw new InvalidOperationException("The CSV tokenizer has already been completed.");

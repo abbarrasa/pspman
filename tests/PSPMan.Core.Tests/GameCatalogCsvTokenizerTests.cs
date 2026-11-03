@@ -5,6 +5,90 @@ namespace PSPMan.Core.Tests;
 public class GameCatalogCsvTokenizerTests
 {
     [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(7)]
+    [InlineData(4096)]
+    public void IgnoresBlankPhysicalLinesButPreservesTheirSourceLineNumbers(int chunkSize)
+    {
+        const string csv = "\r\n \t\r\nheader;value\n\t \nfirst;row\r\n \t";
+        var tokenizer = new GameCatalogCsvTokenizer();
+        var records = new List<GameCatalogCsvRecord>();
+        for (var offset = 0; offset < csv.Length; offset += chunkSize)
+        {
+            tokenizer.Push(csv.AsSpan(offset, Math.Min(chunkSize, csv.Length - offset)), records.Add);
+        }
+        tokenizer.Complete(records.Add);
+
+        Assert.Equal(new long[] { 3, 5 }, records.Select(record => record.StartLine));
+        Assert.Equal(new[] { "header", "value" }, records[0].Cells);
+        Assert.Equal(new[] { "first", "row" }, records[1].Cells);
+    }
+
+    [Theory]
+    [InlineData("\" \t\"", " \t")]
+    [InlineData("\"\"", "")]
+    [InlineData("\"\r\n \t\n\"", "\r\n \t\n")]
+    [InlineData("\u00A0", "\u00A0")]
+    public void DoesNotDiscardQuotedEmptyOrWhitespaceFieldsOrOtherUnicodeWhitespace(string csv, string expected)
+    {
+        var tokenizer = new GameCatalogCsvTokenizer();
+        var records = new List<GameCatalogCsvRecord>();
+        foreach (var character in csv)
+        {
+            tokenizer.Push(character.ToString(), records.Add);
+        }
+        tokenizer.Complete(records.Add);
+
+        Assert.Equal(new[] { expected }, Assert.Single(records).Cells);
+    }
+
+    [Fact]
+    public void DoesNotDiscardRowsContainingSeparatorsWithEmptyCells()
+    {
+        var tokenizer = new GameCatalogCsvTokenizer();
+        var records = new List<GameCatalogCsvRecord>();
+        tokenizer.Push(";\n \t; \t;\n", records.Add);
+        tokenizer.Complete(records.Add);
+
+        Assert.Equal(new[] { "", "" }, records[0].Cells);
+        Assert.Equal(new[] { " \t", " \t", "" }, records[1].Cells);
+    }
+
+    [Theory]
+    [InlineData("ab\"cd;value", "Unexpected quote in an unquoted field.")]
+    [InlineData(" \"text\";value", "Unexpected quote in an unquoted field.")]
+    [InlineData("\"text\"x;value", "Unexpected character after a closing quote.")]
+    [InlineData("\"text\" ;value", "Unexpected character after a closing quote.")]
+    [InlineData("\"text\"\t;value", "Unexpected character after a closing quote.")]
+    [InlineData("\"first\nsecond\"x", "Unexpected character after a closing quote.")]
+    [InlineData("\"unfinished", "Unterminated quoted field.")]
+    [InlineData("\"escaped\"\"", "Unterminated quoted field.")]
+    [InlineData("\"first\r\nsecond", "Unterminated quoted field.")]
+    public void ReportsFatalStructureErrorsAtEveryChunkBoundaryAndCannotContinue(string malformed, string reason)
+    {
+        for (var split = 0; split <= malformed.Length; split++)
+        {
+            var tokenizer = new GameCatalogCsvTokenizer();
+            var records = new List<GameCatalogCsvRecord>();
+            tokenizer.Push("valid;row\r\n\t \n", records.Add);
+
+            var error = Assert.Throws<FormatException>(() =>
+            {
+                tokenizer.Push(malformed.AsSpan(0, split), records.Add);
+                tokenizer.Push(malformed.AsSpan(split), records.Add);
+                tokenizer.Complete(records.Add);
+            });
+
+            Assert.Contains("starting on line 3", error.Message);
+            Assert.Contains(reason, error.Message);
+            Assert.Equal(new[] { "valid", "row" }, Assert.Single(records).Cells);
+            Assert.Throws<InvalidOperationException>(() => tokenizer.Push("later;row\n", records.Add));
+            Assert.Throws<InvalidOperationException>(() => tokenizer.Complete(records.Add));
+        }
+    }
+
+    [Theory]
     [InlineData("\"a;b\";c", "a;b", "c")]
     [InlineData("\"a\"\"b\";\"c\"", "a\"b", "c")]
     [InlineData("\"\";\"\"", "", "")]
