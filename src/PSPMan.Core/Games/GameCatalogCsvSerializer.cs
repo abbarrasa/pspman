@@ -5,9 +5,6 @@ namespace PSPMan.Core.Games;
 
 public static class GameCatalogCsvSerializer
 {
-    private const string HeaderLine =
-        "Title;Medium;DVD Number;Location;Format;Decompressed Size (bytes);Approximate Size (binary units);Notes\r\n";
-
     public static byte[] SerializeEmptyCatalog()
     {
         return SerializeCatalog([]);
@@ -17,7 +14,7 @@ public static class GameCatalogCsvSerializer
     {
         ArgumentNullException.ThrowIfNull(records);
 
-        var csv = new StringBuilder(HeaderLine);
+        var csv = new StringBuilder(GameCatalogCsvSchema.HeaderLine);
         foreach (var record in records)
         {
             var fields = ProjectRecord(record);
@@ -56,7 +53,6 @@ public static class GameCatalogCsvSerializer
             record.Location,
             format,
             record.SizeBytes.ToString(CultureInfo.InvariantCulture),
-            ByteSizeFormatter.Format(record.SizeBytes),
             record.Notes ?? string.Empty
         ];
     }
