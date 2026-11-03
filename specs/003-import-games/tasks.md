@@ -15,7 +15,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
 
 - [x] **T04 (25 min; FR-2, FR-3):** Add an incremental tokenizer for semicolon-separated logical records and source line tracking.
   Done when: Unit tests recover ordinary cells and record start lines from chunked CRLF/LF input without loading the complete file.
-- [ ] **T05 (25 min; FR-2, FR-3):** Extend the tokenizer for quoted semicolons, doubled quotes, Unicode, and line breaks inside quoted Notes.
+- [x] **T05 (25 min; FR-2, FR-3):** Extend the tokenizer for quoted semicolons, doubled quotes, Unicode, and line breaks inside quoted Notes.
   Done when: Tests show each multiline record remains one logical row with its exact decoded cell values.
 - [ ] **T06 (25 min; FR-6, FR-9, FR-11):** Distinguish blank or spaces/tabs-only lines outside quotes from malformed quoting and unterminated records.
   Done when: Tests ignore those blank lines, preserve whitespace inside quotes, and report unrecoverable CSV structure as a fatal preview error.

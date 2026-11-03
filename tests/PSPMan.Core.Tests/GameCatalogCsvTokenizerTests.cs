@@ -5,6 +5,74 @@ namespace PSPMan.Core.Tests;
 public class GameCatalogCsvTokenizerTests
 {
     [Theory]
+    [InlineData("\"a;b\";c", "a;b", "c")]
+    [InlineData("\"a\"\"b\";\"c\"", "a\"b", "c")]
+    [InlineData("\"\";\"\"", "", "")]
+    [InlineData("\"\"\"\";tail", "\"", "tail")]
+    [InlineData("\" 日本語;🎮 é \";á", " 日本語;🎮 é ", "á")]
+    public void DecodesQuotedCellsAtEveryPossibleChunkBoundary(string csv, string first, string second)
+    {
+        for (var split = 0; split <= csv.Length; split++)
+        {
+            var tokenizer = new GameCatalogCsvTokenizer();
+            var records = new List<GameCatalogCsvRecord>();
+            tokenizer.Push(csv.AsSpan(0, split), records.Add);
+            tokenizer.Push(csv.AsSpan(split), records.Add);
+            tokenizer.Complete(records.Add);
+
+            var record = Assert.Single(records);
+            Assert.Equal(1, record.StartLine);
+            Assert.Equal(new[] { first, second }, record.Cells);
+        }
+    }
+
+    [Theory]
+    [InlineData("\n", 1)]
+    [InlineData("\n", 2)]
+    [InlineData("\n", 7)]
+    [InlineData("\n", 4096)]
+    [InlineData("\r\n", 1)]
+    [InlineData("\r\n", 2)]
+    [InlineData("\r\n", 7)]
+    [InlineData("\r\n", 4096)]
+    public void KeepsMultilineNotesAsOneRecordAndTracksFollowingStartLine(string newline, int chunkSize)
+    {
+        var notes = $"First; \"quoted\"{newline}日本語 🎮{newline}Last";
+        var csv = $"Title;Notes{newline}Game;\"{notes.Replace("\"", "\"\"")}\"{newline}Next;ordinary{newline}";
+        var tokenizer = new GameCatalogCsvTokenizer();
+        var records = new List<GameCatalogCsvRecord>();
+
+        for (var offset = 0; offset < csv.Length; offset += chunkSize)
+        {
+            tokenizer.Push(csv.AsSpan(offset, Math.Min(chunkSize, csv.Length - offset)), records.Add);
+        }
+        tokenizer.Complete(records.Add);
+
+        Assert.Equal(new long[] { 1, 2, 5 }, records.Select(record => record.StartLine));
+        Assert.Equal(new[] { "Game", notes }, records[1].Cells);
+        Assert.Equal(new[] { "Next", "ordinary" }, records[2].Cells);
+    }
+
+    [Fact]
+    public void DoesNotEmitARecordAtLineBreaksInsideAnUnfinishedQuotedField()
+    {
+        var tokenizer = new GameCatalogCsvTokenizer();
+        var records = new List<GameCatalogCsvRecord>();
+
+        tokenizer.Push("first;\"line one\r", records.Add);
+        tokenizer.Push("\nline two\n", records.Add);
+        Assert.Empty(records);
+        tokenizer.Push("line three\"\r", records.Add);
+        Assert.Equal(new[] { "first", "line one\r\nline two\nline three" }, Assert.Single(records).Cells);
+        tokenizer.Push("\n\"last\";\"value\"", records.Add);
+        Assert.Single(records);
+        tokenizer.Complete(records.Add);
+
+        Assert.Equal(4, records[1].StartLine);
+        Assert.Equal(new[] { "last", "value" }, records[1].Cells);
+    }
+
+    [Theory]
     [InlineData("\n", 1)]
     [InlineData("\n", 2)]
     [InlineData("\n", 7)]
