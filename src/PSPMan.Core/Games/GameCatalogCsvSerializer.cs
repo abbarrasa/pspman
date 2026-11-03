@@ -14,10 +14,14 @@ public static class GameCatalogCsvSerializer
     {
         ArgumentNullException.ThrowIfNull(records);
 
+        return SerializeRows(records.Select(ProjectRecord));
+    }
+
+    internal static byte[] SerializeRows(IEnumerable<string[]> rows)
+    {
         var csv = new StringBuilder(GameCatalogCsvSchema.HeaderLine);
-        foreach (var record in records)
+        foreach (var fields in rows)
         {
-            var fields = ProjectRecord(record);
             csv.AppendJoin(';', fields.Select((field, index) =>
                 EscapeCsvField(index is 2 or 5 ? field : ProtectExcelText(field)))).Append("\r\n");
         }
@@ -29,29 +33,15 @@ public static class GameCatalogCsvSerializer
     {
         ArgumentNullException.ThrowIfNull(record);
 
-        var medium = record.Medium switch
-        {
-            GameMedium.Dvd => "Dvd",
-            GameMedium.Usb => "Usb",
-            GameMedium.MemoryCard => "MemoryCard",
-            _ => throw new ArgumentOutOfRangeException(nameof(record), "Unsupported game medium.")
-        };
-        var format = record.Format switch
-        {
-            GameFormat.Iso => "ISO",
-            GameFormat.Chd => "CHD",
-            _ => throw new ArgumentOutOfRangeException(nameof(record), "Unsupported game format.")
-        };
-
         return
         [
             record.Title,
-            medium,
+            GameCatalogCsvSchema.GetMediumLabel(record.Medium),
             record.Medium == GameMedium.Dvd
                 ? record.DvdNumber?.ToString(CultureInfo.InvariantCulture) ?? string.Empty
                 : string.Empty,
             record.Location,
-            format,
+            GameCatalogCsvSchema.GetFormatLabel(record.Format),
             record.SizeBytes.ToString(CultureInfo.InvariantCulture),
             record.Notes ?? string.Empty
         ];
