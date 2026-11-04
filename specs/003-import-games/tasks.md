@@ -21,7 +21,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests ignore those blank lines, preserve whitespace inside quotes, and report unrecoverable CSV structure as a fatal preview error.
 - [x] **T07 (25 min; FR-2, FR-9):** Map headings by case-insensitive name, reject whitespace in any heading, require all seven fields, and select the last duplicate heading.
   Done when: Tests cover reordered, repeated, extra, missing, mixed-case, and whitespace-containing headings with deterministic column indices or file errors.
-- [ ] **T08 (25 min; FR-3, FR-6):** Convert a row's Medium, Format, DvdNumber, and SizeBytes using the permitted labels and invariant numeric rules.
+- [x] **T08 (25 min; FR-3, FR-6):** Convert a row's Medium, Format, DvdNumber, and SizeBytes using the permitted labels and invariant numeric rules.
   Done when: Tests accept mixed-case values without whitespace and valid integer boundaries, and reject whitespace, unsupported labels, overflow, and malformed numbers by field.
 - [ ] **T09 (25 min; FR-3, FR-6):** Map the remaining text fields, remove exactly one formula-protection tab when required, and reuse `GameRecordRules` for record validation.
   Done when: Tests cover required Title/Location, path syntax, DVD-only numbering, Notes length, punctuation, and preserved or removed leading tabs.
