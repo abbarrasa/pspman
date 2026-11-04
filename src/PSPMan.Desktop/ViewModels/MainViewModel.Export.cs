@@ -123,8 +123,23 @@ public partial class MainViewModel
     public bool IsTemplateExport
     {
         get => _isTemplateExport;
-        private set => SetProperty(ref _isTemplateExport, value);
+        private set
+        {
+            if (SetProperty(ref _isTemplateExport, value))
+            {
+                OnPropertyChanged(nameof(ExportFormTitle));
+                OnPropertyChanged(nameof(ExportActionText));
+                OnPropertyChanged(nameof(ExportReplacementPrompt));
+                OnPropertyChanged(nameof(ExportSuccessHeading));
+            }
+        }
     }
+
+    public string ExportFormTitle => IsTemplateExport ? "Save CSV import template" : "Export catalog to CSV";
+    public string ExportActionText => IsTemplateExport ? "Save template" : "Export";
+    public string ExportReplacementPrompt => IsTemplateExport
+        ? "The template file already exists. Replace it?" : "The export file already exists. Replace it?";
+    public string ExportSuccessHeading => IsTemplateExport ? "CSV template saved to:" : "Catalog exported to:";
 
     public bool CanOpenCsvTemplate => CanOpenExport && _exportWriter is not null && _catalogPath is not null;
 

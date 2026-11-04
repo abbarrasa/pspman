@@ -18,6 +18,8 @@
         <Grid ColumnDefinitions="*,Auto">
             <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="GetCsvTemplateButton" Content="Get CSV template"
+                        Command="{Binding OpenCsvTemplateCommand}" IsEnabled="{Binding CanOpenCsvTemplate}" />
                 <Button x:Name="ImportCatalogButton" Content="Import catalog"
                         Command="{Binding OpenImportCommand}" IsEnabled="{Binding CanOpenImport}" />
                 <Button x:Name="ExportCatalogButton" Content="Export catalog"
@@ -78,7 +80,7 @@
         </ScrollViewer>
         <StackPanel x:Name="ExportFormPanel" Grid.Row="2" Margin="0,12,0,0" Spacing="8"
                     IsVisible="{Binding IsExportFormOpen}">
-            <TextBlock Text="Export catalog to CSV" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock x:Name="ExportFormTitleText" Text="{Binding ExportFormTitle}" FontSize="18" FontWeight="SemiBold" />
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button x:Name="ChooseExportFolderButton" Content="Choose folder"
                         Command="{Binding ChooseExportFolderCommand}" />
@@ -89,7 +91,7 @@
                 <TextBlock Text="CSV file name" VerticalAlignment="Center" />
                 <TextBox x:Name="ExportFileNameInput" Width="280"
                          Text="{Binding ExportFileName, Mode=TwoWay}" />
-                <Button x:Name="ExportFileButton" Content="Export"
+                <Button x:Name="ExportFileButton" Content="{Binding ExportActionText}"
                         Command="{Binding ExportCatalogCommand}"
                         IsEnabled="{Binding CanExportCatalog}" />
                 <Button x:Name="CancelExportButton" Content="Cancel"
@@ -97,7 +99,7 @@
             </StackPanel>
             <StackPanel x:Name="ExportReplacementPanel" Spacing="6"
                         IsVisible="{Binding IsReplacementPending}">
-                <TextBlock Text="The export file already exists. Replace it?"
+                <TextBlock x:Name="ExportReplacementPromptText" Text="{Binding ExportReplacementPrompt}"
                            FontWeight="SemiBold" TextWrapping="Wrap" />
                 <TextBlock x:Name="PendingExportPathText" Text="{Binding PendingReplacementPath}"
                            TextWrapping="Wrap" />
@@ -113,7 +115,7 @@
         </StackPanel>
         <StackPanel x:Name="ExportSuccessPanel" Grid.Row="3" Margin="0,12,0,0" Spacing="4"
                     IsVisible="{Binding HasExportSuccess}">
-            <TextBlock Text="Catalog exported to:" FontWeight="SemiBold" />
+            <TextBlock x:Name="ExportSuccessHeadingText" Text="{Binding ExportSuccessHeading}" FontWeight="SemiBold" />
             <TextBlock x:Name="ExportSuccessPathText" Text="{Binding ExportedPath}"
                        TextWrapping="Wrap" />
         </StackPanel>

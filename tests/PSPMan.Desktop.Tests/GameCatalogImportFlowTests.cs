@@ -13,6 +13,61 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public class GameCatalogImportFlowTests
 {
+    [Theory]
+    [InlineData("new")]
+    [InlineData("replace")]
+    [InlineData("decline")]
+    public async Task TemplateControlsSaveOrDeclineReplacementWithoutChangingCatalog(string action)
+    {
+        using var data = new ImportData(Header);
+        var destination = Path.Combine(data.Folder, "pspman-import-template.csv");
+        byte[] original = [4, 2, 0];
+        if (action != "new") File.WriteAllBytes(destination, original);
+        var before = File.ReadAllBytes(data.CatalogPath);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await session.Dispatch(() =>
+        {
+            var window = data.OpenWindow();
+            try
+            {
+                Click(window, "GetCsvTemplateButton");
+                Assert.Equal("Save CSV import template", Control<TextBlock>(window, "ExportFormTitleText").Text);
+                Assert.Equal("Save template", Control<Button>(window, "ExportFileButton").Content);
+                Assert.Equal("pspman-import-template.csv", Control<TextBox>(window, "ExportFileNameInput").Text);
+                Click(window, "ChooseExportFolderButton");
+                Click(window, "ExportFileButton");
+                if (action != "new")
+                {
+                    Assert.Equal(original, File.ReadAllBytes(destination));
+                    Assert.Equal("The template file already exists. Replace it?", Control<TextBlock>(window, "ExportReplacementPromptText").Text);
+                    Click(window, action == "replace" ? "ReplaceExportButton" : "DeclineExportButton");
+                }
+                if (action == "decline")
+                {
+                    Assert.Equal(original, File.ReadAllBytes(destination));
+                    Assert.False(Control<StackPanel>(window, "ExportSuccessPanel").IsVisible);
+                    Click(window, "CancelExportButton");
+                }
+                else
+                {
+                    Assert.Equal(GameCatalogCsvTemplate.Generate(), File.ReadAllBytes(destination));
+                    Assert.Equal("CSV template saved to:", Control<TextBlock>(window, "ExportSuccessHeadingText").Text);
+                    Assert.Equal(destination, Control<TextBlock>(window, "ExportSuccessPathText").Text);
+                }
+                Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+                Click(window, "ExportCatalogButton");
+                Assert.Equal("Export catalog to CSV", Control<TextBlock>(window, "ExportFormTitleText").Text);
+                Assert.Equal("Export", Control<Button>(window, "ExportFileButton").Content);
+            }
+            finally { window.Close(); }
+        }, CancellationToken.None);
+    }
+
+    private sealed class TemplateFolderPicker(string folder) : IGameExportFolderPicker
+    {
+        public Task<string?> PickFolderAsync() => Task.FromResult<string?>(folder);
+    }
+
     private const string Header = "Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes\n";
 
     [Theory]
@@ -199,7 +254,7 @@ public class GameCatalogImportFlowTests
         }
         public MainWindow OpenWindow()
         {
-            var window = new MainWindow { DataContext = CatalogStartup.CreateMainViewModel(Folder, importFilePicker: new Picker(CsvPath)) };
+            var window = new MainWindow { DataContext = CatalogStartup.CreateMainViewModel(Folder, new TemplateFolderPicker(Folder), new Picker(CsvPath)) };
             window.Show();
             Dispatcher.UIThread.RunJobs();
             return window;
