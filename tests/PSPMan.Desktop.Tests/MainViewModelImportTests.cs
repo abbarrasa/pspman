@@ -6,6 +6,195 @@ namespace PSPMan.Desktop.Tests;
 
 public class MainViewModelImportTests
 {
+    [Fact]
+    public async Task ConfirmationSavesOnlyProposalsPreservesIdsAndRefreshesSelection()
+    {
+        var old = new GameRecord(Guid.NewGuid(), "Old", GameMedium.Usb, null, "/old.rar", GameFormat.Iso, 1, "notes");
+        var repository = new WritableImportRepository([old]);
+        var source = new PreviewSource(CsvHeader + "Edited;Usb;;/old.rar;CHD;2;\nNew;Usb;;/new.rar;ISO;1;\n");
+        var vm = await CreatePreviewViewModel(repository, source);
+        vm.SelectedGame = old;
+        Assert.False(vm.ConfirmImportCommand.CanExecute(null));
+        await vm.PreviewImportCommand.ExecuteAsync(null);
+        Assert.True(vm.ConfirmImportCommand.CanExecute(null));
+        Assert.Empty(repository.Attempts);
+
+        await vm.ConfirmImportCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, vm.ImportCreatedCount);
+        Assert.Equal(1, vm.ImportUpdatedCount);
+        Assert.Equal(0, vm.ImportFailedCount);
+        Assert.True(vm.HasImportResult);
+        Assert.True(vm.ImportApplyResult!.IsSuccess);
+        Assert.False(vm.HasImportPreview);
+        Assert.False(vm.ConfirmImportCommand.CanExecute(null));
+        await vm.ConfirmImportCommand.ExecuteAsync(null);
+        Assert.Equal(2, repository.Attempts.Count);
+        Assert.Equal("Edited", vm.SelectedGame!.Title);
+        Assert.Equal(old.Id, vm.SelectedGame.Id);
+        Assert.Equal("", vm.SelectedGame.Notes);
+        Assert.Equal(2, vm.Games.Count);
+        Assert.Null(vm.ImportError);
+        Assert.Contains("1 created", vm.ImportStatusText!);
+        Assert.True(source.LastReader!.Disposed);
+    }
+
+    [Fact]
+    public async Task CancellingPendingPreviewReenablesMutationsWithoutWrites()
+    {
+        var repository = new WritableImportRepository([]);
+        var vm = await CreatePreviewViewModel(repository, new PreviewSource(CsvHeader));
+        await vm.PreviewImportCommand.ExecuteAsync(null);
+        Assert.False(vm.AddGameCommand.CanExecute(null));
+
+        vm.CancelImportCommand.Execute(null);
+
+        Assert.False(vm.IsImportFormOpen);
+        Assert.False(vm.HasImportPreview);
+        Assert.True(vm.AddGameCommand.CanExecute(null));
+        Assert.Empty(repository.Attempts);
+    }
+
+    [Fact]
+    public async Task ChangedSourceAtConfirmationShowsErrorAndDoesNotWrite()
+    {
+        var repository = new WritableImportRepository([]);
+        var source = new PreviewSource(CsvHeader + "New;Usb;;/new.rar;ISO;1;\n");
+        var vm = await CreatePreviewViewModel(repository, source);
+        await vm.PreviewImportCommand.ExecuteAsync(null);
+        source.Text += "Other;Usb;;/other.rar;ISO;1;\n";
+
+        await vm.ConfirmImportCommand.ExecuteAsync(null);
+
+        Assert.Contains("changed", vm.ImportError!);
+        Assert.Empty(repository.Attempts);
+        Assert.Empty(vm.Games);
+        Assert.False(vm.ConfirmImportCommand.CanExecute(null));
+        Assert.False(vm.IsImportBusy);
+    }
+
+    [Theory]
+    [InlineData("ordinary")]
+    [InlineData("corrupt")]
+    [InlineData("source")]
+    public async Task PartialImportShowsOnlySavedRecordsAndKeepsErrorsVisible(string failure)
+    {
+        var repository = new WritableImportRepository([]);
+        var source = new PreviewSource(CsvHeader + "Saved;Usb;;/saved.rar;ISO;1;\n"
+            + "Failed;Usb;;/failed.rar;ISO;1;\nLater;Usb;;/later.rar;ISO;1;\n");
+        var vm = await CreatePreviewViewModel(repository, source);
+        await vm.PreviewImportCommand.ExecuteAsync(null);
+        repository.BeforeWrite = record =>
+        {
+            if (failure == "source") source.LastReader!.VerificationFailure = new GameCatalogImportSourceChangedException();
+            else if (record.Title == "Failed")
+            {
+                if (failure == "corrupt") throw new InvalidDataException("Corrupt.");
+                throw new IOException("Save failed.");
+            }
+        };
+
+        await vm.ConfirmImportCommand.ExecuteAsync(null);
+
+        Assert.True(vm.HasImportResult);
+        Assert.False(vm.ImportApplyResult!.IsSuccess);
+        Assert.Equal(failure == "ordinary" ? 2 : 1, vm.ImportCreatedCount);
+        Assert.Equal(failure == "source" ? 0 : 1, vm.ImportFailedCount);
+        Assert.Equal(vm.ImportCreatedCount, vm.Games.Count);
+        Assert.DoesNotContain(vm.Games, record => record.Title == "Failed");
+        Assert.Equal(failure == "corrupt", vm.HasStartupError);
+        Assert.NotNull(vm.ImportError);
+        if (failure == "source") Assert.Contains("changed", vm.ImportError!);
+        else Assert.Equal(3, Assert.Single(vm.ImportSaveErrors).StartLine);
+    }
+
+    [Fact]
+    public async Task FailedRefreshRetainsConfirmedUpdatesAndNewRecords()
+    {
+        var old = new GameRecord(Guid.NewGuid(), "Old", GameMedium.Usb, null, "/old.rar", GameFormat.Iso, 1, null);
+        var repository = new WritableImportRepository([old]);
+        var vm = await CreatePreviewViewModel(repository,
+            new PreviewSource(CsvHeader + "Edited;Usb;;/old.rar;CHD;2;\nNew;Usb;;/new.rar;ISO;1;\n"));
+        vm.SelectedGame = old;
+        await vm.PreviewImportCommand.ExecuteAsync(null);
+        repository.BeforeWrite = _ => repository.FailList = true;
+
+        await vm.ConfirmImportCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, vm.Games.Count);
+        Assert.Equal("Edited", vm.SelectedGame!.Title);
+        Assert.Equal(1, vm.ImportUpdatedCount);
+        Assert.Equal(1, vm.ImportCreatedCount);
+        Assert.Contains("refreshed", vm.ImportError!);
+    }
+
+    [Theory]
+    [InlineData("preview")]
+    [InlineData("apply")]
+    public async Task MutationsStayBlockedDuringWorkerAndPendingReview(string phase)
+    {
+        var old = new GameRecord(Guid.NewGuid(), "Old", GameMedium.Usb, null, "/old.rar", GameFormat.Iso, 1, null);
+        var repository = new WritableImportRepository([old]);
+        var source = new PreviewSource(CsvHeader + "New;Usb;;/new.rar;ISO;1;\n");
+        var vm = await CreatePreviewViewModel(repository, source);
+        vm.SelectedGame = old;
+        using var release = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action block = () => { entered.SetResult(true); if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException(); };
+        if (phase == "preview") source.BeforeOpen = block;
+        else
+        {
+            await vm.PreviewImportCommand.ExecuteAsync(null);
+            AssertMutationsBlocked(vm);
+            repository.BeforeWrite = _ => block();
+        }
+        var working = phase == "preview" ? vm.PreviewImportCommand.ExecuteAsync(null) : vm.ConfirmImportCommand.ExecuteAsync(null);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            AssertMutationsBlocked(vm);
+            // Guards must also protect direct calls, which bypass CanExecute.
+            vm.AddGameCommand.Execute(null);
+            vm.StartEditCommand.Execute(null);
+            vm.SaveChangesCommand.Execute(null);
+            vm.DeleteSelectedCommand.Execute(null);
+            vm.ConfirmDeleteCommand.Execute(null);
+            if (phase == "apply")
+            {
+                Assert.False(vm.CancelImportCommand.CanExecute(null));
+                vm.CancelImportCommand.Execute(null);
+                Assert.True(vm.IsImportFormOpen);
+                Assert.Contains("Importing", vm.ImportStatusText!);
+            }
+        }
+        finally { release.Set(); }
+        await working;
+        if (phase == "preview") AssertMutationsBlocked(vm);
+        else Assert.True(vm.AddGameCommand.CanExecute(null));
+    }
+
+    private static void AssertMutationsBlocked(MainViewModel vm)
+    {
+        Assert.False(vm.AddGameCommand.CanExecute(null));
+        Assert.False(vm.StartEditCommand.CanExecute(null));
+        Assert.False(vm.SaveChangesCommand.CanExecute(null));
+        Assert.False(vm.DeleteSelectedCommand.CanExecute(null));
+        Assert.False(vm.ConfirmDeleteCommand.CanExecute(null));
+    }
+
+    private sealed class WritableImportRepository(IEnumerable<GameRecord> records) : IGameRecordRepository
+    {
+        private readonly Dictionary<Guid, GameRecord> recordsById = records.ToDictionary(record => record.Id);
+        public List<GameRecord> Attempts { get; } = [];
+        public Action<GameRecord>? BeforeWrite { get; set; }
+        public bool FailList { get; set; }
+        public IReadOnlyList<GameRecord> List() => FailList ? throw new IOException("Refresh failed.") : recordsById.Values.ToArray();
+        public GameRecord? GetById(Guid id) => recordsById.GetValueOrDefault(id);
+        public void Create(GameRecord record) { Attempts.Add(record); BeforeWrite?.Invoke(record); recordsById.Add(record.Id, record); }
+        public void Update(GameRecord record) { Attempts.Add(record); BeforeWrite?.Invoke(record); recordsById[record.Id] = record; }
+        public void Delete(Guid id) => throw new InvalidOperationException("Import must not delete.");
+    }
+
     private const string CsvHeader = "Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes\n";
 
     [Fact]
@@ -135,7 +324,7 @@ public class MainViewModelImportTests
         Assert.True(viewModel.PreviewImportCommand.CanExecute(null));
     }
 
-    private static async Task<MainViewModel> CreatePreviewViewModel(ReadOnlyRepository repository, PreviewSource source)
+    private static async Task<MainViewModel> CreatePreviewViewModel(IGameRecordRepository repository, PreviewSource source)
     {
         var viewModel = new MainViewModel(new GameCatalogService(repository), null,
             importFilePicker: new TestPicker(() => Task.FromResult<string?>("/catalog.csv")),
@@ -165,6 +354,7 @@ public class MainViewModelImportTests
     {
         private int position;
         public bool Disposed { get; private set; }
+        public Exception? VerificationFailure { get; set; }
         public int Read(Span<char> buffer)
         {
             var count = Math.Min(buffer.Length, text.Length - position);
@@ -172,8 +362,12 @@ public class MainViewModelImportTests
             position += count;
             return count;
         }
-        public GameCatalogImportFingerprint CaptureFingerprint() => new("unchanged");
-        public void VerifyUnchanged(GameCatalogImportFingerprint expected) { }
+        public GameCatalogImportFingerprint CaptureFingerprint() => new(text);
+        public void VerifyUnchanged(GameCatalogImportFingerprint expected)
+        {
+            if (VerificationFailure is not null) throw VerificationFailure;
+            if (CaptureFingerprint() != expected) throw new GameCatalogImportSourceChangedException();
+        }
         public void Dispose() => Disposed = true;
     }
 

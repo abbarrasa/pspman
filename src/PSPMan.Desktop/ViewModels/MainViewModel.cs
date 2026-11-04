@@ -155,15 +155,15 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsDeletePending => PendingDeleteRecordId.HasValue;
 
-    public bool IsAdding => IsEditorAvailable && !IsEditing;
+    public bool IsAdding => IsEditorAvailable && !IsCatalogMutationBlocked && !IsEditing;
 
-    public bool CanStartEdit => IsEditorAvailable && !IsEditing && !IsDeletePending && SelectedGame is not null;
+    public bool CanStartEdit => IsEditorAvailable && !IsCatalogMutationBlocked && !IsEditing && !IsDeletePending && SelectedGame is not null;
 
-    public bool CanStartDelete => IsEditorAvailable && !IsEditing && !IsDeletePending && SelectedGame is not null;
+    public bool CanStartDelete => IsEditorAvailable && !IsCatalogMutationBlocked && !IsEditing && !IsDeletePending && SelectedGame is not null;
 
-    public bool CanConfirmDelete => IsEditorAvailable && IsDeletePending;
+    public bool CanConfirmDelete => IsEditorAvailable && !IsCatalogMutationBlocked && IsDeletePending;
 
-    public bool CanSaveChanges => IsEditorAvailable && IsEditing;
+    public bool CanSaveChanges => IsEditorAvailable && !IsCatalogMutationBlocked && IsEditing;
 
     public bool HasOperationError => !string.IsNullOrWhiteSpace(OperationError);
 
@@ -239,6 +239,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(IsAdding))]
     private void AddGame()
     {
+        if (!IsAdding) return;
         OperationError = null;
         var input = Editor.ValidateFields();
         if (input is null)
@@ -276,6 +277,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStartEdit))]
     private void StartEdit()
     {
+        if (!CanStartEdit) return;
         if (SelectedGame is null)
         {
             return;
@@ -290,6 +292,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSaveChanges))]
     private void SaveChanges()
     {
+        if (!CanSaveChanges) return;
         if (EditingRecordId is not Guid id)
         {
             return;
@@ -343,6 +346,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanStartDelete))]
     private void DeleteSelected()
     {
+        if (!CanStartDelete) return;
         if (SelectedGame is null)
         {
             return;
@@ -356,6 +360,7 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanConfirmDelete))]
     private void ConfirmDelete()
     {
+        if (!CanConfirmDelete) return;
         if (PendingDeleteRecordId is not Guid id)
         {
             return;
