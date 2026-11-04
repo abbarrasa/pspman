@@ -13,6 +13,60 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public class GameCatalogImportFlowTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UneditedTemplateAndHeaderOnlyCsvImportWithoutCreatingGames(bool headerOnly)
+    {
+        using var data = new ImportData(Header);
+        var before = File.ReadAllBytes(data.CatalogPath);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await session.Dispatch(async () =>
+        {
+            var window = data.OpenWindow();
+            try
+            {
+                var vm = (MainViewModel)window.DataContext!;
+                Click(window, "GetCsvTemplateButton");
+                Click(window, "ChooseExportFolderButton");
+                Control<TextBox>(window, "ExportFileNameInput").Text = Path.GetFileName(data.CsvPath);
+                Dispatcher.UIThread.RunJobs();
+                Click(window, "ExportFileButton");
+                // The fixture creates this source beforehand, so saving the template requires consent.
+                Click(window, "ReplaceExportButton");
+                Assert.Equal(data.CsvPath, Control<TextBlock>(window, "ExportSuccessPathText").Text);
+                var template = File.ReadAllText(data.CsvPath);
+                Assert.StartsWith("Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes", template);
+                var rows = template.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+                Assert.Equal(4, rows.Length);
+                Assert.Equal(new[] { "Dvd", "Usb", "MemoryCard" }, rows.Skip(1).Select(row => row.Split(';')[1]));
+                Assert.Equal(new[] { "ISO", "CHD", "ISO" }, rows.Skip(1).Select(row => row.Split(';')[4]));
+                if (headerOnly) File.WriteAllText(data.CsvPath, Header);
+
+                Click(window, "ImportCatalogButton");
+                Click(window, "ChooseImportFileButton");
+                await vm.ChooseImportFileCommand.ExecutionTask!;
+                Click(window, "PreviewImportButton");
+                await vm.PreviewImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
+                Dispatcher.UIThread.RunJobs();
+                var errors = headerOnly ? 0 : 3;
+                Assert.Equal($"0 new games, 0 modified games, {errors} erroneous rows.", Control<TextBlock>(window, "ImportStatusText").Text);
+                Assert.Equal(errors, Control<ItemsControl>(window, "ImportRowErrorsList").Items.Count);
+                Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+                Click(window, "ConfirmImportButton");
+                await vm.ConfirmImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("0 created, 0 updated, 0 failed.", Control<TextBlock>(window, "ImportStatusText").Text);
+                Assert.Null(vm.ImportError);
+                Assert.Empty(vm.Games);
+                Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+            }
+            finally { window.Close(); }
+            return 0;
+        }, CancellationToken.None);
+        Assert.Empty(new SqliteGameRecordRepository(data.CatalogPath).List());
+    }
+
     [Fact]
     public async Task IrregularCsvPreviewShowsFinalColumnsCountsAndPhysicalErrorLinesWithoutWrites()
     {
