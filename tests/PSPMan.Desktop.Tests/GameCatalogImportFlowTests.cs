@@ -13,6 +13,64 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public class GameCatalogImportFlowTests
 {
+    [Fact]
+    public async Task IrregularCsvPreviewShowsFinalColumnsCountsAndPhysicalErrorLinesWithoutWrites()
+    {
+        const string csv = "Notes;Format;Title;Extra;Medium;SizeBytes;Location;DvdNumber;tItLe\r\n"
+            + "\r\n"
+            + " \t  \r\n"
+            + "\"First line; quoted\r\nSecond line\";ISO;Ignored;unused;Usb;1024;/new.rar;;New game;surplus\r\n"
+            + "Too;short\r\n"
+            + ";ISO;Ignored;unused;Usb;invalid;/bad.rar;;Invalid size\r\n"
+            + ";CHD;Ignored;unused;MemoryCard;2048;/existing.rar;;Edited game\r\n"
+            + ";ISO;Ignored;unused;Usb;512;/another.rar;;Later valid\r\n";
+        using var data = new ImportData(csv);
+        var catalog = CatalogStartup.CreateMainViewModel(data.Folder).CatalogService!;
+        var saved = catalog.Create(new GameRecordInput("Original", GameMedium.MemoryCard, null,
+            "/existing.rar", GameFormat.Iso, 1, "Original notes"));
+        Assert.True(saved.IsSuccess, saved.Error);
+        var before = File.ReadAllBytes(data.CatalogPath);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await session.Dispatch(async () =>
+        {
+            var window = data.OpenWindow();
+            try
+            {
+                var vm = (MainViewModel)window.DataContext!;
+                Click(window, "ImportCatalogButton");
+                Click(window, "ChooseImportFileButton");
+                await vm.ChooseImportFileCommand.ExecutionTask!;
+                Click(window, "PreviewImportButton");
+                await vm.PreviewImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("2 new games, 1 modified games, 2 erroneous rows.",
+                    Control<TextBlock>(window, "ImportStatusText").Text);
+                var errors = Control<ItemsControl>(window, "ImportRowErrorsList").Items.Cast<GameCatalogImportRowError>().ToArray();
+                Assert.Equal(new long[] { 6, 7 }, errors.Select(error => error.StartLine));
+                Assert.All(errors, error => Assert.False(string.IsNullOrWhiteSpace(error.Message)));
+                Assert.True(Control<StackPanel>(window, "ImportConfirmationPanel").IsVisible);
+                Assert.True(Control<Button>(window, "ConfirmImportButton").IsEnabled);
+                Assert.False(Control<TextBlock>(window, "ImportErrorText").IsVisible);
+                var preview = vm.ImportPreview!;
+                Assert.Equal(new[] { "New game", "Later valid" }, preview.NewGames.Select(game => game.Input.Title));
+                Assert.Equal(new long[] { 4, 9 }, preview.NewGames.Select(game => game.StartLine));
+                Assert.Equal("First line; quoted\r\nSecond line", preview.NewGames[0].Input.Notes);
+                var modification = Assert.Single(preview.ModifiedGames);
+                Assert.Equal(saved.Value!.Id, modification.ExistingId);
+                Assert.Equal("Edited game", modification.Input.Title);
+                Assert.Equal(8, modification.StartLine);
+                Assert.Equal(saved.Value, Assert.Single(Control<ListBox>(window, "GamesList").Items.Cast<GameRecord>()));
+                Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+                Click(window, "CancelImportButton");
+                Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+            }
+            finally { window.Close(); }
+            return 0;
+        }, CancellationToken.None);
+        Assert.Equal(saved.Value, Assert.Single(new SqliteGameRecordRepository(data.CatalogPath).List()));
+    }
+
     [Theory]
     [InlineData("new")]
     [InlineData("replace")]
