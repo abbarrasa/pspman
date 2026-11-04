@@ -13,6 +13,112 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public class GameCatalogImportFlowTests
 {
+    [Fact]
+    public async Task CancelledPickerLeavesCatalogAndVisibleListUnchanged()
+    {
+        using var data = new ImportData(Header);
+        var before = File.ReadAllBytes(data.CatalogPath);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await session.Dispatch(async () =>
+        {
+            var vm = CatalogStartup.CreateMainViewModel(data.Folder, importFilePicker: new CancelledPicker());
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            try
+            {
+                Click(window, "ImportCatalogButton");
+                Click(window, "ChooseImportFileButton");
+                await vm.ChooseImportFileCommand.ExecutionTask!;
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(Control<ScrollViewer>(window, "ImportFormPanel").IsVisible);
+                Assert.Null(vm.ImportSourcePath);
+                Assert.Null(vm.ImportError);
+                Assert.Empty(vm.Games);
+                Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+            }
+            finally { window.Close(); }
+            return 0;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task MidApplyReadFailureDisplaysPartialResultsAndRetainsSavedSqliteRecord()
+    {
+        const string first = "Saved;Usb;;/saved.rar;ISO;1;\n";
+        using var data = new ImportData(Header + first + "Unattempted;Usb;;/later.rar;ISO;1;\n");
+        var source = new FailingApplySource(Header.Length + first.Length);
+        using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await session.Dispatch(async () =>
+        {
+            var repository = new SqliteGameRecordRepository(data.CatalogPath);
+            var vm = new MainViewModel(new GameCatalogService(repository), null,
+                importFilePicker: new Picker(data.CsvPath), importService: new GameCatalogImportService(repository, source));
+            var window = new MainWindow { DataContext = vm };
+            window.Show();
+            try
+            {
+                Click(window, "ImportCatalogButton");
+                Click(window, "ChooseImportFileButton");
+                await vm.ChooseImportFileCommand.ExecutionTask!;
+                Click(window, "PreviewImportButton");
+                await vm.PreviewImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(2, vm.ImportNewCount);
+                Assert.Empty(vm.Games);
+                Click(window, "ConfirmImportButton");
+                await vm.ConfirmImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("1 created, 0 updated, 0 failed.", Control<TextBlock>(window, "ImportStatusText").Text);
+                Assert.True(Control<TextBlock>(window, "ImportErrorText").IsVisible);
+                Assert.Equal("Simulated mid-import read failure.", Control<TextBlock>(window, "ImportErrorText").Text);
+                Assert.False(vm.ImportApplyResult!.IsSuccess);
+                Assert.False(vm.HasStartupError);
+                var listed = Assert.Single(Control<ListBox>(window, "GamesList").Items.Cast<GameRecord>());
+                Assert.Equal("Saved", listed.Title);
+                Assert.Equal(listed, Assert.Single(new SqliteGameRecordRepository(data.CatalogPath).List()));
+                Assert.True(source.ApplyReader!.Disposed);
+                Assert.False(Control<Button>(window, "ConfirmImportButton").IsEnabled);
+            }
+            finally { window.Close(); }
+            return 0;
+        }, CancellationToken.None);
+    }
+
+    private sealed class CancelledPicker : IGameImportFilePicker
+    {
+        public Task<string?> PickFileAsync() => Task.FromResult<string?>(null);
+    }
+
+    private sealed class FailingApplySource(int failAfterCharacters) : IGameCatalogImportSource
+    {
+        private int opens;
+        public FailingApplyReader? ApplyReader { get; private set; }
+        public IGameCatalogImportReader Open(string path)
+        {
+            var reader = new FileGameCatalogImportSource().Open(path);
+            return ++opens == 1 ? reader : ApplyReader = new FailingApplyReader(reader, failAfterCharacters);
+        }
+    }
+
+    private sealed class FailingApplyReader(IGameCatalogImportReader reader, int failAfterCharacters) : IGameCatalogImportReader
+    {
+        private int charactersRead;
+        public bool Disposed { get; private set; }
+        public int Read(Span<char> buffer)
+        {
+            if (charactersRead >= failAfterCharacters)
+                throw new GameCatalogImportReadException("Simulated mid-import read failure.", new IOException("Device disconnected."));
+            // Limit decoded reads to reach the failure boundary after the first logical row was saved.
+            var count = reader.Read(buffer[..Math.Min(buffer.Length, failAfterCharacters - charactersRead)]);
+            charactersRead += count;
+            return count;
+        }
+        public GameCatalogImportFingerprint CaptureFingerprint() => reader.CaptureFingerprint();
+        public void VerifyUnchanged(GameCatalogImportFingerprint expected) => reader.VerifyUnchanged(expected);
+        public void Dispose() { Disposed = true; reader.Dispose(); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -237,6 +343,7 @@ public class GameCatalogImportFlowTests
     [Theory]
     [InlineData("empty")]
     [InlineData("malformed")]
+    [InlineData("missing")]
     [InlineData("changed")]
     public async Task VisibleFeedbackDistinguishesEmptyPreviewAndSourceFailures(string scenario)
     {
@@ -255,9 +362,10 @@ public class GameCatalogImportFlowTests
                 await vm.ChooseImportFileCommand.ExecutionTask!;
                 Click(window, "PreviewImportButton");
                 await vm.PreviewImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
-                if (scenario == "changed")
+                if (scenario is "changed" or "missing")
                 {
-                    File.AppendAllText(data.CsvPath, "Other;Usb;;/other.rar;ISO;1;\n");
+                    if (scenario == "missing") File.Delete(data.CsvPath);
+                    else File.AppendAllText(data.CsvPath, "Other;Usb;;/other.rar;ISO;1;\n");
                     Click(window, "ConfirmImportButton");
                     await vm.ConfirmImportCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(10));
                 }
