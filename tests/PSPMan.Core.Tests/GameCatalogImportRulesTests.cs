@@ -6,6 +6,169 @@ namespace PSPMan.Core.Tests;
 public class GameCatalogImportRulesTests
 {
     [Fact]
+    public void ClassifiesNewModifiedAndUnchangedCandidatesWithoutChangingInputs()
+    {
+        var original = new GameRecordInput("Game", GameMedium.Usb, null, "/GAMES/game.rar", GameFormat.Iso, 1024, "notes");
+        var unchanged = original with { Location = "/GAMES/unchanged.rar" };
+        var added = original with { Location = "/GAMES/new.rar" };
+        var edited = original with { Title = "Edited", Notes = "" };
+        var id = Guid.NewGuid();
+        GameRecord[] snapshot = [SavedImportRecord(id, original), SavedImportRecord(Guid.NewGuid(), unchanged)];
+        var before = snapshot.ToArray();
+        var candidates = ImportCandidates(new(8, edited), new(2, added), new(5, unchanged));
+
+        var result = GameCatalogImportRules.ClassifyCandidates(candidates, snapshot);
+
+        Assert.Equal(1, result.NewCount);
+        Assert.Equal(1, result.ModifiedCount);
+        Assert.Equal(new GameCatalogImportCandidate(2, added), Assert.Single(result.NewGames));
+        var modification = Assert.Single(result.ModifiedGames);
+        Assert.Equal(id, modification.ExistingId);
+        Assert.Equal(8, modification.StartLine);
+        Assert.Equal(edited, modification.Input);
+        Assert.Equal(before, snapshot);
+        Assert.Equal(3, candidates.Count);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(null, "")]
+    [InlineData("", null)]
+    [InlineData("", "")]
+    [InlineData("same notes", "same notes")]
+    public void OmitsIdenticalMatchesIncludingEquivalentEmptyNotes(string? existingNotes, string? importedNotes)
+    {
+        var input = new GameRecordInput("Game", GameMedium.Usb, null, "/GAMES/game.rar", GameFormat.Iso, 1024, importedNotes);
+        var existing = SavedImportRecord(Guid.NewGuid(), input with { Notes = existingNotes });
+
+        var result = GameCatalogImportRules.ClassifyCandidates(ImportCandidates(new GameCatalogImportCandidate(2, input)), [existing]);
+
+        Assert.Equal(0, result.NewCount);
+        Assert.Equal(0, result.ModifiedCount);
+        Assert.Empty(result.NewGames);
+        Assert.Empty(result.ModifiedGames);
+    }
+
+    [Theory]
+    [InlineData("Title")]
+    [InlineData("TitleCase")]
+    [InlineData("TitleWhitespace")]
+    [InlineData("Format")]
+    [InlineData("SizeBytes")]
+    [InlineData("Notes")]
+    [InlineData("ClearNotes")]
+    [InlineData("NotesWhitespace")]
+    public void EachEditableDifferenceProposesAnEditPreservingTheExistingId(string field)
+    {
+        var original = new GameRecordInput("Game", GameMedium.Usb, null, "/GAMES/game.rar", GameFormat.Iso, 1024, "notes");
+        var edited = field switch
+        {
+            "Title" => original with { Title = "Different" },
+            "TitleCase" => original with { Title = "GAME" },
+            "TitleWhitespace" => original with { Title = " Game " },
+            "Format" => original with { Format = GameFormat.Chd },
+            "SizeBytes" => original with { SizeBytes = 2048 },
+            "Notes" => original with { Notes = "Different" },
+            "ClearNotes" => original with { Notes = "" },
+            _ => original with { Notes = " notes " }
+        };
+        var existing = SavedImportRecord(Guid.NewGuid(), original);
+
+        var result = GameCatalogImportRules.ClassifyCandidates(ImportCandidates(new GameCatalogImportCandidate(7, edited)), [existing]);
+
+        Assert.Equal(0, result.NewCount);
+        Assert.Equal(1, result.ModifiedCount);
+        var modification = Assert.Single(result.ModifiedGames);
+        Assert.Equal(existing.Id, modification.ExistingId);
+        Assert.Equal(edited, modification.Input);
+        Assert.Equal(7, modification.StartLine);
+    }
+
+    [Fact]
+    public void EmptyCatalogClassifiesEveryFinalCandidateAsNewInSourceLineOrder()
+    {
+        var first = new GameRecordInput("Same", GameMedium.Usb, null, "/GAMES/first.rar", GameFormat.Iso, 1024, "");
+        var second = first with { Location = "/GAMES/second.rar" };
+        var result = GameCatalogImportRules.ClassifyCandidates(ImportCandidates(new(8, second), new(2, first)), []);
+
+        Assert.Equal(2, result.NewCount);
+        Assert.Equal(0, result.ModifiedCount);
+        Assert.Equal(new long[] { 2, 8 }, result.NewGames.Select(candidate => candidate.StartLine));
+    }
+
+    [Fact]
+    public void EmptyCandidatesProposeNoChanges()
+    {
+        var result = GameCatalogImportRules.ClassifyCandidates(ImportCandidates(), []);
+
+        Assert.Equal(0, result.NewCount);
+        Assert.Equal(0, result.ModifiedCount);
+    }
+
+    [Fact]
+    public void ClassifiesOnlyTheLastValidRowOnceAndOmitsAReturnToOriginalValues()
+    {
+        var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
+        var map = CanonicalImportMap();
+        var original = ValidImportCells();
+        Assert.True(GameCatalogImportRules.TryMapGameRow(original, map, out var input, out _));
+        var existing = SavedImportRecord(Guid.NewGuid(), input!);
+        var changed = original.ToArray();
+        changed[0] = "Changed";
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(2, changed), map, candidates, out _));
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(3, changed), map, candidates, out _));
+        var proposed = GameCatalogImportRules.ClassifyCandidates(candidates, [existing]);
+        Assert.Equal(1, proposed.ModifiedCount);
+        Assert.Equal(3, Assert.Single(proposed.ModifiedGames).StartLine);
+
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(4, original), map, candidates, out _));
+        var unchanged = GameCatalogImportRules.ClassifyCandidates(candidates, [existing]);
+        Assert.Equal(0, unchanged.NewCount);
+        Assert.Equal(0, unchanged.ModifiedCount);
+    }
+
+    [Fact]
+    public void CatalogMatchingUsesCaseSensitiveLocationMediumAndDvdIdentity()
+    {
+        var original = new GameRecordInput("Game", GameMedium.Dvd, 1, "/GAMES/game.rar", GameFormat.Iso, 1024, "");
+        var candidates = ImportCandidates(
+            new(2, original with { Location = "/GAMES/Game.rar" }),
+            new(3, original with { Medium = GameMedium.Usb, DvdNumber = null }),
+            new(4, original with { DvdNumber = 2 }));
+
+        var result = GameCatalogImportRules.ClassifyCandidates(candidates, [SavedImportRecord(Guid.NewGuid(), original)]);
+
+        Assert.Equal(3, result.NewCount);
+        Assert.Equal(0, result.ModifiedCount);
+    }
+
+    [Fact]
+    public void EnumeratesTheCatalogSnapshotOnlyOnce()
+    {
+        var count = 0;
+        var original = new GameRecordInput("Game", GameMedium.Usb, null, "/GAMES/game.rar", GameFormat.Iso, 1024, "");
+        IEnumerable<GameRecord> Snapshot()
+        {
+            count++;
+            Assert.Equal(1, count);
+            yield return SavedImportRecord(Guid.NewGuid(), original);
+        }
+
+        var result = GameCatalogImportRules.ClassifyCandidates(ImportCandidates(
+            new(2, original), new(3, original with { Location = "/GAMES/new.rar" })), Snapshot());
+
+        Assert.Equal(1, count);
+        Assert.Equal(1, result.NewCount);
+        Assert.Equal(0, result.ModifiedCount);
+    }
+
+    private static Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate> ImportCandidates(
+        params GameCatalogImportCandidate[] candidates) => candidates.ToDictionary(candidate => GameCatalogImportRules.Identity(candidate.Input));
+
+    private static GameRecord SavedImportRecord(Guid id, GameRecordInput input) => new(
+        id, input.Title, input.Medium, input.DvdNumber, input.Location, input.Format, input.SizeBytes, input.Notes);
+
+    [Fact]
     public void LastValidRowReplacesAllEditableValuesAndSourceLineForTheSameIdentity()
     {
         var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();

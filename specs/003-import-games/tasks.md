@@ -32,7 +32,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
 
 - [x] **T11 (25 min; FR-4, FR-5):** Build case-sensitive game identity keys and keep only the last valid CSV row per identity.
   Done when: Tests show identical Medium/Location/DVD keys collapse to the last valid row, invalid later rows do not replace it, and differently cased Locations stay distinct.
-- [ ] **T12 (25 min; FR-4, FR-7):** Classify final rows against one catalog snapshot as new, modified, or no-op; compare absent and empty Notes as equivalent.
+- [x] **T12 (25 min; FR-4, FR-7):** Classify final rows against one catalog snapshot as new, modified, or no-op; compare absent and empty Notes as equivalent.
   Done when: Tests count each final identity once, omit unchanged matches from all three preview counts, and preserve existing IDs for proposed edits.
 - [ ] **T13 (25 min; FR-2, FR-3, FR-9):** Add the Core import-source contract and Infraestructure local-file reader with strict UTF-8 and optional BOM support.
   Done when: Disposable-file tests read a normal export incrementally and reject invalid UTF-8 or an unreadable source without catalog writes.
