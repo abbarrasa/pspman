@@ -10,7 +10,8 @@ namespace PSPMan.Desktop;
 public static class CatalogStartup
 {
     public static MainViewModel CreateMainViewModel(string? applicationDataRoot = null,
-        IGameExportFolderPicker? exportFolderPicker = null)
+        IGameExportFolderPicker? exportFolderPicker = null,
+        IGameImportFilePicker? importFilePicker = null)
     {
         try
         {
@@ -26,7 +27,8 @@ public static class CatalogStartup
             var catalogPath = Path.Combine(catalogDirectory, "catalog.db");
             var repository = new SqliteGameRecordRepository(catalogPath);
             return new MainViewModel(new GameCatalogService(repository), null,
-                exportFolderPicker, new AtomicCsvExportWriter(), catalogPath);
+                exportFolderPicker, new AtomicCsvExportWriter(), catalogPath,
+                importFilePicker, new GameCatalogImportService(repository, new FileGameCatalogImportSource()));
         }
         catch (InvalidDataException)
         {

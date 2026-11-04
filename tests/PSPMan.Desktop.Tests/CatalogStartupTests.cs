@@ -6,6 +6,40 @@ namespace PSPMan.Desktop.Tests;
 public class CatalogStartupTests
 {
     [Fact]
+    public async Task StartupComposesImportWithTheSameCatalogAndALocalFileSource()
+    {
+        using var data = new TemporaryApplicationData();
+        var csvPath = System.IO.Path.Combine(data.Path, "games.csv");
+        var picker = new FixedImportFilePicker(csvPath);
+        var viewModel = CatalogStartup.CreateMainViewModel(data.Path, importFilePicker: picker);
+        var saved = viewModel.CatalogService!.Create(new GameRecordInput(
+            "Stored", GameMedium.Usb, null, "/stored.rar", GameFormat.Iso, 1024, null));
+        Assert.True(saved.IsSuccess);
+        File.WriteAllBytes(csvPath, GameCatalogCsvSerializer.SerializeCatalog([saved.Value!]));
+        var before = File.ReadAllBytes(data.CatalogPath);
+
+        viewModel.OpenImportCommand.Execute(null);
+        await viewModel.ChooseImportFileCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsImportFormOpen);
+        Assert.Equal(csvPath, viewModel.ImportSourcePath);
+        Assert.Equal(1, picker.Calls);
+        Assert.Null(viewModel.ImportError);
+        var preview = viewModel.ImportService!.Preview(csvPath);
+        Assert.True(preview.IsSuccess, preview.Error);
+        Assert.Equal(0, preview.Value!.NewCount);
+        Assert.Equal(0, preview.Value.ModifiedCount);
+        viewModel.CancelImportCommand.Execute(null);
+        Assert.Equal(before, File.ReadAllBytes(data.CatalogPath));
+    }
+
+    private sealed class FixedImportFilePicker(string path) : IGameImportFilePicker
+    {
+        public int Calls { get; private set; }
+        public Task<string?> PickFileAsync() { Calls++; return Task.FromResult<string?>(path); }
+    }
+
+    [Fact]
     public async Task StartupComposesExportAgainstDisposableApplicationData()
     {
         using var data = new TemporaryApplicationData();
