@@ -4,6 +4,7 @@ public sealed class GameCatalogVerifiedImportSession : IDisposable
 {
     private readonly IGameCatalogImportReader reader;
     private bool disposed;
+    private bool consumed;
 
     internal GameCatalogVerifiedImportSession(GameCatalogImportPreview preview, IGameCatalogImportReader reader)
     {
@@ -22,6 +23,17 @@ public sealed class GameCatalogVerifiedImportSession : IDisposable
         }
     }
 
+    internal IGameCatalogImportReader BeginApply()
+    {
+        var currentReader = Reader;
+        if (consumed)
+        {
+            throw new InvalidOperationException("The verified import session has already been used.");
+        }
+        consumed = true;
+        return currentReader;
+    }
+
     public void Dispose()
     {
         if (!disposed)
@@ -30,6 +42,24 @@ public sealed class GameCatalogVerifiedImportSession : IDisposable
             reader.Dispose();
         }
     }
+}
+
+public sealed class GameCatalogImportApplyResult
+{
+    internal GameCatalogImportApplyResult(int createdCount, int updatedCount,
+        IEnumerable<GameRecord> savedRecords, string? error)
+    {
+        CreatedCount = createdCount;
+        UpdatedCount = updatedCount;
+        SavedRecords = Array.AsReadOnly(savedRecords.ToArray());
+        Error = error;
+    }
+
+    public int CreatedCount { get; }
+    public int UpdatedCount { get; }
+    public IReadOnlyList<GameRecord> SavedRecords { get; }
+    public string? Error { get; }
+    public bool IsSuccess => Error is null;
 }
 
 public sealed class GameCatalogImportPreview
@@ -66,6 +96,64 @@ public sealed class GameCatalogImportService
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.source = source ?? throw new ArgumentNullException(nameof(source));
+    }
+
+    /// <summary>Consumes and closes a verified session, applying only its proposed changes.</summary>
+    public GameCatalogImportApplyResult Apply(
+        GameCatalogVerifiedImportSession session, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var savedRecords = new List<GameRecord>();
+        var createdCount = 0;
+        var updatedCount = 0;
+        try
+        {
+            var reader = session.BeginApply();
+            using (session)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                reader.VerifyUnchanged(session.Preview.Fingerprint);
+                cancellationToken.ThrowIfCancellationRequested();
+                var operations = session.Preview.NewGames.Select(candidate =>
+                        (candidate.StartLine, ExistingId: (Guid?)null, candidate.Input))
+                    .Concat(session.Preview.ModifiedGames.Select(modification =>
+                        (modification.StartLine, ExistingId: (Guid?)modification.ExistingId, modification.Input)))
+                    .OrderBy(operation => operation.StartLine);
+
+                foreach (var operation in operations)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var input = operation.Input;
+                    var record = new GameRecord(operation.ExistingId ?? Guid.NewGuid(), input.Title,
+                        input.Medium, input.DvdNumber, input.Location, input.Format, input.SizeBytes, input.Notes);
+                    if (operation.ExistingId is null)
+                    {
+                        repository.Create(record);
+                        createdCount++;
+                    }
+                    else
+                    {
+                        repository.Update(record);
+                        updatedCount++;
+                    }
+                    savedRecords.Add(record);
+                }
+            }
+
+            return new(createdCount, updatedCount, savedRecords, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new(createdCount, updatedCount, savedRecords, "The CSV import was cancelled.");
+        }
+        catch (Exception exception) when (exception is GameCatalogImportReadException or GameCatalogImportSourceChangedException)
+        {
+            return new(createdCount, updatedCount, savedRecords, exception.Message);
+        }
+        catch (Exception)
+        {
+            return new(createdCount, updatedCount, savedRecords, "Unable to apply the confirmed CSV import.");
+        }
     }
 
     /// <summary>Reopens and verifies a confirmed preview. The caller must dispose a successful session.</summary>
