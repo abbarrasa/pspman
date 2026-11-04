@@ -68,7 +68,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests produce the seven-column template, decline replacement without changing an existing file, and leave catalog bytes unchanged.
 - [x] **T26 (30 min; FR-1, FR-7–FR-9, FR-11, FR-12):** Add typed-bound Import controls, preview summary, row-error list, confirmation/cancellation, progress, and final counts to the main window.
   Done when: Headless tests operate the visible controls, verify English feedback, and see the refreshed list only after confirmed writes.
-- [ ] **T27 (20 min; FR-13):** Add the typed-bound Get CSV template action and destination/replacement feedback to the main window.
+- [x] **T27 (20 min; FR-13):** Add the typed-bound Get CSV template action and destination/replacement feedback to the main window.
   Done when: A headless test saves a template through the UI and verifies its content without a catalog change.
 
 ## End-to-end acceptance and documentation
