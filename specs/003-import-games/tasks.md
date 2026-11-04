@@ -36,7 +36,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests count each final identity once, omit unchanged matches from all three preview counts, and preserve existing IDs for proposed edits.
 - [x] **T13 (25 min; FR-2, FR-3, FR-9):** Add the Core import-source contract and Infraestructure local-file reader with strict UTF-8 and optional BOM support.
   Done when: Disposable-file tests read a normal export incrementally and reject invalid UTF-8 or an unreadable source without catalog writes.
-- [ ] **T14 (25 min; FR-9, FR-12):** Add source content fingerprints and a read-handle/change-check seam to the file adapter.
+- [x] **T14 (25 min; FR-9, FR-12):** Add source content fingerprints and a read-handle/change-check seam to the file adapter.
   Done when: Tests distinguish unchanged content from same-length or same-timestamp modifications and can inject a read failure at a chosen point.
 - [ ] **T15 (30 min; FR-2, FR-4–FR-7, FR-9):** Implement preview orchestration: load the catalog once, stream and validate the CSV, retain final candidates and row errors, and compute summary counts.
   Done when: Service tests preview new, edited, duplicate, invalid, and no-op rows without calling any repository write method.
