@@ -19,7 +19,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests show each multiline record remains one logical row with its exact decoded cell values.
 - [x] **T06 (25 min; FR-6, FR-9, FR-11):** Distinguish blank or spaces/tabs-only lines outside quotes from malformed quoting and unterminated records.
   Done when: Tests ignore those blank lines, preserve whitespace inside quotes, and report unrecoverable CSV structure as a fatal preview error.
-- [ ] **T07 (25 min; FR-2, FR-9):** Map headings by case-insensitive name, reject whitespace in any heading, require all seven fields, and select the last duplicate heading.
+- [x] **T07 (25 min; FR-2, FR-9):** Map headings by case-insensitive name, reject whitespace in any heading, require all seven fields, and select the last duplicate heading.
   Done when: Tests cover reordered, repeated, extra, missing, mixed-case, and whitespace-containing headings with deterministic column indices or file errors.
 - [ ] **T08 (25 min; FR-3, FR-6):** Convert a row's Medium, Format, DvdNumber, and SizeBytes using the permitted labels and invariant numeric rules.
   Done when: Tests accept mixed-case values without whitespace and valid integer boundaries, and reject whitespace, unsupported labels, overflow, and malformed numbers by field.
