@@ -8,6 +8,97 @@ public class GameCatalogImportServiceTests
     private const string ValidRow = "Game;Usb;;/GAMES/game.rar;ISO;1024;\r\n";
 
     [Fact]
+    public void ConfirmingAnUnchangedPreviewKeepsTheVerifiedReaderOpenUntilSessionDisposal()
+    {
+        var repository = new ReadOnlyRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var preview = Assert.IsType<GameCatalogImportPreview>(service.Preview("chosen.csv").Value);
+        var confirmationReader = new TestReader(Header + ValidRow, 1) { RequireEndBeforeVerification = false };
+        source.ConfirmationReader = confirmationReader;
+
+        var result = service.PrepareConfirmedImport(preview);
+
+        Assert.True(result.IsSuccess, result.Error);
+        var session = Assert.IsType<GameCatalogVerifiedImportSession>(result.Value);
+        using (session)
+        {
+            Assert.Same(preview, session.Preview);
+            Assert.False(confirmationReader.Disposed);
+            Assert.Equal(0, confirmationReader.CharactersRead);
+            Assert.Equal(preview.Fingerprint, confirmationReader.LastVerifiedFingerprint);
+            Assert.Equal(1, confirmationReader.VerifyCalls);
+            Assert.Equal(2, source.OpenCalls);
+            Assert.Equal(preview.SourcePath, source.OpenedPath);
+            Assert.Equal(1, repository.ListCalls);
+            Assert.Equal(0, repository.WriteCalls);
+        }
+        session.Dispose();
+        Assert.True(confirmationReader.Disposed);
+        Assert.Equal(1, confirmationReader.DisposeCalls);
+    }
+
+    [Theory]
+    [InlineData("changed")]
+    [InlineData("missing")]
+    [InlineData("unreadable")]
+    [InlineData("unverifiable")]
+    public void FailedConfirmationReturnsNoSessionAndNeverWrites(string failure)
+    {
+        var repository = new ReadOnlyRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var preview = Assert.IsType<GameCatalogImportPreview>(service.Preview("chosen.csv").Value);
+        var confirmationReader = new TestReader(Header + ValidRow, 1) { RequireEndBeforeVerification = false };
+        source.ConfirmationReader = confirmationReader;
+        switch (failure)
+        {
+            case "changed": confirmationReader.Fingerprint = new("different-content"); break;
+            case "missing": source.OpenFailure = new GameCatalogImportReadException("Source is missing.", new FileNotFoundException()); break;
+            case "unreadable": source.OpenFailure = new GameCatalogImportReadException("Source is unreadable.", new UnauthorizedAccessException()); break;
+            case "unverifiable": confirmationReader.VerificationFailure = new GameCatalogImportReadException("Source cannot be verified.", new IOException()); break;
+        }
+
+        var result = service.PrepareConfirmedImport(preview);
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.NotNull(result.Error);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(failure is "changed" or "unverifiable", confirmationReader.Disposed);
+        Assert.Equal(0, repository.WriteCalls);
+        Assert.Equal(1, repository.ListCalls);
+    }
+
+    [Theory]
+    [InlineData("before")]
+    [InlineData("open")]
+    [InlineData("verify")]
+    public void CancelledConfirmationDoesNotTransferReaderOwnershipOrWrite(string stage)
+    {
+        var repository = new ReadOnlyRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var preview = Assert.IsType<GameCatalogImportPreview>(service.Preview("chosen.csv").Value);
+        var confirmationReader = new TestReader(Header + ValidRow, 1) { RequireEndBeforeVerification = false };
+        source.ConfirmationReader = confirmationReader;
+        using var cancellation = new CancellationTokenSource();
+        if (stage == "before") cancellation.Cancel();
+        if (stage == "open") source.AfterOpen = cancellation.Cancel;
+        if (stage == "verify") confirmationReader.AfterVerify = cancellation.Cancel;
+
+        var result = service.PrepareConfirmedImport(preview, cancellation.Token);
+
+        Assert.False(result.IsSuccess);
+        Assert.Null(result.Value);
+        Assert.Equal("The CSV import confirmation was cancelled.", result.Error);
+        Assert.Equal(stage != "before", confirmationReader.Disposed);
+        Assert.Equal(stage == "before" ? 1 : 2, source.OpenCalls);
+        Assert.Equal(stage == "verify" ? 1 : 0, confirmationReader.VerifyCalls);
+        Assert.Equal(0, repository.WriteCalls);
+    }
+
+    [Fact]
     public void AlreadyCancelledPreviewDoesNotAccessRepositoryOrSource()
     {
         var repository = new ReadOnlyRepository([]);
@@ -321,20 +412,24 @@ public class GameCatalogImportServiceTests
         public string? OpenedPath { get; private set; }
         public Exception? OpenFailure { get; set; }
         public Action? AfterOpen { get; set; }
+        public TestReader? ConfirmationReader { get; set; }
         public IGameCatalogImportReader Open(string sourcePath)
         {
             OpenCalls++;
             OpenedPath = sourcePath;
             if (OpenFailure is not null) throw OpenFailure;
             AfterOpen?.Invoke();
-            return Reader;
+            return OpenCalls > 1 && ConfirmationReader is not null ? ConfirmationReader : Reader;
         }
     }
 
     private sealed class TestReader(string text, int chunkSize) : IGameCatalogImportReader
     {
         private int position;
-        public GameCatalogImportFingerprint Fingerprint { get; } = new("test-content-fingerprint");
+        public GameCatalogImportFingerprint Fingerprint { get; set; } = new("test-content-fingerprint");
+        public bool RequireEndBeforeVerification { get; set; } = true;
+        public GameCatalogImportFingerprint? LastVerifiedFingerprint { get; private set; }
+        public int DisposeCalls { get; private set; }
         public bool Disposed { get; private set; }
         public bool EndReached { get; private set; }
         public bool Changed { get; set; }
@@ -371,12 +466,16 @@ public class GameCatalogImportServiceTests
         public void VerifyUnchanged(GameCatalogImportFingerprint expected)
         {
             VerifyCalls++;
-            Assert.True(EndReached);
-            Assert.Equal(Fingerprint, expected);
+            if (RequireEndBeforeVerification) Assert.True(EndReached);
+            LastVerifiedFingerprint = expected;
             if (VerificationFailure is not null) throw VerificationFailure;
-            if (Changed) throw new GameCatalogImportSourceChangedException();
+            if (Changed || Fingerprint != expected) throw new GameCatalogImportSourceChangedException();
             AfterVerify?.Invoke();
         }
-        public void Dispose() => Disposed = true;
+        public void Dispose()
+        {
+            DisposeCalls++;
+            Disposed = true;
+        }
     }
 }

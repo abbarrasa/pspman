@@ -1,5 +1,37 @@
 namespace PSPMan.Core.Games;
 
+public sealed class GameCatalogVerifiedImportSession : IDisposable
+{
+    private readonly IGameCatalogImportReader reader;
+    private bool disposed;
+
+    internal GameCatalogVerifiedImportSession(GameCatalogImportPreview preview, IGameCatalogImportReader reader)
+    {
+        Preview = preview;
+        this.reader = reader;
+    }
+
+    public GameCatalogImportPreview Preview { get; }
+
+    internal IGameCatalogImportReader Reader
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            return reader;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (!disposed)
+        {
+            disposed = true;
+            reader.Dispose();
+        }
+    }
+}
+
 public sealed class GameCatalogImportPreview
 {
     internal GameCatalogImportPreview(
@@ -34,6 +66,42 @@ public sealed class GameCatalogImportService
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.source = source ?? throw new ArgumentNullException(nameof(source));
+    }
+
+    /// <summary>Reopens and verifies a confirmed preview. The caller must dispose a successful session.</summary>
+    public GameCatalogResult<GameCatalogVerifiedImportSession> PrepareConfirmedImport(
+        GameCatalogImportPreview preview, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var reader = source.Open(preview.SourcePath);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                reader.VerifyUnchanged(preview.Fingerprint);
+                cancellationToken.ThrowIfCancellationRequested();
+                return GameCatalogResult<GameCatalogVerifiedImportSession>.Success(new(preview, reader));
+            }
+            catch
+            {
+                reader.Dispose();
+                throw;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return GameCatalogResult<GameCatalogVerifiedImportSession>.Failure("The CSV import confirmation was cancelled.");
+        }
+        catch (Exception exception) when (exception is GameCatalogImportReadException or GameCatalogImportSourceChangedException)
+        {
+            return GameCatalogResult<GameCatalogVerifiedImportSession>.Failure(exception.Message);
+        }
+        catch (Exception)
+        {
+            return GameCatalogResult<GameCatalogVerifiedImportSession>.Failure("Unable to verify the confirmed CSV import source.");
+        }
     }
 
     public GameCatalogResult<GameCatalogImportPreview> Preview(string sourcePath, CancellationToken cancellationToken = default)
