@@ -60,7 +60,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests distinguish a chosen local path, user cancellation, and an unusable or nonlocal selection.
 - [x] **T22 (25 min; FR-1, FR-7, FR-9):** Add import state and commands to the main view model, and wire source/picker dependencies at startup.
   Done when: View-model/startup tests can open import, choose or cancel a CSV, and block import when the catalog is unavailable without changing it.
-- [ ] **T23 (25 min; FR-6, FR-7, FR-9, FR-11):** Run preview away from the UI thread and expose English counts, row errors, busy state, and fatal-error feedback.
+- [x] **T23 (25 min; FR-6, FR-7, FR-9, FR-11):** Run preview away from the UI thread and expose English counts, row errors, busy state, and fatal-error feedback.
   Done when: Tests observe accurate new/modified/error counts, header-only preview, and visible failure without catalog writes.
 - [ ] **T24 (25 min; FR-4, FR-7, FR-8, FR-12):** Add preview confirmation/cancellation and final results to the view model; block competing add/edit/delete actions while preview or apply is active.
   Done when: Tests show cancellation leaves the catalog intact, confirmation displays only confirmed writes, changed-source errors remain visible, and competing commands are disabled.
