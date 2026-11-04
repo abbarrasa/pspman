@@ -47,19 +47,25 @@ public sealed class GameCatalogVerifiedImportSession : IDisposable
 public sealed class GameCatalogImportApplyResult
 {
     internal GameCatalogImportApplyResult(int createdCount, int updatedCount,
-        IEnumerable<GameRecord> savedRecords, string? error)
+        IEnumerable<GameRecord> savedRecords, string? error,
+        IEnumerable<GameCatalogImportRowError>? saveErrors = null, bool isCorrupt = false)
     {
         CreatedCount = createdCount;
         UpdatedCount = updatedCount;
         SavedRecords = Array.AsReadOnly(savedRecords.ToArray());
         Error = error;
+        SaveErrors = Array.AsReadOnly(saveErrors?.ToArray() ?? []);
+        IsCorrupt = isCorrupt;
     }
 
     public int CreatedCount { get; }
     public int UpdatedCount { get; }
     public IReadOnlyList<GameRecord> SavedRecords { get; }
     public string? Error { get; }
-    public bool IsSuccess => Error is null;
+    public IReadOnlyList<GameCatalogImportRowError> SaveErrors { get; }
+    public int FailedCount => SaveErrors.Count;
+    public bool IsCorrupt { get; }
+    public bool IsSuccess => Error is null && FailedCount == 0 && !IsCorrupt;
 }
 
 public sealed class GameCatalogImportPreview
@@ -106,6 +112,9 @@ public sealed class GameCatalogImportService
         var savedRecords = new List<GameRecord>();
         var createdCount = 0;
         var updatedCount = 0;
+        var saveErrors = new List<GameCatalogImportRowError>();
+        var isCorrupt = false;
+        const string corruptMessage = "The game catalog is corrupt. Catalog changes are disabled.";
         try
         {
             var reader = session.BeginApply();
@@ -126,33 +135,57 @@ public sealed class GameCatalogImportService
                     var input = operation.Input;
                     var record = new GameRecord(operation.ExistingId ?? Guid.NewGuid(), input.Title,
                         input.Medium, input.DvdNumber, input.Location, input.Format, input.SizeBytes, input.Notes);
-                    if (operation.ExistingId is null)
+                    try
                     {
-                        repository.Create(record);
-                        createdCount++;
+                        if (operation.ExistingId is null)
+                        {
+                            repository.Create(record);
+                            createdCount++;
+                        }
+                        else
+                        {
+                            repository.Update(record);
+                            updatedCount++;
+                        }
+                        savedRecords.Add(record);
                     }
-                    else
+                    catch (InvalidDataException)
                     {
-                        repository.Update(record);
-                        updatedCount++;
+                        saveErrors.Add(new(operation.StartLine, corruptMessage, []));
+                        isCorrupt = true;
+                        throw;
                     }
-                    savedRecords.Add(record);
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        var action = operation.ExistingId is null ? "create" : "update";
+                        saveErrors.Add(new(operation.StartLine,
+                            $"Unable to {action} the game record: {exception.Message}", []));
+                    }
                 }
             }
 
-            return new(createdCount, updatedCount, savedRecords, null);
+            return new(createdCount, updatedCount, savedRecords,
+                saveErrors.Count == 0 ? null : "Some game records could not be saved.", saveErrors);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return new(createdCount, updatedCount, savedRecords, "The CSV import was cancelled.");
+            return new(createdCount, updatedCount, savedRecords, "The CSV import was cancelled.", saveErrors, isCorrupt);
+        }
+        catch (InvalidDataException) when (isCorrupt)
+        {
+            return new(createdCount, updatedCount, savedRecords, corruptMessage, saveErrors, isCorrupt: true);
         }
         catch (Exception exception) when (exception is GameCatalogImportReadException or GameCatalogImportSourceChangedException)
         {
-            return new(createdCount, updatedCount, savedRecords, exception.Message);
+            return new(createdCount, updatedCount, savedRecords, exception.Message, saveErrors, isCorrupt);
         }
         catch (Exception)
         {
-            return new(createdCount, updatedCount, savedRecords, "Unable to apply the confirmed CSV import.");
+            return new(createdCount, updatedCount, savedRecords, "Unable to apply the confirmed CSV import.", saveErrors, isCorrupt);
         }
     }
 

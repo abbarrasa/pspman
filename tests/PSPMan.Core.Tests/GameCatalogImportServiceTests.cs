@@ -7,6 +7,166 @@ public class GameCatalogImportServiceTests
     private const string Header = "Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes\r\n";
     private const string ValidRow = "Game;Usb;;/GAMES/game.rar;ISO;1024;\r\n";
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OrdinaryCreateOrUpdateFailureIsReportedAndLaterCandidatesAreSaved(bool failCreate)
+    {
+        var original = new GameRecord(Guid.NewGuid(), "Original", GameMedium.Usb, null,
+            failCreate ? "/GAMES/later.rar" : "/GAMES/fail.rar", GameFormat.Iso, 1024, "old");
+        var repository = new WritableRepository([original]);
+        repository.BeforeWrite = (_, record) =>
+        {
+            if (record.Location == "/GAMES/fail.rar") throw new IOException("Simulated storage failure.");
+        };
+        var source = new TestSource(Header + "First;Usb;;/GAMES/first.rar;ISO;1024;\n"
+            + "Failed;Usb;;/GAMES/fail.rar;CHD;2048;\n"
+            + "Later;Usb;;/GAMES/later.rar;CHD;2048;\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+
+        var result = service.Apply(ConfirmImportPreview(service, source));
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsCorrupt);
+        Assert.NotNull(result.Error);
+        Assert.Equal(failCreate ? 1 : 2, result.CreatedCount);
+        Assert.Equal(failCreate ? 1 : 0, result.UpdatedCount);
+        Assert.Equal(1, result.FailedCount);
+        var error = Assert.Single(result.SaveErrors);
+        Assert.Equal(3, error.StartLine);
+        Assert.Contains("Simulated storage failure.", error.Message);
+        Assert.Equal(3, repository.Attempts.Count);
+        Assert.Equal(new[] { "First", "Later" }, result.SavedRecords.Select(record => record.Title));
+        Assert.Equal(repository.Writes.Select(write => write.Record), result.SavedRecords);
+        if (!failCreate) Assert.Same(original, repository.Records[original.Id]);
+        Assert.True(source.ConfirmationReader!.Disposed);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CorruptionDuringCreateOrUpdateStopsBeforeLaterWritesAndRetainsEarlierSaves(bool failCreate)
+    {
+        GameRecord[] existing = failCreate ? [] :
+            [new(Guid.NewGuid(), "Original", GameMedium.Usb, null, "/GAMES/fail.rar", GameFormat.Iso, 1024, "old")];
+        var repository = new WritableRepository(existing);
+        repository.BeforeWrite = (_, record) =>
+        {
+            if (record.Location == "/GAMES/fail.rar") throw new InvalidDataException("Corrupt catalog.");
+        };
+        var source = new TestSource(Header + "First;Usb;;/GAMES/first.rar;ISO;1024;\n"
+            + "Failed;Usb;;/GAMES/fail.rar;CHD;2048;\n"
+            + "Unattempted;Usb;;/GAMES/later.rar;ISO;1024;\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+
+        var result = service.Apply(ConfirmImportPreview(service, source));
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.IsCorrupt);
+        Assert.Equal(1, result.CreatedCount);
+        Assert.Equal(0, result.UpdatedCount);
+        Assert.Equal(1, result.FailedCount);
+        Assert.Equal(3, Assert.Single(result.SaveErrors).StartLine);
+        Assert.Equal(2, repository.Attempts.Count);
+        Assert.Equal("First", Assert.Single(result.SavedRecords).Title);
+        Assert.DoesNotContain(repository.Records.Values, record => record.Title == "Unattempted");
+        if (!failCreate) Assert.Same(existing[0], repository.Records[existing[0].Id]);
+        Assert.True(source.ConfirmationReader!.Disposed);
+    }
+
+    [Fact]
+    public void AllOrdinaryFailuresAreCountedWithoutAnyFalseSavedRecord()
+    {
+        var repository = new WritableRepository([])
+        {
+            BeforeWrite = (_, _) => throw new IOException("No storage available.")
+        };
+        var source = new TestSource(Header + "One;Usb;;/one.rar;ISO;1;\nTwo;Usb;;/two.rar;ISO;1;\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+
+        var result = service.Apply(ConfirmImportPreview(service, source));
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(0, result.CreatedCount);
+        Assert.Equal(0, result.UpdatedCount);
+        Assert.Equal(2, result.FailedCount);
+        Assert.Equal(new long[] { 2, 3 }, result.SaveErrors.Select(error => error.StartLine));
+        Assert.Empty(result.SavedRecords);
+        Assert.Empty(repository.Records);
+        Assert.Equal(2, repository.Attempts.Count);
+        Assert.Throws<NotSupportedException>(() => ((IList<GameCatalogImportRowError>)result.SaveErrors).Clear());
+    }
+
+    [Fact]
+    public void OrdinaryFailuresRemainReportedIfACorruptWriteLaterStopsTheImport()
+    {
+        var repository = new WritableRepository([]);
+        repository.BeforeWrite = (_, record) =>
+        {
+            if (record.Title == "Ordinary") throw new IOException("Storage failure.");
+            if (record.Title == "Corrupt") throw new InvalidDataException("Catalog corruption.");
+        };
+        var source = new TestSource(Header + "Ordinary;Usb;;/one.rar;ISO;1;\nSaved;Usb;;/two.rar;ISO;1;\n"
+            + "Corrupt;Usb;;/three.rar;ISO;1;\nUnattempted;Usb;;/four.rar;ISO;1;\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+
+        var result = service.Apply(ConfirmImportPreview(service, source));
+
+        Assert.True(result.IsCorrupt);
+        Assert.Equal(2, result.FailedCount);
+        Assert.Equal(1, result.CreatedCount);
+        Assert.Equal(new long[] { 2, 4 }, result.SaveErrors.Select(error => error.StartLine));
+        Assert.Equal("Saved", Assert.Single(result.SavedRecords).Title);
+        Assert.Equal(3, repository.Attempts.Count);
+    }
+
+    [Fact]
+    public void SourceVerificationErrorsAreNotCountedAsFailedWritesOrCatalogCorruption()
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        source.ConfirmationReader!.VerificationFailure = new InvalidDataException("Invalid source data.");
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Empty(repository.Attempts);
+    }
+
+    [Fact]
+    public void CooperativeCancellationIsNotSwallowedAsAnOrdinarySaveFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var repository = new WritableRepository([]);
+        repository.BeforeWrite = (_, record) =>
+        {
+            if (record.Title == "Cancel")
+            {
+                cancellation.Cancel();
+                cancellation.Token.ThrowIfCancellationRequested();
+            }
+        };
+        var source = new TestSource(Header + "Saved;Usb;;/one.rar;ISO;1;\nCancel;Usb;;/two.rar;ISO;1;\n"
+            + "Unattempted;Usb;;/three.rar;ISO;1;\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+
+        var result = service.Apply(ConfirmImportPreview(service, source), cancellation.Token);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal("The CSV import was cancelled.", result.Error);
+        Assert.Equal(1, result.CreatedCount);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Equal(2, repository.Attempts.Count);
+        Assert.Equal("Saved", Assert.Single(result.SavedRecords).Title);
+        Assert.True(source.ConfirmationReader!.Disposed);
+    }
+
     [Fact]
     public void AppliesOnlyFinalChangedCandidatesInSourceOrderWithCorrectIdsAndCounts()
     {
@@ -502,6 +662,8 @@ public class GameCatalogImportServiceTests
     {
         public Dictionary<Guid, GameRecord> Records { get; } = records.ToDictionary(record => record.Id);
         public List<(string Operation, GameRecord Record)> Writes { get; } = [];
+        public List<(string Operation, GameRecord Record)> Attempts { get; } = [];
+        public Action<string, GameRecord>? BeforeWrite { get; set; }
         public int ListCalls { get; private set; }
         public IReadOnlyList<GameRecord> List()
         {
@@ -511,11 +673,15 @@ public class GameCatalogImportServiceTests
         public GameRecord? GetById(Guid id) => Records.GetValueOrDefault(id);
         public void Create(GameRecord record)
         {
+            Attempts.Add(("create", record));
+            BeforeWrite?.Invoke("create", record);
             Records.Add(record.Id, record);
             Writes.Add(("create", record));
         }
         public void Update(GameRecord record)
         {
+            Attempts.Add(("update", record));
+            BeforeWrite?.Invoke("update", record);
             Assert.True(Records.ContainsKey(record.Id));
             Records[record.Id] = record;
             Writes.Add(("update", record));

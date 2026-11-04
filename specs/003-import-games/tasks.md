@@ -49,7 +49,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Changed, missing, unreadable, or unverifiable files stop before any save, while an unchanged file proceeds.
 - [x] **T18 (30 min; FR-4, FR-5, FR-7, FR-8, FR-10):** Apply selected final candidates through the repository, creating new IDs, preserving existing IDs on edits, and skipping no-ops.
   Done when: Tests prove create/edit effects, empty-Notes updates, no update call for an identical match, last-valid behavior, and no game-file access.
-- [ ] **T19 (25 min; FR-8, FR-9):** Report ordinary per-record save failures and continue; stop further writes on catalog corruption.
+- [x] **T19 (25 min; FR-8, FR-9):** Report ordinary per-record save failures and continue; stop further writes on catalog corruption.
   Done when: Fault-injected tests show accurate created/updated/failed counts, successful earlier writes retained, later valid rows attempted after ordinary failure, and no later writes after corruption.
 - [ ] **T20 (30 min; FR-8, FR-9, FR-12):** Re-read and compare selected source rows while applying, then verify the source before reporting complete success.
   Done when: Deterministic changed-file and mid-import read-failure tests stop further saves, report the error and partial counts, and retain records already saved.
