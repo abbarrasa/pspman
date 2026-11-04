@@ -9,6 +9,27 @@ public readonly record struct GameCatalogImportIdentity(GameMedium Medium, strin
 
 public sealed record GameCatalogImportCandidate(long StartLine, GameRecordInput Input);
 
+public sealed record GameCatalogImportModification(long StartLine, Guid ExistingId, GameRecordInput Input);
+
+public sealed class GameCatalogImportClassification
+{
+    internal GameCatalogImportClassification(
+        List<GameCatalogImportCandidate> newGames,
+        List<GameCatalogImportModification> modifiedGames)
+    {
+        NewGames = newGames.AsReadOnly();
+        ModifiedGames = modifiedGames.AsReadOnly();
+    }
+
+    public IReadOnlyList<GameCatalogImportCandidate> NewGames { get; }
+
+    public IReadOnlyList<GameCatalogImportModification> ModifiedGames { get; }
+
+    public int NewCount => NewGames.Count;
+
+    public int ModifiedCount => ModifiedGames.Count;
+}
+
 public sealed record GameCatalogImportRowError(
     long StartLine,
     string Message,
@@ -29,12 +50,49 @@ public sealed class GameCatalogCsvHeaderMap
 
 public static class GameCatalogImportRules
 {
+    public static GameCatalogImportClassification ClassifyCandidates(
+        IReadOnlyDictionary<GameCatalogImportIdentity, GameCatalogImportCandidate> candidates,
+        IEnumerable<GameRecord> catalogSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(catalogSnapshot);
+        var catalogByIdentity = catalogSnapshot.ToDictionary(record =>
+            Identity(record.Medium, record.Location, record.DvdNumber));
+        var newGames = new List<GameCatalogImportCandidate>();
+        var modifiedGames = new List<GameCatalogImportModification>();
+
+        foreach (var candidate in candidates.Values.OrderBy(candidate => candidate.StartLine))
+        {
+            var input = candidate.Input;
+            if (!catalogByIdentity.TryGetValue(Identity(input), out var existing))
+            {
+                newGames.Add(candidate);
+                continue;
+            }
+
+            // Identity already covers Medium, Location, and normalized DVD numbering.
+            if (string.Equals(input.Title, existing.Title, StringComparison.Ordinal)
+                && input.Format == existing.Format
+                && input.SizeBytes == existing.SizeBytes
+                && string.Equals(input.Notes ?? string.Empty, existing.Notes ?? string.Empty, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            modifiedGames.Add(new(candidate.StartLine, existing.Id, input));
+        }
+
+        return new(newGames, modifiedGames);
+    }
+
     public static GameCatalogImportIdentity Identity(GameRecordInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        return new(input.Medium, input.Location,
-            input.Medium == GameMedium.Dvd ? GameRecordRules.NormalizeDvdNumber(input.DvdNumber) : null);
+        return Identity(input.Medium, input.Location, input.DvdNumber);
     }
+
+    private static GameCatalogImportIdentity Identity(GameMedium medium, string location, int? dvdNumber) =>
+        new(medium, location, medium == GameMedium.Dvd ? GameRecordRules.NormalizeDvdNumber(dvdNumber) : null);
 
     public static bool SelectLastValid(
         GameCatalogCsvRecord record,
