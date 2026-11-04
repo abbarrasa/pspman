@@ -6,6 +6,163 @@ namespace PSPMan.Core.Tests;
 public class GameCatalogImportRulesTests
 {
     [Theory]
+    [InlineData("\t=1+1", "=1+1")]
+    [InlineData("\t+SUM(1;2)", "+SUM(1;2)")]
+    [InlineData("\t-10", "-10")]
+    [InlineData("\t@CMD", "@CMD")]
+    [InlineData("\t \u2003=1", " \u2003=1")]
+    [InlineData("\t\t=1", "\t=1")]
+    [InlineData(" \t=1", " \t=1")]
+    [InlineData("\tordinary", "\tordinary")]
+    [InlineData("\t \t", "\t \t")]
+    [InlineData("=1", "=1")]
+    [InlineData("", "")]
+    public void RemovesExactlyOneInitialProtectionTabOnlyForFormulaLikeText(string text, string expected)
+    {
+        Assert.Equal(expected, GameCatalogImportRules.UndoFormulaProtection(text));
+    }
+
+    [Fact]
+    public void MapsReorderedFieldsAndPreservesTextWithoutMutatingCells()
+    {
+        Assert.True(GameCatalogImportRules.TryMapHeadings(
+            ["Notes", "Format", "Title", "SizeBytes", "Location", "DvdNumber", "Medium", "title"],
+            out var map, out _));
+        string[] cells = ["\t \u2003=SUM(1;2) \"quoted\"\r\nNext", "cHd", "superseded", "2048",
+            "/GAMES/Case Sensitive;é.rar", "0", "uSb", "\t\t+Title"];
+        var before = cells.ToArray();
+
+        Assert.True(GameCatalogImportRules.TryMapGameRow(cells, map!, out var input, out var errors));
+
+        Assert.Empty(errors);
+        Assert.Equal(new GameRecordInput("\t+Title", GameMedium.Usb, null,
+            "/GAMES/Case Sensitive;é.rar", GameFormat.Chd, 2048, " \u2003=SUM(1;2) \"quoted\"\r\nNext"), input);
+        Assert.Equal(before, cells);
+    }
+
+    [Theory]
+    [InlineData(0, "", "Title")]
+    [InlineData(0, " \t\u2003", "Title")]
+    [InlineData(3, "", "Location")]
+    [InlineData(3, "relative/game.rar", "Location")]
+    [InlineData(3, "/GAMES/../game.rar", "Location")]
+    [InlineData(3, "/GAMES\\game.rar", "Location")]
+    [InlineData(3, "/GAMES/game\t.rar", "Location")]
+    [InlineData(3, "\t/GAMES/game.rar", "Location")]
+    [InlineData(1, "Dvd", "DvdNumber")]
+    [InlineData(2, "2", "DvdNumber")]
+    public void UsesExistingDomainRulesAndReturnsNoRecordForInvalidFields(int index, string value, string field)
+    {
+        var cells = ValidImportCells();
+        cells[index] = value;
+
+        Assert.False(GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out var input, out var errors));
+
+        Assert.Null(input);
+        Assert.Equal(field, Assert.Single(errors).Field);
+    }
+
+    [Theory]
+    [InlineData("Dvd", "2", true)]
+    [InlineData("Dvd", "", false)]
+    [InlineData("Dvd", "0", false)]
+    [InlineData("Usb", "", true)]
+    [InlineData("Usb", "0", true)]
+    [InlineData("Usb", "1", false)]
+    [InlineData("MemoryCard", "", true)]
+    [InlineData("MemoryCard", "0", true)]
+    [InlineData("MemoryCard", "1", false)]
+    public void ValidatesDvdNumberAgainstTheSelectedMedium(string medium, string number, bool expected)
+    {
+        var cells = ValidImportCells();
+        cells[1] = medium;
+        cells[2] = number;
+
+        Assert.Equal(expected, GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out var input, out var errors));
+        if (expected)
+        {
+            Assert.NotNull(input);
+            Assert.Empty(errors);
+        }
+        else
+        {
+            Assert.Null(input);
+            Assert.Equal("DvdNumber", Assert.Single(errors).Field);
+        }
+    }
+
+    [Theory]
+    [InlineData(2500, true)]
+    [InlineData(2501, false)]
+    public void ValidatesNotesLengthAfterRemovingProtection(int length, bool expected)
+    {
+        var cells = ValidImportCells();
+        cells[6] = "\t=" + new string('x', length - 1);
+
+        Assert.Equal(expected, GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out var input, out var errors));
+        if (expected)
+        {
+            Assert.NotNull(input);
+            Assert.Equal(length, input.Notes!.Length);
+            Assert.Empty(errors);
+        }
+        else
+        {
+            Assert.Null(input);
+            Assert.Equal("Notes", Assert.Single(errors).Field);
+        }
+    }
+
+    [Fact]
+    public void NotesLimitCountsUtf16CodeUnits()
+    {
+        var cells = ValidImportCells();
+        cells[6] = string.Concat(Enumerable.Repeat("🎮", 1250));
+        Assert.True(GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out _, out _));
+        cells[6] += "x";
+        Assert.False(GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out var input, out var errors));
+        Assert.Null(input);
+        Assert.Equal("Notes", Assert.Single(errors).Field);
+    }
+
+    [Fact]
+    public void KeepsOrdinaryWhitespacePunctuationAndEmptyNotes()
+    {
+        var cells = ValidImportCells();
+        cells[0] = " \tGame; \"title\", volume: 2 ";
+        cells[6] = "\tOrdinary notes; \"quoted\"\r\n次 🎮 ";
+        Assert.True(GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out var input, out _));
+        Assert.Equal(cells[0], input!.Title);
+        Assert.Equal(cells[6], input.Notes);
+        cells[6] = string.Empty;
+        Assert.True(GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out input, out _));
+        Assert.Equal(string.Empty, input!.Notes);
+    }
+
+    [Fact]
+    public void ReportsAllTypedConversionFailuresWithoutReturningARecord()
+    {
+        var cells = ValidImportCells();
+        cells[1] = "bad";
+        cells[2] = "bad";
+        cells[4] = "bad";
+        cells[5] = "bad";
+
+        Assert.False(GameCatalogImportRules.TryMapGameRow(cells, CanonicalImportMap(), out var input, out var errors));
+
+        Assert.Null(input);
+        Assert.Equal(new[] { "DvdNumber", "Format", "Medium", "SizeBytes" }, errors.Select(error => error.Field).Order());
+    }
+
+    private static string[] ValidImportCells() => ["Game", "Usb", "", "/GAMES/game.rar", "ISO", "1024", ""];
+
+    private static GameCatalogCsvHeaderMap CanonicalImportMap()
+    {
+        Assert.True(GameCatalogImportRules.TryMapHeadings(GameCatalogCsvSchema.Headings, out var map, out _));
+        return map!;
+    }
+
+    [Theory]
     [InlineData("Dvd", GameMedium.Dvd)]
     [InlineData("DVD", GameMedium.Dvd)]
     [InlineData("uSb", GameMedium.Usb)]
