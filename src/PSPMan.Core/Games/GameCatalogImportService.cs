@@ -127,12 +127,38 @@ public sealed class GameCatalogImportService
                         (candidate.StartLine, ExistingId: (Guid?)null, candidate.Input))
                     .Concat(session.Preview.ModifiedGames.Select(modification =>
                         (modification.StartLine, ExistingId: (Guid?)modification.ExistingId, modification.Input)))
-                    .OrderBy(operation => operation.StartLine);
+                    .OrderBy(operation => operation.StartLine)
+                    .ToArray();
 
-                foreach (var operation in operations)
+                var operationIndex = 0;
+                GameCatalogCsvHeaderMap? headerMap = null;
+                var tokenizer = new GameCatalogCsvTokenizer();
+
+                void ApplyRecord(GameCatalogCsvRecord sourceRecord)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var input = operation.Input;
+                    if (headerMap is null)
+                    {
+                        if (!GameCatalogImportRules.TryMapHeadings(sourceRecord.Cells, out headerMap, out var error))
+                        {
+                            throw new FormatException($"CSV header starting on line {sourceRecord.StartLine}: {error}");
+                        }
+                        return;
+                    }
+                    if (operationIndex == operations.Length) return;
+                    var operation = operations[operationIndex];
+                    if (sourceRecord.StartLine < operation.StartLine) return;
+                    if (sourceRecord.StartLine != operation.StartLine
+                        || !GameCatalogImportRules.TryMapSourceRow(sourceRecord, headerMap, out var input, out _)
+                        || input != operation.Input)
+                    {
+                        throw new GameCatalogImportSourceChangedException();
+                    }
+
+                    // Check even when several logical rows were already buffered by the reader.
+                    reader.VerifyUnchanged(session.Preview.Fingerprint);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    operationIndex++;
                     var record = new GameRecord(operation.ExistingId ?? Guid.NewGuid(), input.Title,
                         input.Medium, input.DvdNumber, input.Location, input.Format, input.SizeBytes, input.Notes);
                     try
@@ -166,6 +192,27 @@ public sealed class GameCatalogImportService
                             $"Unable to {action} the game record: {exception.Message}", []));
                     }
                 }
+
+                var buffer = new char[4096];
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var count = reader.Read(buffer);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (count == 0) break;
+                    tokenizer.Push(buffer.AsSpan(0, count), ApplyRecord);
+                }
+                tokenizer.Complete(ApplyRecord);
+                if (headerMap is null)
+                {
+                    throw new FormatException("The CSV source does not contain a header.");
+                }
+                if (operationIndex != operations.Length)
+                {
+                    throw new GameCatalogImportSourceChangedException();
+                }
+                reader.VerifyUnchanged(session.Preview.Fingerprint);
+                cancellationToken.ThrowIfCancellationRequested();
             }
 
             return new(createdCount, updatedCount, savedRecords,
@@ -179,7 +226,7 @@ public sealed class GameCatalogImportService
         {
             return new(createdCount, updatedCount, savedRecords, corruptMessage, saveErrors, isCorrupt: true);
         }
-        catch (Exception exception) when (exception is GameCatalogImportReadException or GameCatalogImportSourceChangedException)
+        catch (Exception exception) when (exception is FormatException or GameCatalogImportReadException or GameCatalogImportSourceChangedException)
         {
             return new(createdCount, updatedCount, savedRecords, exception.Message, saveErrors, isCorrupt);
         }

@@ -8,6 +8,156 @@ public class GameCatalogImportServiceTests
     private const string ValidRow = "Game;Usb;;/GAMES/game.rar;ISO;1024;\r\n";
 
     [Theory]
+    [InlineData("Changed;Usb;;/GAMES/game.rar;ISO;1024;\r\n")]
+    [InlineData("Game;Usb;;/GAMES/game.rar;ISO;invalid;\r\n")]
+    [InlineData("")]
+    public void RereadSelectedRowMustMatchThePreviewBeforeSaving(string replacementRow)
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var preview = service.Preview("virtual.csv").Value!;
+        // A stale buffered reader may differ even when the verification seam reports unchanged content.
+        source.ConfirmationReader = new(Header + replacementRow, 1) { RequireEndBeforeVerification = false };
+        var session = service.PrepareConfirmedImport(preview).Value!;
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.NotNull(result.Error);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Empty(repository.Attempts);
+        Assert.True(source.ConfirmationReader.Disposed);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4096)]
+    public void SourceChangeDuringSavingStopsBeforeTheNextWriteEvenWithBufferedRows(int chunkSize)
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow + "Next;Usb;;/next.rar;ISO;1;\n", chunkSize);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        repository.BeforeWrite = (_, _) => source.ConfirmationReader!.Changed = true;
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("changed", result.Error!);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(1, result.CreatedCount);
+        Assert.Equal(0, result.UpdatedCount);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Equal("Game", Assert.Single(result.SavedRecords).Title);
+        Assert.Single(repository.Records);
+        Assert.Single(repository.Attempts);
+        Assert.True(source.ConfirmationReader!.Disposed);
+    }
+
+    [Fact]
+    public void MidImportReadFailureRetainsEarlierUpdatesAndOrdinarySaveErrors()
+    {
+        var saved = new GameRecord(Guid.NewGuid(), "Original", GameMedium.Usb, null,
+            "/GAMES/game.rar", GameFormat.Iso, 1024, null);
+        var repository = new WritableRepository([saved]);
+        repository.BeforeWrite = (_, record) =>
+        {
+            if (record.Title == "Failed") throw new IOException("Storage failed.");
+        };
+        var readablePrefix = Header + "Failed;Usb;;/failed.rar;ISO;1;\n" + ValidRow;
+        var source = new TestSource(readablePrefix + "Later;Usb;;/later.rar;ISO;1;\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        source.ConfirmationReader!.FailAtPosition = readablePrefix.Length;
+        source.ConfirmationReader.ReadFailure = new GameCatalogImportReadException(
+            "Source read failed.", new IOException("Device removed."));
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Source read failed.", result.Error);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(0, result.CreatedCount);
+        Assert.Equal(1, result.UpdatedCount);
+        Assert.Equal(1, result.FailedCount);
+        Assert.Equal(2, Assert.Single(result.SaveErrors).StartLine);
+        Assert.Equal(saved.Id, Assert.Single(result.SavedRecords).Id);
+        Assert.Equal("Game", repository.Records[saved.Id].Title);
+        Assert.Equal(2, repository.Attempts.Count);
+        Assert.True(source.ConfirmationReader.Disposed);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FinalSourceVerificationFailurePreventsSuccessAndRetainsCompletedWrites(bool readFailure)
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        source.ConfirmationReader!.AfterRead = count =>
+        {
+            if (count != 0) return;
+            if (readFailure) source.ConfirmationReader.VerificationFailure =
+                new GameCatalogImportReadException("Final verification failed.", new IOException());
+            else source.ConfirmationReader.Changed = true;
+        };
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.NotNull(result.Error);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(1, result.CreatedCount);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Single(result.SavedRecords);
+        Assert.Single(repository.Records);
+        Assert.True(source.ConfirmationReader.EndReached);
+        Assert.True(source.ConfirmationReader.Disposed);
+    }
+
+    [Theory]
+    [InlineData("Title;Medium\n")]
+    [InlineData("Title;Medium;DvdNumber;Location;Format;SizeBytes;Notes\n\"unterminated")]
+    public void FatalRereadStructureErrorsAreReportedWithoutWrites(string replacement)
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var preview = service.Preview("virtual.csv").Value!;
+        source.ConfirmationReader = new(replacement, 1) { RequireEndBeforeVerification = false };
+
+        var result = service.Apply(service.PrepareConfirmedImport(preview).Value!);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("line", result.Error!, StringComparison.OrdinalIgnoreCase);
+        Assert.False(result.IsCorrupt);
+        Assert.Equal(0, result.FailedCount);
+        Assert.Empty(repository.Attempts);
+        Assert.True(source.ConfirmationReader.Disposed);
+    }
+
+    [Fact]
+    public void RereadHandlesReorderedHeadingsMultilineNotesAndFinalRowWithoutNewline()
+    {
+        var repository = new WritableRepository([]);
+        var text = "Notes;SizeBytes;Format;Location;DvdNumber;Medium;Title\r\n"
+            + "\"first;note\r\nsecond \"\"quote\"\"\";1024;ISO;/game.rar;;Usb;Game";
+        var source = new TestSource(text, 1);
+        var service = new GameCatalogImportService(repository, source);
+
+        var result = service.Apply(ConfirmImportPreview(service, source));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal("first;note\r\nsecond \"quote\"", Assert.Single(result.SavedRecords).Notes);
+        Assert.True(source.ConfirmationReader!.EndReached);
+        Assert.Equal(text.Length, source.ConfirmationReader.CharactersRead);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void OrdinaryCreateOrUpdateFailureIsReportedAndLaterCandidatesAreSaved(bool failCreate)
@@ -203,7 +353,8 @@ public class GameCatalogImportServiceTests
         Assert.Null(repository.Records[sameId].Notes);
         Assert.Equal(1, repository.ListCalls);
         Assert.True(source.ConfirmationReader!.Disposed);
-        Assert.Equal(2, source.ConfirmationReader.VerifyCalls);
+        Assert.True(source.ConfirmationReader.EndReached);
+        Assert.True(source.ConfirmationReader.VerifyCalls >= 3);
     }
 
     [Theory]
