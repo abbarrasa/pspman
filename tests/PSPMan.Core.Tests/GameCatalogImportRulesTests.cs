@@ -6,6 +6,131 @@ namespace PSPMan.Core.Tests;
 public class GameCatalogImportRulesTests
 {
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void ShortSourceRowsReturnOneErrorWithoutMappingFields(int count)
+    {
+        var record = new GameCatalogCsvRecord(12, ValidImportCells().Take(count).ToArray());
+
+        Assert.False(GameCatalogImportRules.TryMapSourceRow(record, CanonicalImportMap(), out var input, out var error));
+
+        Assert.Null(input);
+        Assert.NotNull(error);
+        Assert.Equal(12, error.StartLine);
+        Assert.Equal($"Row has {count} cells; expected at least 7.", error.Message);
+        Assert.Empty(error.ValidationErrors);
+    }
+
+    [Theory]
+    [InlineData("Ignored")]
+    [InlineData("Title")]
+    public void WidthIncludesExtraAndRepeatedHeadingColumns(string additionalHeading)
+    {
+        Assert.True(GameCatalogImportRules.TryMapHeadings(
+            [.. GameCatalogCsvSchema.Headings, additionalHeading], out var map, out _));
+
+        Assert.False(GameCatalogImportRules.TryMapSourceRow(
+            new GameCatalogCsvRecord(4, ValidImportCells()), map!, out var input, out var error));
+
+        Assert.Null(input);
+        Assert.NotNull(error);
+        Assert.Equal(4, error.StartLine);
+        Assert.Equal("Row has 7 cells; expected at least 8.", error.Message);
+        Assert.Empty(error.ValidationErrors);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IgnoresSurplusCellsBeyondTheFullHeader(bool extendedHeader)
+    {
+        string[] headings = extendedHeader ? [.. GameCatalogCsvSchema.Headings, "Ignored"] : [.. GameCatalogCsvSchema.Headings];
+        Assert.True(GameCatalogImportRules.TryMapHeadings(headings, out var map, out _));
+        string[] cells = extendedHeader
+            ? [.. ValidImportCells(), "unmapped column", "invalid extra", "=formula"]
+            : [.. ValidImportCells(), "invalid extra", "=formula"];
+        var before = cells.ToArray();
+
+        Assert.True(GameCatalogImportRules.TryMapSourceRow(new GameCatalogCsvRecord(3, cells), map!, out var input, out var error));
+
+        Assert.Null(error);
+        Assert.Equal(new GameRecordInput("Game", GameMedium.Usb, null, "/GAMES/game.rar", GameFormat.Iso, 1024, ""), input);
+        Assert.Equal(before, cells);
+    }
+
+    [Theory]
+    [InlineData(0, "", "Title")]
+    [InlineData(3, "bad-path", "Location")]
+    [InlineData(1, "invalid", "Medium")]
+    [InlineData(5, "invalid", "SizeBytes")]
+    public void SourceRowErrorsPreserveStartLineFieldAndReason(int index, string text, string field)
+    {
+        var cells = ValidImportCells();
+        cells[index] = text;
+        const long startLine = 2147483650;
+
+        Assert.False(GameCatalogImportRules.TryMapSourceRow(
+            new GameCatalogCsvRecord(startLine, cells), CanonicalImportMap(), out var input, out var error));
+
+        Assert.Null(input);
+        Assert.NotNull(error);
+        Assert.Equal(startLine, error.StartLine);
+        var validationError = Assert.Single(error.ValidationErrors);
+        Assert.Equal(field, validationError.Field);
+        Assert.Contains(validationError.Message, error.Message);
+    }
+
+    [Fact]
+    public void MultipleInvalidFieldsProduceOneSourceRowErrorWithAllReasons()
+    {
+        var cells = ValidImportCells();
+        cells[0] = "";
+        cells[3] = "";
+
+        Assert.False(GameCatalogImportRules.TryMapSourceRow(
+            new GameCatalogCsvRecord(5, cells), CanonicalImportMap(), out var input, out var error));
+
+        Assert.Null(input);
+        Assert.NotNull(error);
+        Assert.Equal(5, error.StartLine);
+        Assert.Equal(new[] { "Title", "Location" }, error.ValidationErrors.Select(item => item.Field));
+        Assert.All(error.ValidationErrors, item => Assert.Contains(item.Message, error.Message));
+    }
+
+    [Fact]
+    public void ContinuesMappingValidRowsAfterShortAndInvalidMultilineRows()
+    {
+        const string csv = "short\r\nGame;Usb;;/GAMES/game.rar;ISO;bad;\"first\r\nsecond\"\r\n"
+            + "Good;Usb;;/GAMES/good.rar;ISO;1024;\r\n";
+        var tokenizer = new GameCatalogCsvTokenizer();
+        var records = new List<GameCatalogCsvRecord>();
+        foreach (var character in csv)
+        {
+            tokenizer.Push(character.ToString(), records.Add);
+        }
+        tokenizer.Complete(records.Add);
+        var inputs = new List<GameRecordInput>();
+        var errors = new List<GameCatalogImportRowError>();
+        var map = CanonicalImportMap();
+        foreach (var record in records)
+        {
+            if (GameCatalogImportRules.TryMapSourceRow(record, map, out var input, out var error))
+            {
+                inputs.Add(input!);
+            }
+            else
+            {
+                errors.Add(error!);
+            }
+        }
+
+        Assert.Equal(new long[] { 1, 2 }, errors.Select(error => error.StartLine));
+        Assert.Equal(4, records[2].StartLine);
+        Assert.Equal("Good", Assert.Single(inputs).Title);
+    }
+
+    [Theory]
     [InlineData("\t=1+1", "=1+1")]
     [InlineData("\t+SUM(1;2)", "+SUM(1;2)")]
     [InlineData("\t-10", "-10")]
