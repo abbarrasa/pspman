@@ -4,6 +4,11 @@ using System.Globalization;
 
 namespace PSPMan.Core.Games;
 
+// Record equality compares Location strings ordinally and case-sensitively.
+public readonly record struct GameCatalogImportIdentity(GameMedium Medium, string Location, int? DvdNumber);
+
+public sealed record GameCatalogImportCandidate(long StartLine, GameRecordInput Input);
+
 public sealed record GameCatalogImportRowError(
     long StartLine,
     string Message,
@@ -24,6 +29,29 @@ public sealed class GameCatalogCsvHeaderMap
 
 public static class GameCatalogImportRules
 {
+    public static GameCatalogImportIdentity Identity(GameRecordInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return new(input.Medium, input.Location,
+            input.Medium == GameMedium.Dvd ? GameRecordRules.NormalizeDvdNumber(input.DvdNumber) : null);
+    }
+
+    public static bool SelectLastValid(
+        GameCatalogCsvRecord record,
+        GameCatalogCsvHeaderMap headerMap,
+        IDictionary<GameCatalogImportIdentity, GameCatalogImportCandidate> candidates,
+        [NotNullWhen(false)] out GameCatalogImportRowError? error)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        if (!TryMapSourceRow(record, headerMap, out var input, out error))
+        {
+            return false;
+        }
+
+        candidates[Identity(input)] = new(record.StartLine, input);
+        return true;
+    }
+
     public static bool TryMapSourceRow(
         GameCatalogCsvRecord record,
         GameCatalogCsvHeaderMap headerMap,

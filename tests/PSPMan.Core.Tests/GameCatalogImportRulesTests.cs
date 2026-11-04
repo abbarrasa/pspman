@@ -5,6 +5,131 @@ namespace PSPMan.Core.Tests;
 
 public class GameCatalogImportRulesTests
 {
+    [Fact]
+    public void LastValidRowReplacesAllEditableValuesAndSourceLineForTheSameIdentity()
+    {
+        var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
+        var map = CanonicalImportMap();
+        var first = ValidImportCells();
+        first[6] = "old notes";
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(2, first), map, candidates, out var firstError));
+        Assert.Null(firstError);
+        var last = ValidImportCells();
+        last[0] = "Different title";
+        last[4] = "CHD";
+        last[5] = "2048";
+        last[6] = "";
+
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(9, last), map, candidates, out var error));
+
+        Assert.Null(error);
+        var candidate = Assert.Single(candidates).Value;
+        Assert.Equal(9, candidate.StartLine);
+        Assert.Equal(new GameRecordInput("Different title", GameMedium.Usb, null,
+            "/GAMES/game.rar", GameFormat.Chd, 2048, ""), candidate.Input);
+    }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, "bad medium")]
+    [InlineData(2, "1")]
+    [InlineData(4, "bad format")]
+    [InlineData(5, "bad size")]
+    public void LaterInvalidRowDoesNotReplaceTheEarlierValidCandidate(int index, string value)
+    {
+        var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
+        var map = CanonicalImportMap();
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(2, ValidImportCells()), map, candidates, out _));
+        var earlier = Assert.Single(candidates).Value;
+        var invalid = ValidImportCells();
+        invalid[index] = value;
+
+        Assert.False(GameCatalogImportRules.SelectLastValid(new(4, invalid), map, candidates, out var error));
+
+        Assert.NotNull(error);
+        Assert.Equal(4, error.StartLine);
+        Assert.Same(earlier, Assert.Single(candidates).Value);
+    }
+
+    [Theory]
+    [InlineData("Usb", "", "/GAMES/Game.rar")]
+    [InlineData("Usb", "", "/OTHER/game.rar")]
+    [InlineData("MemoryCard", "", "/GAMES/game.rar")]
+    [InlineData("Dvd", "1", "/GAMES/game.rar")]
+    public void DifferentMediumOrOrdinalLocationKeepsSeparateCandidates(string medium, string dvdNumber, string location)
+    {
+        var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
+        var map = CanonicalImportMap();
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(2, ValidImportCells()), map, candidates, out _));
+        var second = ValidImportCells();
+        second[1] = medium;
+        second[2] = dvdNumber;
+        second[3] = location;
+
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(3, second), map, candidates, out var error));
+
+        Assert.Null(error);
+        Assert.Equal(2, candidates.Count);
+        Assert.Equal(new long[] { 2, 3 }, candidates.Values.Select(candidate => candidate.StartLine).Order());
+    }
+
+    [Fact]
+    public void DifferentDvdNumbersStaySeparateAndLastValidRowWinsWithinOneDisc()
+    {
+        var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
+        var map = CanonicalImportMap();
+        var row = ValidImportCells();
+        row[1] = "Dvd";
+        row[2] = "1";
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(2, row), map, candidates, out _));
+        row[2] = "2";
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(3, row), map, candidates, out _));
+        row[0] = "Replacement for disc two";
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(4, row), map, candidates, out _));
+
+        Assert.Equal(2, candidates.Count);
+        Assert.Equal("Game", candidates.Single(pair => pair.Key.DvdNumber == 1).Value.Input.Title);
+        Assert.Equal(4, candidates.Single(pair => pair.Key.DvdNumber == 2).Value.StartLine);
+        Assert.Equal("Replacement for disc two", candidates.Single(pair => pair.Key.DvdNumber == 2).Value.Input.Title);
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Dvd, 0, null)]
+    [InlineData(GameMedium.Dvd, 2, 2)]
+    [InlineData(GameMedium.Usb, 2, null)]
+    [InlineData(GameMedium.MemoryCard, 2, null)]
+    public void IdentityUsesTheSameDvdNormalizationAsExistingDomainRules(GameMedium medium, int number, int? expected)
+    {
+        var input = new GameRecordInput("Title", medium, number, "/GAMES/game.rar", GameFormat.Iso, 1024, "notes");
+        var key = GameCatalogImportRules.Identity(input);
+        var existing = new GameRecord(Guid.NewGuid(), "Another title", medium, expected,
+            input.Location, GameFormat.Chd, 2048, null);
+
+        Assert.Equal(expected, key.DvdNumber);
+        Assert.Equal(medium, key.Medium);
+        Assert.Equal(input.Location, key.Location);
+        Assert.True(GameRecordRules.HasSameIdentity(input, existing));
+        Assert.Equal(key, GameCatalogImportRules.Identity(new GameRecordInput(existing.Title, existing.Medium,
+            existing.DvdNumber, existing.Location, existing.Format, existing.SizeBytes, existing.Notes)));
+    }
+
+    [Fact]
+    public void ZeroAndEmptyNumbersCollapseForNonDvdAndInvalidOnlyInputCreatesNoCandidates()
+    {
+        var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
+        var map = CanonicalImportMap();
+        Assert.False(GameCatalogImportRules.SelectLastValid(new(2, []), map, candidates, out var error));
+        Assert.NotNull(error);
+        Assert.Empty(candidates);
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(3, ValidImportCells()), map, candidates, out _));
+        var row = ValidImportCells();
+        row[2] = "0";
+        Assert.True(GameCatalogImportRules.SelectLastValid(new(4, row), map, candidates, out error));
+
+        Assert.Null(error);
+        Assert.Equal(4, Assert.Single(candidates).Value.StartLine);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
