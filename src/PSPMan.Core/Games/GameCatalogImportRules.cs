@@ -4,6 +4,11 @@ using System.Globalization;
 
 namespace PSPMan.Core.Games;
 
+public sealed record GameCatalogImportRowError(
+    long StartLine,
+    string Message,
+    IReadOnlyList<GameRecordValidationError> ValidationErrors);
+
 public sealed class GameCatalogCsvHeaderMap
 {
     internal GameCatalogCsvHeaderMap(int columnCount, Dictionary<string, int> indices)
@@ -19,6 +24,35 @@ public sealed class GameCatalogCsvHeaderMap
 
 public static class GameCatalogImportRules
 {
+    public static bool TryMapSourceRow(
+        GameCatalogCsvRecord record,
+        GameCatalogCsvHeaderMap headerMap,
+        [NotNullWhen(true)] out GameRecordInput? input,
+        [NotNullWhen(false)] out GameCatalogImportRowError? error)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(headerMap);
+        input = null;
+        error = null;
+        if (record.Cells.Count < headerMap.ColumnCount)
+        {
+            error = new(record.StartLine,
+                $"Row has {record.Cells.Count} cells; expected at least {headerMap.ColumnCount}.", []);
+            return false;
+        }
+
+        // Only mapped header indices are read; surplus cells are never interpreted.
+        if (TryMapGameRow(record.Cells, headerMap, out input, out var validationErrors))
+        {
+            return true;
+        }
+
+        error = new(record.StartLine,
+            string.Join(" ", validationErrors.Select(item => $"{item.Field}: {item.Message}")),
+            Array.AsReadOnly(validationErrors.ToArray()));
+        return false;
+    }
+
     public static string UndoFormulaProtection(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
