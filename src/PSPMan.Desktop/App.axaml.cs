@@ -19,7 +19,8 @@ public partial class App : Application
         {
             var window = new MainWindow();
             window.DataContext = CatalogStartup.CreateMainViewModel(
-                exportFolderPicker: new AvaloniaGameExportFolderPicker(window));
+                exportFolderPicker: new AvaloniaGameExportFolderPicker(window),
+                importFilePicker: new AvaloniaGameImportFilePicker(window));
             desktop.MainWindow = window;
         }
 
