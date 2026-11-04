@@ -34,7 +34,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests show identical Medium/Location/DVD keys collapse to the last valid row, invalid later rows do not replace it, and differently cased Locations stay distinct.
 - [x] **T12 (25 min; FR-4, FR-7):** Classify final rows against one catalog snapshot as new, modified, or no-op; compare absent and empty Notes as equivalent.
   Done when: Tests count each final identity once, omit unchanged matches from all three preview counts, and preserve existing IDs for proposed edits.
-- [ ] **T13 (25 min; FR-2, FR-3, FR-9):** Add the Core import-source contract and Infraestructure local-file reader with strict UTF-8 and optional BOM support.
+- [x] **T13 (25 min; FR-2, FR-3, FR-9):** Add the Core import-source contract and Infraestructure local-file reader with strict UTF-8 and optional BOM support.
   Done when: Disposable-file tests read a normal export incrementally and reject invalid UTF-8 or an unreadable source without catalog writes.
 - [ ] **T14 (25 min; FR-9, FR-12):** Add source content fingerprints and a read-handle/change-check seam to the file adapter.
   Done when: Tests distinguish unchanged content from same-length or same-timestamp modifications and can inject a read failure at a chosen point.
