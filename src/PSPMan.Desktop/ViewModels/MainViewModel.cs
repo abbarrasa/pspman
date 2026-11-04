@@ -114,6 +114,8 @@ public partial class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsEditorAvailable));
                 OnPropertyChanged(nameof(IsAdding));
                 OnPropertyChanged(nameof(IsEmpty));
+                OnPropertyChanged(nameof(CanOpenCsvTemplate));
+                OpenCsvTemplateCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanOpenExport));
                 OnPropertyChanged(nameof(CanExportCatalog));
                 OnPropertyChanged(nameof(CanConfirmExportReplacement));

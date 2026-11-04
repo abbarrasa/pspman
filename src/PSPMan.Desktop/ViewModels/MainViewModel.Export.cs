@@ -13,6 +13,7 @@ public partial class MainViewModel
     private readonly IGameCatalogExportWriter? _exportWriter;
     private readonly string? _catalogPath;
     private bool _isExportFormOpen;
+    private bool _isTemplateExport;
     private string? _exportFolderPath;
     private string _exportFileName = "pspman-games.csv";
     private string? _exportError;
@@ -30,6 +31,8 @@ public partial class MainViewModel
             if (SetProperty(ref _isExportFormOpen, value))
             {
                 OnPropertyChanged(nameof(CanOpenExport));
+                OnPropertyChanged(nameof(CanOpenCsvTemplate));
+                OpenCsvTemplateCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanExportCatalog));
                 OnPropertyChanged(nameof(CanConfirmExportReplacement));
                 OpenExportCommand.NotifyCanExecuteChanged();
@@ -117,6 +120,14 @@ public partial class MainViewModel
 
     public string? PendingReplacementPath => PendingReplacement?.DestinationPath;
 
+    public bool IsTemplateExport
+    {
+        get => _isTemplateExport;
+        private set => SetProperty(ref _isTemplateExport, value);
+    }
+
+    public bool CanOpenCsvTemplate => CanOpenExport && _exportWriter is not null && _catalogPath is not null;
+
     public bool CanOpenExport => IsEditorAvailable && _exportFolderPicker is not null && !IsExportFormOpen;
 
     public bool CanChooseExportFolder => IsEditorAvailable && _exportFolderPicker is not null && IsExportFormOpen;
@@ -128,9 +139,19 @@ public partial class MainViewModel
     public bool CanConfirmExportReplacement => IsEditorAvailable && IsExportFormOpen && IsReplacementPending;
 
     [RelayCommand(CanExecute = nameof(CanOpenExport))]
-    private void OpenExport()
+    private void OpenExport() => OpenExportForm(isTemplate: false);
+
+    [RelayCommand(CanExecute = nameof(CanOpenCsvTemplate))]
+    private void OpenCsvTemplate()
     {
-        ExportFileName = "pspman-games.csv";
+        if (!CanOpenCsvTemplate) return;
+        OpenExportForm(isTemplate: true);
+    }
+
+    private void OpenExportForm(bool isTemplate)
+    {
+        IsTemplateExport = isTemplate;
+        ExportFileName = isTemplate ? "pspman-import-template.csv" : "pspman-games.csv";
         ExportFolderPath = null;
         ExportError = null;
         ExportedPath = null;
@@ -152,25 +173,40 @@ public partial class MainViewModel
             return;
         }
 
-        var result = CatalogService!.List();
-        if (!result.IsSuccess)
-        {
-            ReportCorruption(result);
-            ExportError = result.IsCorrupt
-                ? result.Error
-                : "Unable to read the game catalog for export. Try again.";
-            return;
-        }
-
         byte[] bytes;
-        try
+        if (IsTemplateExport)
         {
-            bytes = GameCatalogCsvSerializer.SerializeCatalog(result.Value ?? []);
+            try
+            {
+                bytes = GameCatalogCsvTemplate.Generate();
+            }
+            catch (Exception)
+            {
+                ExportError = "Unable to prepare the CSV template.";
+                return;
+            }
         }
-        catch (Exception)
+        else
         {
-            ExportError = "Unable to prepare the catalog export.";
-            return;
+            var result = CatalogService!.List();
+            if (!result.IsSuccess)
+            {
+                ReportCorruption(result);
+                ExportError = result.IsCorrupt
+                    ? result.Error
+                    : "Unable to read the game catalog for export. Try again.";
+                return;
+            }
+
+            try
+            {
+                bytes = GameCatalogCsvSerializer.SerializeCatalog(result.Value ?? []);
+            }
+            catch (Exception)
+            {
+                ExportError = "Unable to prepare the catalog export.";
+                return;
+            }
         }
 
         ExportDestinationSnapshot snapshot;
@@ -180,7 +216,9 @@ public partial class MainViewModel
         }
         catch (Exception)
         {
-            ExportError = "Unable to inspect the export destination. Check access and try again.";
+            ExportError = IsTemplateExport
+                ? "Unable to inspect the template destination. Check access and try again."
+                : "Unable to inspect the export destination. Check access and try again.";
             return;
         }
 
@@ -220,9 +258,13 @@ public partial class MainViewModel
         catch (Exception)
         {
             PendingReplacement = null;
-            ExportError = overwriteApproved
-                ? "Unable to write the replacement export. The destination was left unchanged; try again."
-                : "Unable to write the export file. Check the destination and try again.";
+            ExportError = IsTemplateExport
+                ? (overwriteApproved
+                    ? "Unable to write the replacement CSV template. The destination was left unchanged; try again."
+                    : "Unable to write the CSV template. Check the destination and try again.")
+                : (overwriteApproved
+                    ? "Unable to write the replacement export. The destination was left unchanged; try again."
+                    : "Unable to write the export file. Check the destination and try again.");
         }
     }
 
