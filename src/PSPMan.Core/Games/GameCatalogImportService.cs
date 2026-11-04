@@ -36,13 +36,25 @@ public sealed class GameCatalogImportService
         this.source = source ?? throw new ArgumentNullException(nameof(source));
     }
 
-    public GameCatalogResult<GameCatalogImportPreview> Preview(string sourcePath)
+    public GameCatalogResult<GameCatalogImportPreview> Preview(string sourcePath, CancellationToken cancellationToken = default)
     {
         try
         {
-            var catalogSnapshot = repository.List().ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
+            GameRecord[] catalogSnapshot;
+            try
+            {
+                catalogSnapshot = repository.List().ToArray();
+            }
+            catch (InvalidDataException)
+            {
+                return GameCatalogResult<GameCatalogImportPreview>.Corrupt();
+            }
+            cancellationToken.ThrowIfCancellationRequested();
             using var reader = source.Open(sourcePath);
+            cancellationToken.ThrowIfCancellationRequested();
             var fingerprint = reader.CaptureFingerprint();
+            cancellationToken.ThrowIfCancellationRequested();
             var candidates = new Dictionary<GameCatalogImportIdentity, GameCatalogImportCandidate>();
             var rowErrors = new List<GameCatalogImportRowError>();
             GameCatalogCsvHeaderMap? headerMap = null;
@@ -50,6 +62,7 @@ public sealed class GameCatalogImportService
 
             void EvaluateRecord(GameCatalogCsvRecord record)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (headerMap is null)
                 {
                     if (!GameCatalogImportRules.TryMapHeadings(record.Cells, out headerMap, out var error))
@@ -66,9 +79,15 @@ public sealed class GameCatalogImportService
             }
 
             var buffer = new char[4096];
-            int count;
-            while ((count = reader.Read(buffer)) != 0)
+            while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                var count = reader.Read(buffer);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (count == 0)
+                {
+                    break;
+                }
                 tokenizer.Push(buffer.AsSpan(0, count), EvaluateRecord);
             }
             tokenizer.Complete(EvaluateRecord);
@@ -78,9 +97,15 @@ public sealed class GameCatalogImportService
             }
 
             reader.VerifyUnchanged(fingerprint);
+            cancellationToken.ThrowIfCancellationRequested();
             var classification = GameCatalogImportRules.ClassifyCandidates(candidates, catalogSnapshot);
+            cancellationToken.ThrowIfCancellationRequested();
             return GameCatalogResult<GameCatalogImportPreview>.Success(
                 new(sourcePath, fingerprint, classification, rowErrors));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return GameCatalogResult<GameCatalogImportPreview>.Failure("The CSV import preview was cancelled.");
         }
         catch (Exception exception) when (exception is FormatException or GameCatalogImportReadException or GameCatalogImportSourceChangedException)
         {

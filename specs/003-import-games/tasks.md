@@ -40,7 +40,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Tests distinguish unchanged content from same-length or same-timestamp modifications and can inject a read failure at a chosen point.
 - [x] **T15 (30 min; FR-2, FR-4–FR-7, FR-9):** Implement preview orchestration: load the catalog once, stream and validate the CSV, retain final candidates and row errors, and compute summary counts.
   Done when: Service tests preview new, edited, duplicate, invalid, and no-op rows without calling any repository write method.
-- [ ] **T16 (25 min; FR-7, FR-9, FR-11):** Handle preview cancellation, header-only input, fatal parse/read errors, and corrupt catalog reads.
+- [x] **T16 (25 min; FR-7, FR-9, FR-11):** Handle preview cancellation, header-only input, fatal parse/read errors, and corrupt catalog reads.
   Done when: Tests show zero proposed changes for header-only input, no writes after cancellation or fatal failure, and a distinct corruption result.
 
 ## Apply confirmed changes safely
