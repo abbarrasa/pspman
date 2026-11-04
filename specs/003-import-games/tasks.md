@@ -73,7 +73,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
 
 ## End-to-end acceptance and documentation
 
-- [ ] **T28 (25 min; FR-2, FR-3, FR-4, FR-7, FR-8, FR-10):** Add a disposable SQLite-backed export/import round-trip test for multiline Notes, formula-like text, offline media, and otherwise unchanged records.
+- [x] **T28 (25 min; FR-2, FR-3, FR-4, FR-7, FR-8, FR-10):** Add a disposable SQLite-backed export/import round-trip test for multiline Notes, formula-like text, offline media, and otherwise unchanged records.
   Done when: A new export imports without creations, updates, or errors; IDs, catalog bytes, and game files remain unchanged.
 - [ ] **T29 (25 min; FR-4, FR-5, FR-7, FR-8):** Add a SQLite-backed functional test that edits one exported row, repeats an identity, and leaves another row unchanged.
   Done when: Only the last valid changed row is saved and counted, its ID is preserved, and the unchanged row is neither counted nor written.
