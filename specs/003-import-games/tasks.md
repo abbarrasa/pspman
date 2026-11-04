@@ -77,7 +77,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: A new export imports without creations, updates, or errors; IDs, catalog bytes, and game files remain unchanged.
 - [x] **T29 (25 min; FR-4, FR-5, FR-7, FR-8):** Add a SQLite-backed functional test that edits one exported row, repeats an identity, and leaves another row unchanged.
   Done when: Only the last valid changed row is saved and counted, its ID is preserved, and the unchanged row is neither counted nor written.
-- [ ] **T30 (25 min; FR-2, FR-6, FR-7, FR-11):** Add a headless preview test for reordered/extra/repeated headings and short, invalid, and whitespace-only rows.
+- [x] **T30 (25 min; FR-2, FR-6, FR-7, FR-11):** Add a headless preview test for reordered/extra/repeated headings and short, invalid, and whitespace-only rows.
   Done when: New/modified/error counts and starting source lines match the expected logical rows, while valid later rows remain eligible.
 - [ ] **T31 (20 min; FR-11, FR-13):** Add a headless template-flow test including import of the unedited template and a header-only CSV.
   Done when: Template values are visible, neither file creates a game, and header-only input reports zero proposed changes.
