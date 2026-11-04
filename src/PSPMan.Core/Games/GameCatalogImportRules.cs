@@ -19,6 +19,80 @@ public sealed class GameCatalogCsvHeaderMap
 
 public static class GameCatalogImportRules
 {
+    public static string UndoFormulaProtection(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length > 0 && text[0] == '\t')
+        {
+            foreach (var character in text.AsSpan(1))
+            {
+                if (!char.IsWhiteSpace(character))
+                {
+                    return character is '=' or '+' or '-' or '@' ? text[1..] : text;
+                }
+            }
+        }
+
+        return text;
+    }
+
+    /// <summary>Maps a complete row; callers must check its width against the header first.</summary>
+    public static bool TryMapGameRow(
+        IReadOnlyList<string> cells,
+        GameCatalogCsvHeaderMap headerMap,
+        [NotNullWhen(true)] out GameRecordInput? input,
+        out IReadOnlyList<GameRecordValidationError> errors)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        ArgumentNullException.ThrowIfNull(headerMap);
+        if (cells.Count < headerMap.ColumnCount)
+        {
+            throw new ArgumentException("The row must contain at least as many cells as its header.", nameof(cells));
+        }
+
+        input = null;
+        var conversionErrors = new List<GameRecordValidationError>();
+        if (!TryParseMedium(cells[headerMap.Indices[nameof(GameRecordInput.Medium)]], out var medium, out var mediumError))
+        {
+            conversionErrors.Add(mediumError);
+        }
+        if (!TryParseFormat(cells[headerMap.Indices[nameof(GameRecordInput.Format)]], out var format, out var formatError))
+        {
+            conversionErrors.Add(formatError);
+        }
+        if (!TryParseDvdNumber(cells[headerMap.Indices[nameof(GameRecordInput.DvdNumber)]], out var dvdNumber, out var dvdError))
+        {
+            conversionErrors.Add(dvdError);
+        }
+        if (!TryParseSizeBytes(cells[headerMap.Indices[nameof(GameRecordInput.SizeBytes)]], out var sizeBytes, out var sizeError))
+        {
+            conversionErrors.Add(sizeError);
+        }
+
+        if (conversionErrors.Count > 0)
+        {
+            errors = conversionErrors.AsReadOnly();
+            return false;
+        }
+
+        var candidate = new GameRecordInput(
+            UndoFormulaProtection(cells[headerMap.Indices[nameof(GameRecordInput.Title)]]),
+            medium,
+            dvdNumber,
+            UndoFormulaProtection(cells[headerMap.Indices[nameof(GameRecordInput.Location)]]),
+            format,
+            sizeBytes,
+            UndoFormulaProtection(cells[headerMap.Indices[nameof(GameRecordInput.Notes)]]));
+        errors = GameRecordRules.Validate(candidate);
+        if (errors.Count > 0)
+        {
+            return false;
+        }
+
+        input = candidate;
+        return true;
+    }
+
     public static bool TryParseMedium(
         string text, out GameMedium medium,
         [NotNullWhen(false)] out GameRecordValidationError? error)
