@@ -8,6 +8,125 @@ public class GameCatalogImportServiceTests
     private const string ValidRow = "Game;Usb;;/GAMES/game.rar;ISO;1024;\r\n";
 
     [Fact]
+    public void AppliesOnlyFinalChangedCandidatesInSourceOrderWithCorrectIdsAndCounts()
+    {
+        var editedId = Guid.NewGuid();
+        var sameId = Guid.NewGuid();
+        var repository = new WritableRepository([
+            new(editedId, "Original", GameMedium.Usb, null, "/GAMES/edit.rar", GameFormat.Iso, 1024, "old notes"),
+            new(sameId, "Same", GameMedium.Usb, null, "/GAMES/same.rar", GameFormat.Iso, 1024, null)]);
+        var source = new TestSource(Header
+            + "First;Usb;;/GAMES/new.rar;ISO;1024;superseded\r\n"
+            + "Edited;Usb;;/GAMES/edit.rar;CHD;2048;\r\n"
+            + "Same;Usb;;/GAMES/same.rar;ISO;1024;\r\n"
+            + "Last;Usb;;/GAMES/new.rar;CHD;4096;last notes\r\n"
+            + "Invalid later;Usb;;/GAMES/new.rar;ISO;bad;\r\n"
+            + "Other;MemoryCard;;/GAMES/offline.rar;ISO;2048;\r\n", 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        Assert.Empty(repository.Writes);
+
+        var result = service.Apply(session);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(2, result.CreatedCount);
+        Assert.Equal(1, result.UpdatedCount);
+        Assert.Equal(new[] { "update", "create", "create" }, repository.Writes.Select(write => write.Operation));
+        Assert.Equal(repository.Writes.Select(write => write.Record), result.SavedRecords);
+        var edit = repository.Records[editedId];
+        Assert.Equal(new GameRecord(editedId, "Edited", GameMedium.Usb, null,
+            "/GAMES/edit.rar", GameFormat.Chd, 2048, ""), edit);
+        var added = repository.Writes.Where(write => write.Operation == "create").Select(write => write.Record).ToArray();
+        Assert.Equal(new[] { "Last", "Other" }, added.Select(record => record.Title));
+        Assert.Equal(2, added.Select(record => record.Id).Distinct().Count());
+        Assert.All(added, record => Assert.DoesNotContain(record.Id, new[] { Guid.Empty, editedId, sameId }));
+        Assert.Null(repository.Records[sameId].Notes);
+        Assert.Equal(1, repository.ListCalls);
+        Assert.True(source.ConfirmationReader!.Disposed);
+        Assert.Equal(2, source.ConfirmationReader.VerifyCalls);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void ApplyingIdenticalMatchesDoesNotCreateOrUpdateRecords(string? notes)
+    {
+        var saved = new GameRecord(Guid.NewGuid(), "Game", GameMedium.Usb, null,
+            "/GAMES/game.rar", GameFormat.Iso, 1024, notes);
+        var repository = new WritableRepository([saved]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+
+        var result = service.Apply(session);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(0, result.CreatedCount);
+        Assert.Equal(0, result.UpdatedCount);
+        Assert.Empty(result.SavedRecords);
+        Assert.Empty(repository.Writes);
+        Assert.Same(saved, repository.Records[saved.Id]);
+        Assert.True(source.ConfirmationReader!.Disposed);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ClosedOrAlreadyUsedSessionsCannotWriteAgain(bool alreadyUsed)
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        if (alreadyUsed)
+        {
+            Assert.True(service.Apply(session).IsSuccess);
+        }
+        else
+        {
+            session.Dispose();
+        }
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, result.CreatedCount);
+        Assert.Equal(0, result.UpdatedCount);
+        Assert.Empty(result.SavedRecords);
+        Assert.Equal(alreadyUsed ? 1 : 0, repository.Writes.Count);
+        Assert.Equal(1, source.ConfirmationReader!.DisposeCalls);
+    }
+
+    [Fact]
+    public void SourceChangeAfterPreparationStopsBeforeTheFirstWrite()
+    {
+        var repository = new WritableRepository([]);
+        var source = new TestSource(Header + ValidRow, 1);
+        var service = new GameCatalogImportService(repository, source);
+        var session = ConfirmImportPreview(service, source);
+        source.ConfirmationReader!.Changed = true;
+
+        var result = service.Apply(session);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, result.CreatedCount);
+        Assert.Equal(0, result.UpdatedCount);
+        Assert.Empty(repository.Writes);
+        Assert.True(source.ConfirmationReader.Disposed);
+    }
+
+    private static GameCatalogVerifiedImportSession ConfirmImportPreview(GameCatalogImportService service, TestSource source)
+    {
+        var previewResult = service.Preview("virtual.csv");
+        Assert.True(previewResult.IsSuccess, previewResult.Error);
+        source.UseFreshConfirmationReader();
+        var confirmation = service.PrepareConfirmedImport(previewResult.Value!);
+        Assert.True(confirmation.IsSuccess, confirmation.Error);
+        return Assert.IsType<GameCatalogVerifiedImportSession>(confirmation.Value);
+    }
+
+
+    [Fact]
     public void ConfirmingAnUnchangedPreviewKeepsTheVerifiedReaderOpenUntilSessionDisposal()
     {
         var repository = new ReadOnlyRepository([]);
@@ -379,6 +498,31 @@ public class GameCatalogImportServiceTests
         Assert.Throws<NotSupportedException>(() => ((IList<GameCatalogImportRowError>)preview.RowErrors).Clear());
     }
 
+    private sealed class WritableRepository(IEnumerable<GameRecord> records) : IGameRecordRepository
+    {
+        public Dictionary<Guid, GameRecord> Records { get; } = records.ToDictionary(record => record.Id);
+        public List<(string Operation, GameRecord Record)> Writes { get; } = [];
+        public int ListCalls { get; private set; }
+        public IReadOnlyList<GameRecord> List()
+        {
+            ListCalls++;
+            return Records.Values.ToArray();
+        }
+        public GameRecord? GetById(Guid id) => Records.GetValueOrDefault(id);
+        public void Create(GameRecord record)
+        {
+            Records.Add(record.Id, record);
+            Writes.Add(("create", record));
+        }
+        public void Update(GameRecord record)
+        {
+            Assert.True(Records.ContainsKey(record.Id));
+            Records[record.Id] = record;
+            Writes.Add(("update", record));
+        }
+        public void Delete(Guid id) => throw new InvalidOperationException("Import must not delete catalog records.");
+    }
+
     private sealed class ReadOnlyRepository(IReadOnlyList<GameRecord> records) : IGameRecordRepository
     {
         public IReadOnlyList<GameRecord> Records { get; } = records;
@@ -413,6 +557,7 @@ public class GameCatalogImportServiceTests
         public Exception? OpenFailure { get; set; }
         public Action? AfterOpen { get; set; }
         public TestReader? ConfirmationReader { get; set; }
+        public void UseFreshConfirmationReader() => ConfirmationReader = new(text, chunkSize) { RequireEndBeforeVerification = false };
         public IGameCatalogImportReader Open(string sourcePath)
         {
             OpenCalls++;
