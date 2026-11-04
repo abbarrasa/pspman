@@ -56,7 +56,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
 
 ## Add Desktop actions and presentation
 
-- [ ] **T21 (20 min; FR-1, FR-9):** Add the Desktop single-file picker abstraction and Avalonia adapter for a local CSV.
+- [x] **T21 (20 min; FR-1, FR-9):** Add the Desktop single-file picker abstraction and Avalonia adapter for a local CSV.
   Done when: Tests distinguish a chosen local path, user cancellation, and an unusable or nonlocal selection.
 - [ ] **T22 (25 min; FR-1, FR-7, FR-9):** Add import state and commands to the main view model, and wire source/picker dependencies at startup.
   Done when: View-model/startup tests can open import, choose or cancel a CSV, and block import when the catalog is unavailable without changing it.
