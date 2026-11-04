@@ -79,7 +79,7 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Only the last valid changed row is saved and counted, its ID is preserved, and the unchanged row is neither counted nor written.
 - [x] **T30 (25 min; FR-2, FR-6, FR-7, FR-11):** Add a headless preview test for reordered/extra/repeated headings and short, invalid, and whitespace-only rows.
   Done when: New/modified/error counts and starting source lines match the expected logical rows, while valid later rows remain eligible.
-- [ ] **T31 (20 min; FR-11, FR-13):** Add a headless template-flow test including import of the unedited template and a header-only CSV.
+- [x] **T31 (20 min; FR-11, FR-13):** Add a headless template-flow test including import of the unedited template and a header-only CSV.
   Done when: Template values are visible, neither file creates a game, and header-only input reports zero proposed changes.
 - [ ] **T32 (30 min; FR-1, FR-7–FR-9, FR-12):** Add headless cancellation and source-failure tests with disposable catalog and CSV files.
   Done when: Picker/preview cancellation and pre-save changes leave catalog bytes untouched; a read failure after import begins reports partial results and retains earlier successful writes.
