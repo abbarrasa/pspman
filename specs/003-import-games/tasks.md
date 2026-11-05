@@ -85,5 +85,5 @@ Source: [specification](./spec.md), [implementation plan](./plan.md), and the re
   Done when: Picker/preview cancellation and pre-save changes leave catalog bytes untouched; a read failure after import begins reports partial results and retains earlier successful writes.
 - [x] **T33 (25 min; FR-1–FR-13):** Build and test the solution, measure line and branch coverage, and write the FR-to-test coverage report with justified gaps.
   Done when: Build and tests pass, measured coverage is recorded, and every FR maps to automated evidence.
-- [ ] **T34 (30 min; FR-1–FR-13):** Perform and record the graphical import/template walkthrough, check Excel compatibility where available, and replace stale import/export notes in project memory.
+- [x] **T34 (30 min; FR-1–FR-13):** Perform and record the graphical import/template walkthrough, check Excel compatibility where available, and replace stale import/export notes in project memory.
   Done when: Manual results record each required flow and any unavailable Excel check as pending, and memory describes the implemented state rather than this draft plan.
