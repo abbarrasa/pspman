@@ -25,10 +25,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: Each model family has a documented evidence status and source; any recognition impossibility is raised before dependent recognition work, while unavailable physical checks remain explicitly pending.
   - Evidence: [Recognition matrix](./manual-validation.md), documentary research completed 2026-11-09. Sony manufacturer sources cover all five families; pinned hwdata/PSPLINK sources distinguish registry candidates from development mode. Full storage descriptors and all Linux/Windows hardware checks remain pending for T15/T49–T53; no impossibility was established. No product code or automated tests were written/run. Git whitespace checks passed; no commits/pushes.
 
-- [ ] **T02. Introduce device snapshots and the provider contract.** FR-1, FR-3, FR-5, FR-14, FR-18, NFR-2
+- [x] **T02. Introduce device snapshots and the provider contract.** FR-1, FR-3, FR-5, FR-14, FR-18, NFR-2
   - Depends on: none.
   - Work: Create DeviceSnapshot and IDeviceProvider with immutable identities, volumes, capabilities, roots and operation outcomes. Add a fake-provider consumer test proving multiple volumes and missing roots can be represented without platform dependencies.
   - Done when: The consumer test passes with a fake provider; Core has no platform, Desktop or persistence reference and the solution builds.
+  - Evidence: Individual T02 plan explicitly approved. Tests written first: filtered run initially failed compilation because the Devices namespace/contracts did not exist (CS0234/CS0246); after implementation, `dotnet test tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj --filter FullyQualifiedName~DeviceProviderContractTests --nologo` passed 4/4. `dotnet build PSPMan.slnx --nologo` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --nologo` passed 643/643 (Core 398, Infraestructure 70, Desktop 175), no skips. Immutable snapshots, provider-scoped keys, full inventory revisions, cancellation/disposal and volume-mount/whole-device-removal requests are defined in Core without new references. These are contract-consumption tests, not native mounting evidence. Branch: `feature/004_T02_add-device-provider-contract`; no commits/pushes.
 
 - [ ] **T03. Resolve source groups and zero/one/many candidates.** FR-7, FR-8, FR-9, FR-19
   - Depends on: T02.
