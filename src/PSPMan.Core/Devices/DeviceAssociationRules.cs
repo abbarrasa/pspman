@@ -65,6 +65,43 @@ public static class DeviceAssociationRules
             candidates.Count == 1 ? candidates[0].Key : null);
     }
 
+    /// <summary>Replaces only the explicit source choice in the specified session group.</summary>
+    public static DeviceSessionState ChooseSource(DeviceSessionState state, SourceGroup group, DeviceKey device)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return group switch
+        {
+            SourceGroup.Optical => state with { OpticalSource = device },
+            SourceGroup.Removable => state with { RemovableSource = device },
+            _ => throw new ArgumentOutOfRangeException(nameof(group), group, "Unsupported source group.")
+        };
+    }
+
+    /// <summary>
+    /// Applies explicit session preferences without replacing an unavailable choice with another
+    /// candidate. This does not perform volume selection or reconnection identity recovery.
+    /// </summary>
+    public static SourceResolution ResolveSource(GameMedium medium, DeviceInventorySnapshot inventory,
+        DeviceSessionState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        var resolution = ResolveSource(medium, inventory);
+        var preferred = GetSourceGroup(medium) == SourceGroup.Optical
+            ? state.OpticalSource
+            : state.RemovableSource;
+        if (preferred is null)
+        {
+            return resolution;
+        }
+
+        var available = resolution.Candidates.Any(candidate => candidate.Key == preferred.Value);
+        return resolution with
+        {
+            Status = available ? SourceResolutionStatus.Selected : SourceResolutionStatus.Unavailable,
+            SelectedDevice = available ? preferred : null
+        };
+    }
+
     private static bool IsMountedSource(DeviceSnapshot device, DeviceCapabilities requiredCapability)
     {
         if (device.Medium == DeviceMedium.Psp
