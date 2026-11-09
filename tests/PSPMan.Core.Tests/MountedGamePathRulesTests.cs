@@ -77,4 +77,101 @@ public sealed class MountedGamePathRulesTests
         Assert.Null(result.Error);
         Assert.Equal(original, record);
     }
+
+    [Theory]
+    [InlineData(@"E:\", "/GAMES/Game.rar", @"E:\GAMES\Game.rar")]
+    [InlineData(@"e:\", "/games/GAME.rar", @"e:\games\GAME.rar")]
+    [InlineData(@"C:\Mounted\Games", "/GAMES/Game.rar", @"C:\Mounted\Games\GAMES\Game.rar")]
+    [InlineData(@"C:\Mounted\Games\", "/GAMES/Game.rar", @"C:\Mounted\Games\GAMES\Game.rar")]
+    [InlineData(@"E:\My Games\", "/日本語/Árbol Game.rar", @"E:\My Games\日本語\Árbol Game.rar")]
+    [InlineData(@"E:\", "/Collection/GAMES/Game.rar", @"E:\Collection\GAMES\Game.rar")]
+    [InlineData(@"E:\", "/.hidden/COM10.rar", @"E:\.hidden\COM10.rar")]
+    [InlineData(@"E:\", "/ Leading space/Game.rar", @"E:\ Leading space\Game.rar")]
+    public void ConstructsWindowsPathsIndependentlyOfTheHost(string root, string location, string expected)
+    {
+        var result = MountedGamePathRules.Resolve(root, location, MountedPathSyntax.Windows);
+
+        Assert.Equal(expected, result.Path);
+        Assert.Null(result.Error);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(@"E:")]
+    [InlineData(@"E:Games")]
+    [InlineData(@"\Games")]
+    [InlineData(@"Games")]
+    [InlineData("/media/games")]
+    [InlineData("E:/Games")]
+    [InlineData(@"1:\")]
+    [InlineData(@"E:\Games\..\Other")]
+    [InlineData(@"E:\Games\.\Other")]
+    [InlineData(@"E:\Games\\Other")]
+    [InlineData(@"E:\Bad?Name")]
+    [InlineData(@"E:\CON")]
+    [InlineData(@"E:\Games.")]
+    [InlineData(@"E:\Games ")]
+    [InlineData("E:\\Games\0")]
+    [InlineData(@"\\.\PhysicalDrive0")]
+    public void RejectsInvalidWindowsRootsWithoutReturningAPath(string? root)
+    {
+        var result = MountedGamePathRules.Resolve(root, "/GAMES/Game.rar", MountedPathSyntax.Windows);
+
+        Assert.Null(result.Path);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+    }
+
+    [Theory]
+    [InlineData("/GAMES/Bad<Name.rar")]
+    [InlineData("/GAMES/Bad>Name.rar")]
+    [InlineData("/GAMES/Game.rar:stream")]
+    [InlineData("/GAMES/Bad\"Name.rar")]
+    [InlineData("/GAMES/Bad|Name.rar")]
+    [InlineData("/GAMES/Bad?Name.rar")]
+    [InlineData("/GAMES/Bad*Name.rar")]
+    [InlineData("/GAMES/CON")]
+    [InlineData("/GAMES/con.rar")]
+    [InlineData("/GAMES/PRN.iso")]
+    [InlineData("/GAMES/AUX")]
+    [InlineData("/GAMES/NUL.tar.gz")]
+    [InlineData("/GAMES/COM1.chd")]
+    [InlineData("/GAMES/com9")]
+    [InlineData("/GAMES/LPT1")]
+    [InlineData("/GAMES/lpt9.rar")]
+    [InlineData("/GAMES/COM¹.rar")]
+    [InlineData("/GAMES/LPT²")]
+    [InlineData("/GAMES/COM³")]
+    [InlineData("/GAMES/Game.rar.")]
+    [InlineData("/GAMES/Game.rar ")]
+    [InlineData("/Games /Game.rar")]
+    [InlineData("/NUL/Game.rar")]
+    [InlineData("/../Game.rar")]
+    [InlineData("/GAMES//Game.rar")]
+    [InlineData("/GAMES/./Game.rar")]
+    [InlineData(@"/GAMES\Game.rar")]
+    public void RejectsWindowsInvalidNamesWithoutSanitizingTheLocation(string location)
+    {
+        var original = location;
+        var result = MountedGamePathRules.Resolve(@"E:\", location, MountedPathSyntax.Windows);
+
+        Assert.Null(result.Path);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error));
+        Assert.Equal(original, location);
+    }
+
+    [Fact]
+    public void WindowsCompositionDoesNotProbeFilesOrChangeTheStoredLocation()
+    {
+        var location = "/Absent/" + Guid.NewGuid().ToString("N") + ".rar";
+        var record = new GameRecord(Guid.NewGuid(), "Game", GameMedium.Usb, null,
+            location, GameFormat.Iso, 1, null);
+
+        var result = MountedGamePathRules.Resolve(@"Z:\NotAnObservedVolume", record.Location, MountedPathSyntax.Windows);
+
+        Assert.Equal(@"Z:\NotAnObservedVolume" + location.Replace('/', '\\'), result.Path);
+        Assert.Null(result.Error);
+        Assert.Equal(location, record.Location);
+    }
+
 }
