@@ -71,9 +71,11 @@ public static class GameRecordRules
         return errors;
     }
 
-    private static bool IsWellFormedLocation(string location)
+    /// <summary>Validates a medium-rooted catalog path without filesystem access.</summary>
+    public static bool IsWellFormedLocation(string? location)
     {
-        if (location[0] != '/' || location.Contains('\\') || location.Any(char.IsControl))
+        if (string.IsNullOrWhiteSpace(location) || location[0] != '/'
+            || location.Contains('\\') || location.Any(char.IsControl))
         {
             return false;
         }
