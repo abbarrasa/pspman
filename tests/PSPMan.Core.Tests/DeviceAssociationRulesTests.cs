@@ -563,6 +563,201 @@ public sealed class DeviceAssociationRulesTests
             DeviceAssociationRules.ResolveSourceVolume(GameMedium.Usb, inventory, state).Status);
     }
 
+    [Fact]
+    public void EachGameKeepsItsOwnPspAndChangingOnePreservesTheOther()
+    {
+        var firstGame = Guid.NewGuid();
+        var secondGame = Guid.NewGuid();
+        var first = Psp("first");
+        var second = Psp("second");
+        var empty = new DeviceSessionState();
+        var state = DeviceAssociationRules.ChooseDestination(empty, firstGame, first.Key);
+        state = DeviceAssociationRules.ChooseDestination(state, secondGame, second.Key);
+        var inventory = new DeviceInventorySnapshot(1, [first, second]);
+
+        Assert.Equal(first.Key, DeviceAssociationRules.ResolveDestination(firstGame, inventory, state).SelectedDevice);
+        Assert.Equal(second.Key, DeviceAssociationRules.ResolveDestination(secondGame, inventory, state).SelectedDevice);
+        var changed = DeviceAssociationRules.ChooseDestination(state, firstGame, second.Key);
+
+        Assert.Equal(second.Key, changed.PspDestinations[firstGame]);
+        Assert.Equal(second.Key, changed.PspDestinations[secondGame]);
+        Assert.Equal(first.Key, state.PspDestinations[firstGame]);
+        Assert.Empty(empty.PspDestinations);
+    }
+
+    [Fact]
+    public void NoPspReturnsUnavailableAndDoesNotUseOrdinarySourceStorage()
+    {
+        var result = DeviceAssociationRules.ResolveDestination(Guid.NewGuid(),
+            new DeviceInventorySnapshot(1, [Source("usb"), Source("label-only") with { Medium = DeviceMedium.Psp }]),
+            new DeviceSessionState());
+
+        Assert.Equal(DestinationResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedDevice);
+        Assert.Empty(result.Candidates);
+    }
+
+    [Fact]
+    public void OneMountedPspIsAvailableWithoutAChoiceAndDoesNotPersistImplicitSelection()
+    {
+        var game = Guid.NewGuid();
+        var device = Psp("only");
+        var state = new DeviceSessionState();
+
+        var result = DeviceAssociationRules.ResolveDestination(game, new DeviceInventorySnapshot(1, [device]), state);
+
+        Assert.Equal(DestinationResolutionStatus.Selected, result.Status);
+        Assert.Equal(device.Key, result.SelectedDevice);
+        Assert.Equal(device, Assert.Single(result.Candidates));
+        Assert.Empty(state.PspDestinations);
+    }
+
+    [Fact]
+    public void SeveralPspsRequireAChoiceForEachUnassignedGame()
+    {
+        var game = Guid.NewGuid();
+        var otherGame = Guid.NewGuid();
+        var first = Psp("first");
+        var second = Psp("second");
+        var state = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), otherGame, first.Key);
+
+        var result = DeviceAssociationRules.ResolveDestination(game, new DeviceInventorySnapshot(1, [first, second]), state);
+
+        Assert.Equal(DestinationResolutionStatus.ChooseDevice, result.Status);
+        Assert.Null(result.SelectedDevice);
+        Assert.Equal(2, result.Candidates.Length);
+    }
+
+    [Fact]
+    public void MissingChosenPspRemainsUnavailableEvenWithOneOtherPsp()
+    {
+        var game = Guid.NewGuid();
+        var chosen = Psp("chosen");
+        var state = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), game, chosen.Key);
+
+        var result = DeviceAssociationRules.ResolveDestination(game,
+            new DeviceInventorySnapshot(2, [Psp("other")]), state);
+
+        Assert.Equal(DestinationResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedDevice);
+        Assert.Equal(chosen.Key, state.PspDestinations[game]);
+        Assert.Single(result.Candidates);
+    }
+
+    [Theory]
+    [InlineData(DeviceState.Unavailable)]
+    [InlineData(DeviceState.Removing)]
+    [InlineData(DeviceState.Unmounted)]
+    [InlineData(DeviceState.Detecting)]
+    public void UnavailableChosenPspCannotRedirectToAnotherPsp(DeviceState deviceState)
+    {
+        var game = Guid.NewGuid();
+        var chosen = Psp("chosen") with { State = deviceState };
+        var state = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), game, chosen.Key);
+
+        var result = DeviceAssociationRules.ResolveDestination(game,
+            new DeviceInventorySnapshot(2, [chosen, Psp("other")]), state);
+
+        Assert.Equal(DestinationResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedDevice);
+    }
+
+    [Theory]
+    [InlineData(null, DeviceState.Ready)]
+    [InlineData("", DeviceState.Ready)]
+    [InlineData("/stale-root", DeviceState.Unmounted)]
+    [InlineData("/stale-root", DeviceState.Unavailable)]
+    public void PspWithoutAvailableMountedVolumeIsNotADestination(string? root, DeviceState state)
+    {
+        var device = Psp("psp");
+        device = device with { Volumes = [device.Volumes[0] with { Root = root, State = state }] };
+
+        var result = DeviceAssociationRules.ResolveDestination(Guid.NewGuid(),
+            new DeviceInventorySnapshot(1, [device]), new DeviceSessionState());
+
+        Assert.Equal(DestinationResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedDevice);
+    }
+
+    [Fact]
+    public void MultiVolumePspAndDuplicateNotificationsRemainOneDestination()
+    {
+        var device = MultiVolumeSource() with { Medium = DeviceMedium.Psp, Capabilities = DeviceCapabilities.PspDestination };
+
+        var result = DeviceAssociationRules.ResolveDestination(Guid.NewGuid(),
+            new DeviceInventorySnapshot(1, [device, device]), new DeviceSessionState());
+
+        Assert.Equal(DestinationResolutionStatus.Selected, result.Status);
+        Assert.Single(result.Candidates);
+        Assert.Equal(device.Key, result.SelectedDevice);
+    }
+
+    [Fact]
+    public void ANewSessionDoesNotInheritPspAssignments()
+    {
+        var game = Guid.NewGuid();
+        var first = Psp("first");
+        var second = Psp("second");
+        var previous = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), game, first.Key);
+        var inventory = new DeviceInventorySnapshot(1, [first, second]);
+
+        Assert.Equal(first.Key, DeviceAssociationRules.ResolveDestination(game, inventory, previous).SelectedDevice);
+        var result = DeviceAssociationRules.ResolveDestination(game, inventory, new DeviceSessionState());
+
+        Assert.Equal(DestinationResolutionStatus.ChooseDevice, result.Status);
+        Assert.Null(result.SelectedDevice);
+    }
+
+    [Fact]
+    public void DestinationAndSourceChoicesDoNotChangeEachOther()
+    {
+        var game = Guid.NewGuid();
+        var source = MultiVolumeSource();
+        var sourceState = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(), SourceGroup.Removable, source.Volumes[1].Key);
+        var withPsp = DeviceAssociationRules.ChooseDestination(sourceState, game, Psp("psp").Key);
+        var changedSource = DeviceAssociationRules.ChooseSource(withPsp, SourceGroup.Removable, Source("new-source").Key);
+        var changedVolume = DeviceAssociationRules.ChooseVolume(withPsp, SourceGroup.Removable, source.Volumes[0].Key);
+
+        Assert.Equal(sourceState.RemovableSource, withPsp.RemovableSource);
+        Assert.Equal(sourceState.RemovableVolume, withPsp.RemovableVolume);
+        Assert.Equal(withPsp.PspDestinations[game], changedSource.PspDestinations[game]);
+        Assert.Equal(withPsp.PspDestinations[game], changedVolume.PspDestinations[game]);
+        Assert.Empty(sourceState.PspDestinations);
+    }
+
+    [Fact]
+    public void UserCanExplicitlyReplaceAnUnavailablePspChoice()
+    {
+        var game = Guid.NewGuid();
+        var other = Psp("other");
+        var state = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), game, Psp("missing").Key);
+        var changed = DeviceAssociationRules.ChooseDestination(state, game, other.Key);
+
+        var result = DeviceAssociationRules.ResolveDestination(game, new DeviceInventorySnapshot(1, [other]), changed);
+
+        Assert.Equal(DestinationResolutionStatus.Selected, result.Status);
+        Assert.Equal(other.Key, result.SelectedDevice);
+    }
+
+    [Fact]
+    public void ProviderScopePreventsRedirectingToAnotherPspWithTheSameLocalId()
+    {
+        var game = Guid.NewGuid();
+        var chosen = Psp("same-id");
+        var otherKey = new DeviceKey("other-provider", chosen.Key.DeviceId);
+        var other = chosen with { Key = otherKey,
+            Volumes = [chosen.Volumes[0] with { Key = new VolumeKey(otherKey, "volume-1") }] };
+        var state = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), game, chosen.Key);
+
+        var result = DeviceAssociationRules.ResolveDestination(game, new DeviceInventorySnapshot(1, [other]), state);
+
+        Assert.Equal(DestinationResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedDevice);
+    }
+
+    private static DeviceSnapshot Psp(string id) =>
+        Source(id, DeviceCapabilities.PspDestination, DeviceMedium.Psp);
+
     private static SourceVolumeResolution ResolveVolume(DeviceSnapshot device, DeviceSessionState state) =>
         DeviceAssociationRules.ResolveSourceVolume(GameMedium.Usb, new DeviceInventorySnapshot(1, [device]), state);
 

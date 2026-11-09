@@ -30,6 +30,19 @@ public sealed record SourceVolumeResolution(
     ImmutableArray<VolumeSnapshot> Candidates,
     VolumeSnapshot? SelectedVolume);
 
+public enum DestinationResolutionStatus
+{
+    Unavailable,
+    Selected,
+    ChooseDevice
+}
+
+/// <summary>Mounted PSP candidates, without asserting that a future copy will succeed.</summary>
+public sealed record DestinationResolution(
+    DestinationResolutionStatus Status,
+    ImmutableArray<DeviceSnapshot> Candidates,
+    DeviceKey? SelectedDevice);
+
 public static class DeviceAssociationRules
 {
     public static SourceGroup GetSourceGroup(GameMedium medium) => medium switch
@@ -159,6 +172,45 @@ public static class DeviceAssociationRules
             0 => new SourceVolumeResolution(SourceResolutionStatus.Unavailable, device.Key, volumes, null),
             1 => new SourceVolumeResolution(SourceResolutionStatus.Selected, device.Key, volumes, volumes[0]),
             _ => new SourceVolumeResolution(SourceResolutionStatus.ChooseVolume, device.Key, volumes, null)
+        };
+    }
+
+    /// <summary>Replaces only the specified game's PSP choice in this session.</summary>
+    public static DeviceSessionState ChooseDestination(DeviceSessionState state, Guid gameId, DeviceKey psp)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return state with { PspDestinations = state.PspDestinations.SetItem(gameId, psp) };
+    }
+
+    /// <summary>Resolves mounted PSPs, preserving explicit unavailable choices without fallback.</summary>
+    public static DestinationResolution ResolveDestination(Guid gameId, DeviceInventorySnapshot inventory,
+        DeviceSessionState state)
+    {
+        ArgumentNullException.ThrowIfNull(inventory);
+        ArgumentNullException.ThrowIfNull(state);
+        var candidates = inventory.Devices.IsDefaultOrEmpty
+            ? ImmutableArray<DeviceSnapshot>.Empty
+            : inventory.Devices.Where(device =>
+                (device.Capabilities & DeviceCapabilities.PspDestination) != 0
+                && device.State is DeviceState.Ready or DeviceState.Mounting or DeviceState.Error
+                && !device.Volumes.IsDefaultOrEmpty
+                && device.Volumes.Any(volume => IsAvailableVolume(device.Key, volume)))
+                .DistinctBy(device => device.Key)
+                .ToImmutableArray();
+
+        if (state.PspDestinations.TryGetValue(gameId, out var preferred))
+        {
+            var available = candidates.Any(device => device.Key == preferred);
+            return new DestinationResolution(
+                available ? DestinationResolutionStatus.Selected : DestinationResolutionStatus.Unavailable,
+                candidates, available ? preferred : null);
+        }
+
+        return candidates.Length switch
+        {
+            0 => new DestinationResolution(DestinationResolutionStatus.Unavailable, candidates, null),
+            1 => new DestinationResolution(DestinationResolutionStatus.Selected, candidates, candidates[0].Key),
+            _ => new DestinationResolution(DestinationResolutionStatus.ChooseDevice, candidates, null)
         };
     }
 
