@@ -31,10 +31,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: The consumer test passes with a fake provider; Core has no platform, Desktop or persistence reference and the solution builds.
   - Evidence: Individual T02 plan explicitly approved. Tests written first: filtered run initially failed compilation because the Devices namespace/contracts did not exist (CS0234/CS0246); after implementation, `dotnet test tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj --filter FullyQualifiedName~DeviceProviderContractTests --nologo` passed 4/4. `dotnet build PSPMan.slnx --nologo` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --nologo` passed 643/643 (Core 398, Infraestructure 70, Desktop 175), no skips. Immutable snapshots, provider-scoped keys, full inventory revisions, cancellation/disposal and volume-mount/whole-device-removal requests are defined in Core without new references. These are contract-consumption tests, not native mounting evidence. Branch: `feature/004_T02_add-device-provider-contract`; no commits/pushes.
 
-- [ ] **T03. Resolve source groups and zero/one/many candidates.** FR-7, FR-8, FR-9, FR-19
+- [x] **T03. Resolve source groups and zero/one/many candidates.** FR-7, FR-8, FR-9, FR-19
   - Depends on: T02.
   - Work: Add pure DeviceAssociationRules tests and logic for optical versus shared USB/card eligibility, PSP exclusion and distinct physical candidates; ignore DVD Number and file contents.
   - Done when: Tests return unavailable, selected or choose-device for zero/one/many candidates and show USB/card interoperability without game-file I/O.
+  - Evidence: Individual T03 plan explicitly approved. Tests were written first; after adding signatures, the filtered run failed 29/29 with NotImplementedException, then passed 29/29 after implementing the rules. Command: `dotnet test tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj --filter FullyQualifiedName~DeviceAssociationRulesTests --nologo`. `dotnet build PSPMan.slnx --nologo` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --nologo` passed 672/672 (Core 427, Infraestructure 70, Desktop 175), no skips. Tests cover source groups, capability-based eligibility, PSP exclusion, provider-scoped deduplication, multi-volume devices, stale/missing roots and partially available devices. No game-file probes or DVD-number input. Preferences/volume choice remain later tasks. Branch: `feature/004_T03_resolve-source-candidates`; no commits/pushes.
 
 - [ ] **T04. Keep independent active source preferences.** FR-10, FR-11, FR-13
   - Depends on: T03.
