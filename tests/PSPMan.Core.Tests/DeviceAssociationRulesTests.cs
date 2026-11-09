@@ -366,6 +366,215 @@ public sealed class DeviceAssociationRulesTests
         Assert.Null(result.SelectedDevice);
     }
 
+    [Fact]
+    public void UsesTheOnlyMountedVolumeAutomatically()
+    {
+        var device = Source("source");
+        var result = ResolveVolume(device, new DeviceSessionState());
+
+        Assert.Equal(SourceResolutionStatus.Selected, result.Status);
+        Assert.Equal(device.Key, result.SelectedDevice);
+        Assert.Equal(device.Volumes[0], result.SelectedVolume);
+        Assert.Single(result.Candidates);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("Games", "Games")]
+    public void MultipleMountedVolumesRequireChoiceRegardlessOfLabels(string? firstLabel, string? secondLabel)
+    {
+        var device = MultiVolumeSource();
+        device = device with { Volumes =
+        [
+            device.Volumes[0] with { Label = firstLabel },
+            device.Volumes[1] with { Label = secondLabel }
+        ] };
+
+        var result = ResolveVolume(device, new DeviceSessionState());
+
+        Assert.Equal(SourceResolutionStatus.ChooseVolume, result.Status);
+        Assert.Equal(device.Key, result.SelectedDevice);
+        Assert.Null(result.SelectedVolume);
+        Assert.Equal(2, result.Candidates.Length);
+        Assert.NotEqual(result.Candidates[0].Root, result.Candidates[1].Root);
+    }
+
+    [Theory]
+    [InlineData(GameMedium.Usb)]
+    [InlineData(GameMedium.MemoryCard)]
+    public void ExplicitVolumeChoiceAppliesToTheSharedSourceGroup(GameMedium medium)
+    {
+        var device = MultiVolumeSource();
+        var empty = new DeviceSessionState();
+        var state = DeviceAssociationRules.ChooseVolume(empty, SourceGroup.Removable, device.Volumes[1].Key);
+
+        var result = DeviceAssociationRules.ResolveSourceVolume(medium,
+            new DeviceInventorySnapshot(1, [device]), state);
+
+        Assert.Equal(SourceResolutionStatus.Selected, result.Status);
+        Assert.Equal(device.Volumes[1], result.SelectedVolume);
+        Assert.Equal(device.Key, state.RemovableSource);
+        Assert.Equal(device.Volumes[1].Key, state.RemovableVolume);
+        Assert.Null(empty.RemovableVolume);
+    }
+
+    [Fact]
+    public void MissingChosenVolumeDoesNotFallBackToRemainingVolume()
+    {
+        var device = MultiVolumeSource();
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, device.Volumes[1].Key);
+        device = device with { Volumes = [device.Volumes[0]] };
+
+        var result = ResolveVolume(device, state);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedVolume);
+        Assert.Single(result.Candidates);
+        Assert.Equal("volume-2", state.RemovableVolume?.VolumeId);
+    }
+
+    [Theory]
+    [InlineData(DeviceState.Unavailable, "/old-root")]
+    [InlineData(DeviceState.Unmounted, null)]
+    [InlineData(DeviceState.Removing, "/old-root")]
+    [InlineData(DeviceState.Ready, null)]
+    public void UnusableChosenVolumeDoesNotFallBack(DeviceState volumeState, string? root)
+    {
+        var device = MultiVolumeSource();
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, device.Volumes[1].Key);
+        device = device with { Volumes = device.Volumes.SetItem(1,
+            device.Volumes[1] with { State = volumeState, Root = root }) };
+
+        var result = ResolveVolume(device, state);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedVolume);
+    }
+
+    [Fact]
+    public void UserCanExplicitlyReplaceAnUnavailableVolumeChoice()
+    {
+        var device = MultiVolumeSource();
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, new VolumeKey(device.Key, "missing"));
+
+        var changed = DeviceAssociationRules.ChooseVolume(state, SourceGroup.Removable, device.Volumes[0].Key);
+        var result = ResolveVolume(device, changed);
+
+        Assert.Equal(device.Volumes[0], result.SelectedVolume);
+        Assert.Equal("missing", state.RemovableVolume?.VolumeId);
+    }
+
+    [Fact]
+    public void ChangingSourceClearsOnlyThatGroupsPreviousVolume()
+    {
+        var optical = Source("dvd", DeviceCapabilities.OpticalSource, DeviceMedium.Optical);
+        var removable = MultiVolumeSource();
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Optical, optical.Volumes[0].Key);
+        state = DeviceAssociationRules.ChooseVolume(state, SourceGroup.Removable, removable.Volumes[1].Key);
+
+        var changedRemovable = DeviceAssociationRules.ChooseSource(state, SourceGroup.Removable, Source("new").Key);
+        var changedOptical = DeviceAssociationRules.ChooseSource(state, SourceGroup.Optical,
+            Source("new-dvd", DeviceCapabilities.OpticalSource, DeviceMedium.Optical).Key);
+
+        Assert.Null(changedRemovable.RemovableVolume);
+        Assert.Equal(optical.Volumes[0].Key, changedRemovable.OpticalVolume);
+        Assert.Null(changedOptical.OpticalVolume);
+        Assert.Equal(removable.Volumes[1].Key, changedOptical.RemovableVolume);
+        Assert.Equal(removable.Volumes[1].Key, state.RemovableVolume);
+    }
+
+    [Fact]
+    public void ReselectingTheSameSourcePreservesItsVolumeChoice()
+    {
+        var device = MultiVolumeSource();
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, device.Volumes[1].Key);
+
+        var unchanged = DeviceAssociationRules.ChooseSource(state, SourceGroup.Removable, device.Key);
+
+        Assert.Equal(state.RemovableVolume, unchanged.RemovableVolume);
+    }
+
+    [Fact]
+    public void OneAvailableVolumeIgnoresUnmountedOrForeignVolumesAndDuplicates()
+    {
+        var device = MultiVolumeSource();
+        device = device with { Volumes =
+        [
+            device.Volumes[0], device.Volumes[0],
+            device.Volumes[1] with { Root = null, State = DeviceState.Unmounted },
+            Source("foreign").Volumes[0]
+        ] };
+
+        var result = ResolveVolume(device, new DeviceSessionState());
+
+        Assert.Equal(SourceResolutionStatus.Selected, result.Status);
+        Assert.Equal(device.Volumes[0], Assert.Single(result.Candidates));
+    }
+
+    [Fact]
+    public void VolumeResolutionPreservesDeviceCollisionAndUnavailablePreference()
+    {
+        var first = Source("first");
+        var second = Source("second");
+        var inventory = new DeviceInventorySnapshot(1, [first, second]);
+
+        var collision = DeviceAssociationRules.ResolveSourceVolume(GameMedium.Usb, inventory, new DeviceSessionState());
+        var unavailable = DeviceAssociationRules.ResolveSourceVolume(GameMedium.Usb, inventory,
+            new DeviceSessionState(RemovableSource: Source("missing").Key));
+
+        Assert.Equal(SourceResolutionStatus.ChooseDevice, collision.Status);
+        Assert.Null(collision.SelectedVolume);
+        Assert.Equal(SourceResolutionStatus.Unavailable, unavailable.Status);
+        Assert.Null(unavailable.SelectedVolume);
+    }
+
+    [Fact]
+    public void VolumeResolutionUsesTheCurrentRootAndDoesNotRestoreChoicesInANewSession()
+    {
+        var device = MultiVolumeSource();
+        var chosen = device.Volumes[1];
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(), SourceGroup.Removable, chosen.Key);
+        device = device with { Volumes = device.Volumes.SetItem(1, chosen with { Root = "/current-root" }) };
+
+        var result = ResolveVolume(device, state);
+        var newSession = ResolveVolume(device, new DeviceSessionState());
+
+        Assert.Equal("/current-root", result.SelectedVolume?.Root);
+        Assert.Equal(chosen.Key, result.SelectedVolume?.Key);
+        Assert.Equal(SourceResolutionStatus.ChooseVolume, newSession.Status);
+    }
+
+    [Fact]
+    public void OpticalVolumeChoiceDoesNotSelectARemovableVolume()
+    {
+        var optical = Source("dvd", DeviceCapabilities.OpticalSource, DeviceMedium.Optical);
+        var removable = MultiVolumeSource();
+        var state = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(), SourceGroup.Optical, optical.Volumes[0].Key);
+        var inventory = new DeviceInventorySnapshot(1, [optical, removable]);
+
+        Assert.Equal(optical.Volumes[0],
+            DeviceAssociationRules.ResolveSourceVolume(GameMedium.Dvd, inventory, state).SelectedVolume);
+        Assert.Equal(SourceResolutionStatus.ChooseVolume,
+            DeviceAssociationRules.ResolveSourceVolume(GameMedium.Usb, inventory, state).Status);
+    }
+
+    private static SourceVolumeResolution ResolveVolume(DeviceSnapshot device, DeviceSessionState state) =>
+        DeviceAssociationRules.ResolveSourceVolume(GameMedium.Usb, new DeviceInventorySnapshot(1, [device]), state);
+
+    private static DeviceSnapshot MultiVolumeSource()
+    {
+        var device = Source("source");
+        return device with { Volumes = device.Volumes.Add(device.Volumes[0] with
+        {
+            Key = new VolumeKey(device.Key, "volume-2"), Root = "/second-root"
+        }) };
+    }
+
     private static SourceResolution Resolve(GameMedium medium, params DeviceSnapshot[] devices) =>
         DeviceAssociationRules.ResolveSource(medium, new DeviceInventorySnapshot(1, devices.ToImmutableArray()));
 
