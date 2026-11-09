@@ -755,6 +755,266 @@ public sealed class DeviceAssociationRulesTests
         Assert.Null(result.SelectedDevice);
     }
 
+    [Fact]
+    public void ReliableReconnectionRecoversSourceVolumeAndFreshRoot()
+    {
+        var original = IdentifiedSource("original");
+        var chosen = DeviceAssociationRules.ChooseVolume(new DeviceSessionState(), SourceGroup.Removable, original.Volumes[0].Key);
+        var observed = Reconcile(chosen, original);
+        var disconnected = Reconcile(observed);
+        var reconnected = Rekey(original, "reconnected", "new-volume", "/fresh-root");
+
+        var recovered = Reconcile(disconnected, reconnected);
+        var result = ResolveVolume(reconnected, recovered);
+
+        Assert.Equal(reconnected.Key, recovered.RemovableSource);
+        Assert.Equal(reconnected.Volumes[0].Key, recovered.RemovableVolume);
+        Assert.Equal("/fresh-root", result.SelectedVolume?.Root);
+        Assert.Equal(original.Key, observed.RemovableSource);
+        Assert.Equal(original.Volumes[0].Key, observed.RemovableVolume);
+    }
+
+    [Fact]
+    public void ReliableReconnectionRecoversEachPspChoiceIndependently()
+    {
+        var first = IdentifiedSource("first") with { Medium = DeviceMedium.Psp, Capabilities = DeviceCapabilities.PspDestination };
+        var second = IdentifiedSource("second") with { Medium = DeviceMedium.Psp, Capabilities = DeviceCapabilities.PspDestination };
+        var firstGame = Guid.NewGuid();
+        var secondGame = Guid.NewGuid();
+        var state = DeviceAssociationRules.ChooseDestination(new DeviceSessionState(), firstGame, first.Key);
+        state = DeviceAssociationRules.ChooseDestination(state, secondGame, second.Key);
+        state = Reconcile(state, first, second);
+        state = Reconcile(state);
+        var returned = Rekey(first, "new-first", "new-volume", "/new-psp-root");
+
+        var recovered = Reconcile(state, returned);
+        var inventory = new DeviceInventorySnapshot(3, [returned]);
+
+        Assert.Equal(returned.Key, recovered.PspDestinations[firstGame]);
+        Assert.Equal(DestinationResolutionStatus.Selected,
+            DeviceAssociationRules.ResolveDestination(firstGame, inventory, recovered).Status);
+        Assert.Equal(second.Key, recovered.PspDestinations[secondGame]);
+        Assert.Equal(DestinationResolutionStatus.Unavailable,
+            DeviceAssociationRules.ResolveDestination(secondGame, inventory, recovered).Status);
+    }
+
+    [Theory]
+    [InlineData(DeviceIdentityConfidence.SessionOnly, null)]
+    [InlineData(DeviceIdentityConfidence.Persistent, null)]
+    [InlineData(DeviceIdentityConfidence.Persistent, "")]
+    public void ReconnectionWithoutReliableDeviceIdentityRequiresExplicitChoice(
+        DeviceIdentityConfidence confidence, string? persistentId)
+    {
+        var original = IdentifiedSource("source") with { Identity = new DeviceIdentity(persistentId, confidence) };
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        state = Reconcile(state);
+
+        var returned = Reconcile(state, original);
+        var result = DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(3, [original]), returned);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, result.Status);
+        Assert.Null(result.SelectedDevice);
+        Assert.Equal(original.Key, returned.RemovableSource);
+        var explicitlyChosen = DeviceAssociationRules.ChooseSource(returned, SourceGroup.Removable, original.Key);
+        Assert.Equal(SourceResolutionStatus.Selected,
+            DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(3, [original]),
+                Reconcile(explicitlyChosen, original)).Status);
+    }
+
+    [Fact]
+    public void ReusedKeysRootsAndLabelsCannotImpersonateTheOriginalDevice()
+    {
+        var original = IdentifiedSource("source");
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        state = Reconcile(state);
+        var impostor = original with { Identity = new DeviceIdentity("different-device", DeviceIdentityConfidence.Persistent) };
+
+        var reconciled = Reconcile(state, impostor);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable,
+            DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(3, [impostor]), reconciled).Status);
+    }
+
+    [Fact]
+    public void ChangedMediaDoesNotRecoverTheOldSourceEvenWithTheSameReaderAndRoot()
+    {
+        var original = IdentifiedSource("reader");
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        var changed = original with { MediaGeneration = "different-card" };
+
+        var reconciled = Reconcile(state, changed);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable,
+            DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(2, [changed]), reconciled).Status);
+        Assert.Equal(SourceResolutionStatus.Selected,
+            DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(3, [original]),
+                Reconcile(reconciled, original)).Status);
+    }
+
+    [Fact]
+    public void DuplicatedPersistentDeviceIdsPreventAutomaticRecovery()
+    {
+        var original = IdentifiedSource("source");
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        state = Reconcile(state);
+        var duplicate = Rekey(original, "duplicate", "duplicate-volume", "/different-root");
+
+        var reconciled = Reconcile(state, original, duplicate);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable,
+            DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(3, [original, duplicate]), reconciled).Status);
+    }
+
+    [Fact]
+    public void MatchingAnIdFromAnotherProviderCannotRecoverAnAssociation()
+    {
+        var original = IdentifiedSource("source");
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        state = Reconcile(state);
+        var key = new DeviceKey("another-provider", original.Key.DeviceId);
+        var other = original with { Key = key,
+            Volumes = [original.Volumes[0] with { Key = new VolumeKey(key, "volume-1") }] };
+
+        var reconciled = Reconcile(state, other);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable,
+            DeviceAssociationRules.ResolveSource(GameMedium.Usb, new DeviceInventorySnapshot(3, [other]), reconciled).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MissingOrDuplicatedVolumeIdentityDoesNotRecoverASelectedVolume(bool duplicate)
+    {
+        var original = IdentifiedSource("source");
+        if (!duplicate)
+        {
+            original = original with { Volumes = [original.Volumes[0] with
+                { Identity = new DeviceIdentity(null, DeviceIdentityConfidence.SessionOnly) }] };
+        }
+        var state = Reconcile(DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, original.Volumes[0].Key), original);
+        state = Reconcile(state);
+        var returned = Rekey(original, "returned", "new-volume", "/fresh-root");
+        if (duplicate)
+        {
+            returned = returned with { Volumes = returned.Volumes.Add(returned.Volumes[0] with
+                { Key = new VolumeKey(returned.Key, "duplicate-volume"), Root = "/other-root" }) };
+        }
+
+        var reconciled = Reconcile(state, returned);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, ResolveVolume(returned, reconciled).Status);
+        Assert.Null(ResolveVolume(returned, reconciled).SelectedVolume);
+    }
+
+    [Fact]
+    public void AChangedVolumeCannotReuseItsOldSelectionWhileTheDeviceStaysConnected()
+    {
+        var original = IdentifiedSource("source");
+        var state = Reconcile(DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, original.Volumes[0].Key), original);
+        var changed = original with { Volumes = [original.Volumes[0] with
+            { Identity = new DeviceIdentity("different-volume", DeviceIdentityConfidence.Persistent) }] };
+
+        var reconciled = Reconcile(state, changed);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, ResolveVolume(changed, reconciled).Status);
+    }
+
+    [Fact]
+    public void AContinuouslyObservedSessionIdentityCanUseAnUpdatedRoot()
+    {
+        var original = Source("source");
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        var changed = original with { Volumes = [original.Volumes[0] with { Root = "/current-root" }] };
+
+        var reconciled = Reconcile(state, changed);
+
+        Assert.Equal("/current-root", ResolveVolume(changed, reconciled).SelectedVolume?.Root);
+    }
+
+    [Fact]
+    public void AFirstObservationThatCannotFindTheChoiceDoesNotBindItOnALaterReusedKey()
+    {
+        var original = IdentifiedSource("source");
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key));
+
+        var reconciled = Reconcile(state, original);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, ResolveVolume(original, reconciled).Status);
+    }
+
+    [Fact]
+    public void ReconciliationDoesNotCreateChoicesInANewSession()
+    {
+        var first = IdentifiedSource("first");
+        var second = IdentifiedSource("second");
+
+        var state = Reconcile(new DeviceSessionState(), first, second);
+
+        Assert.Null(state.RemovableSource);
+        Assert.Null(state.RemovableVolume);
+        Assert.Empty(state.PspDestinations);
+    }
+
+    [Fact]
+    public void AReconnectedDeviceCanWaitForItsOriginalVolumeAndReconnectAgain()
+    {
+        var original = IdentifiedSource("source");
+        var state = Reconcile(DeviceAssociationRules.ChooseVolume(new DeviceSessionState(),
+            SourceGroup.Removable, original.Volumes[0].Key), original);
+        state = Reconcile(state);
+        var returned = Rekey(original, "returned", "returned-volume", "/first-new-root");
+        var mounting = returned with { State = DeviceState.Mounting, Volumes = [] };
+        state = Reconcile(state, mounting);
+        Assert.Equal(SourceResolutionStatus.Unavailable, ResolveVolume(mounting, state).Status);
+
+        state = Reconcile(state, returned);
+        Assert.Equal("/first-new-root", ResolveVolume(returned, state).SelectedVolume?.Root);
+        state = Reconcile(state);
+        var returnedAgain = Rekey(returned, "returned-again", "volume-again", "/second-new-root");
+        state = Reconcile(state, returnedAgain);
+
+        Assert.Equal("/second-new-root", ResolveVolume(returnedAgain, state).SelectedVolume?.Root);
+    }
+
+    [Fact]
+    public void ReaderIdentityAloneCannotRecoverChangedMediaWithoutAGenerationToken()
+    {
+        var original = IdentifiedSource("reader") with { MediaGeneration = null };
+        var state = Reconcile(new DeviceSessionState(RemovableSource: original.Key), original);
+        state = Reconcile(state);
+        var otherCard = original with { Volumes = [original.Volumes[0] with
+            { Identity = new DeviceIdentity("another-card-volume", DeviceIdentityConfidence.Persistent) }] };
+
+        var reconciled = Reconcile(state, otherCard);
+
+        Assert.Equal(SourceResolutionStatus.Unavailable, ResolveVolume(otherCard, reconciled).Status);
+        Assert.Equal(SourceResolutionStatus.Selected, ResolveVolume(original, Reconcile(reconciled, original)).Status);
+    }
+
+    private static DeviceSessionState Reconcile(DeviceSessionState state, params DeviceSnapshot[] devices) =>
+        DeviceAssociationRules.ReconcileAssociations(state, new DeviceInventorySnapshot(1, devices.ToImmutableArray()));
+
+    private static DeviceSnapshot IdentifiedSource(string id)
+    {
+        var device = Source(id);
+        return device with
+        {
+            Identity = new DeviceIdentity("persistent-" + id, DeviceIdentityConfidence.Persistent),
+            Volumes = [device.Volumes[0] with
+                { Identity = new DeviceIdentity("persistent-volume-" + id, DeviceIdentityConfidence.Persistent) }]
+        };
+    }
+
+    private static DeviceSnapshot Rekey(DeviceSnapshot device, string deviceId, string volumeId, string root)
+    {
+        var key = new DeviceKey(device.Key.ProviderId, deviceId);
+        return device with { Key = key, Volumes = [device.Volumes[0] with
+            { Key = new VolumeKey(key, volumeId), Root = root }] };
+    }
+
     private static DeviceSnapshot Psp(string id) =>
         Source(id, DeviceCapabilities.PspDestination, DeviceMedium.Psp);
 

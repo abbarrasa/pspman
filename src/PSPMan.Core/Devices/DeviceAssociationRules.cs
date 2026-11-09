@@ -90,6 +90,12 @@ public static class DeviceAssociationRules
     public static DeviceSessionState ChooseSource(DeviceSessionState state, SourceGroup group, DeviceKey device)
     {
         ArgumentNullException.ThrowIfNull(state);
+        state = state with
+        {
+            SourceEvidence = state.SourceEvidence.Remove(group),
+            UnavailableSources = state.UnavailableSources.Remove(group),
+            UnavailableSourceVolumes = state.UnavailableSourceVolumes.Remove(group)
+        };
         return group switch
         {
             SourceGroup.Optical => state with
@@ -123,7 +129,8 @@ public static class DeviceAssociationRules
             return resolution;
         }
 
-        var available = resolution.Candidates.Any(candidate => candidate.Key == preferred.Value);
+        var available = !state.UnavailableSources.Contains(GetSourceGroup(medium))
+            && resolution.Candidates.Any(candidate => candidate.Key == preferred.Value);
         return resolution with
         {
             Status = available ? SourceResolutionStatus.Selected : SourceResolutionStatus.Unavailable,
@@ -161,7 +168,8 @@ public static class DeviceAssociationRules
 
         if (preferred is not null)
         {
-            var selected = volumes.FirstOrDefault(volume => volume.Key == preferred.Value);
+            var selected = state.UnavailableSourceVolumes.Contains(GetSourceGroup(medium))
+                ? null : volumes.FirstOrDefault(volume => volume.Key == preferred.Value);
             return new SourceVolumeResolution(
                 selected is null ? SourceResolutionStatus.Unavailable : SourceResolutionStatus.Selected,
                 device.Key, volumes, selected);
@@ -179,7 +187,12 @@ public static class DeviceAssociationRules
     public static DeviceSessionState ChooseDestination(DeviceSessionState state, Guid gameId, DeviceKey psp)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return state with { PspDestinations = state.PspDestinations.SetItem(gameId, psp) };
+        return state with
+        {
+            PspDestinations = state.PspDestinations.SetItem(gameId, psp),
+            DestinationEvidence = state.DestinationEvidence.Remove(gameId),
+            UnavailableDestinations = state.UnavailableDestinations.Remove(gameId)
+        };
     }
 
     /// <summary>Resolves mounted PSPs, preserving explicit unavailable choices without fallback.</summary>
@@ -200,7 +213,8 @@ public static class DeviceAssociationRules
 
         if (state.PspDestinations.TryGetValue(gameId, out var preferred))
         {
-            var available = candidates.Any(device => device.Key == preferred);
+            var available = !state.UnavailableDestinations.Contains(gameId)
+                && candidates.Any(device => device.Key == preferred);
             return new DestinationResolution(
                 available ? DestinationResolutionStatus.Selected : DestinationResolutionStatus.Unavailable,
                 candidates, available ? preferred : null);
@@ -213,6 +227,168 @@ public static class DeviceAssociationRules
             _ => new DestinationResolution(DestinationResolutionStatus.ChooseDevice, candidates, null)
         };
     }
+
+    /// <summary>
+    /// Reconciles session choices against a complete observation. Invoke after explicit choices
+    /// while that observation is current, and for every subsequent inventory, including removal.
+    /// Identity evidence never stores or uses mount roots for recognition.
+    /// </summary>
+    public static DeviceSessionState ReconcileAssociations(DeviceSessionState state, DeviceInventorySnapshot inventory)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(inventory);
+        var devices = inventory.Devices.IsDefault ? ImmutableArray<DeviceSnapshot>.Empty : inventory.Devices;
+        foreach (var group in new[] { SourceGroup.Optical, SourceGroup.Removable })
+        {
+            var key = group == SourceGroup.Optical ? state.OpticalSource : state.RemovableSource;
+            if (key is null)
+            {
+                continue;
+            }
+
+            state.SourceEvidence.TryGetValue(group, out var previous);
+            var (device, evidence) = ReconcileDevice(key.Value, previous, devices, requireMedium: true);
+            var volumeKey = group == SourceGroup.Optical ? state.OpticalVolume : state.RemovableVolume;
+            var volume = device is null || volumeKey is null ? null
+                : ReconcileVolume(volumeKey.Value, previous, device,
+                    previous?.RequiresRecovery == true || device.Key != key.Value
+                    || state.UnavailableSourceVolumes.Contains(group));
+            if (volume is not null && volumeKey is not null)
+            {
+                evidence = evidence with { Volumes = evidence.Volumes.Remove(volumeKey.Value)
+                    .SetItem(volume.Key, volume.Identity) };
+            }
+
+            state = state with
+            {
+                SourceEvidence = state.SourceEvidence.SetItem(group, evidence),
+                UnavailableSources = device is null ? state.UnavailableSources.Add(group) : state.UnavailableSources.Remove(group),
+                UnavailableSourceVolumes = volumeKey is not null && volume is null
+                    ? state.UnavailableSourceVolumes.Add(group) : state.UnavailableSourceVolumes.Remove(group)
+            };
+            state = group == SourceGroup.Optical
+                ? state with { OpticalSource = device?.Key ?? key, OpticalVolume = volume?.Key ?? volumeKey }
+                : state with { RemovableSource = device?.Key ?? key, RemovableVolume = volume?.Key ?? volumeKey };
+        }
+
+        foreach (var (gameId, key) in state.PspDestinations)
+        {
+            state.DestinationEvidence.TryGetValue(gameId, out var previous);
+            var (device, evidence) = ReconcileDevice(key, previous, devices, requireMedium: false);
+            state = state with
+            {
+                PspDestinations = state.PspDestinations.SetItem(gameId, device?.Key ?? key),
+                DestinationEvidence = state.DestinationEvidence.SetItem(gameId, evidence),
+                UnavailableDestinations = device is null
+                    ? state.UnavailableDestinations.Add(gameId) : state.UnavailableDestinations.Remove(gameId)
+            };
+        }
+
+        return state;
+    }
+
+    private static (DeviceSnapshot? Device, DeviceAssociationEvidence Evidence) ReconcileDevice(
+        DeviceKey key, DeviceAssociationEvidence? previous, ImmutableArray<DeviceSnapshot> devices, bool requireMedium)
+    {
+        var present = devices.Where(device => device.State != DeviceState.Unavailable).ToArray();
+        var sameKey = present.Where(device => device.Key == key).ToArray();
+        if (previous is null)
+        {
+            if (sameKey.Length == 1)
+            {
+                var current = sameKey[0];
+                var volumes = current.Volumes.IsDefault ? ImmutableDictionary<VolumeKey, DeviceIdentity>.Empty
+                    : current.Volumes.Where(volume => volume.Key.Device == current.Key)
+                        .GroupBy(volume => volume.Key).Where(group => group.Count() == 1)
+                        .ToImmutableDictionary(group => group.Key, group => group.Single().Identity);
+                return (current, new DeviceAssociationEvidence(current.Identity, current.MediaGeneration, volumes, false));
+            }
+
+            return (null, new DeviceAssociationEvidence(null, null, ImmutableDictionary<VolumeKey, DeviceIdentity>.Empty, true));
+        }
+
+        if (!previous.RequiresRecovery && sameKey.Length == 1
+            && sameKey[0].Identity == previous.Identity
+            && MediumMatches(previous, sameKey[0], requireMedium, recovering: false))
+        {
+            return (sameKey[0], previous);
+        }
+
+        if (IsPersistent(previous.Identity))
+        {
+            var matches = present.Where(device => device.Key.ProviderId == key.ProviderId
+                && IsPersistent(device.Identity)
+                && device.Identity.PersistentId == previous.Identity!.PersistentId).ToArray();
+            if (matches.Length == 1 && MediumMatches(previous, matches[0], requireMedium, recovering: true))
+            {
+                return (matches[0], previous with { RequiresRecovery = false });
+            }
+        }
+
+        return (null, previous with { RequiresRecovery = true });
+    }
+
+    private static bool MediumMatches(DeviceAssociationEvidence previous, DeviceSnapshot current,
+        bool requireMedium, bool recovering)
+    {
+        if (previous.MediaGeneration != current.MediaGeneration)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(previous.MediaGeneration) || !requireMedium)
+        {
+            return true;
+        }
+
+        var identities = previous.Volumes.Values.Where(IsPersistent).ToArray();
+        if (identities.Length == 0)
+        {
+            return !recovering;
+        }
+
+        return !current.Volumes.IsDefault && identities.Any(identity => current.Volumes.Count(volume =>
+            volume.Key.Device == current.Key && IsPersistent(volume.Identity)
+            && volume.Identity.PersistentId == identity.PersistentId) == 1);
+    }
+
+    private static VolumeSnapshot? ReconcileVolume(VolumeKey key, DeviceAssociationEvidence? previous,
+        DeviceSnapshot device, bool recovering)
+    {
+        if (device.Volumes.IsDefault)
+        {
+            return null;
+        }
+
+        var volumes = device.Volumes.Where(volume => volume.Key.Device == device.Key).ToArray();
+        var sameKey = volumes.Where(volume => volume.Key == key).ToArray();
+        if (previous is null)
+        {
+            return sameKey.Length == 1 ? sameKey[0] : null;
+        }
+
+        if (!previous.Volumes.TryGetValue(key, out var identity))
+        {
+            return null;
+        }
+
+        if (!recovering && sameKey.Length == 1 && sameKey[0].Identity == identity)
+        {
+            return sameKey[0];
+        }
+
+        if (!IsPersistent(identity))
+        {
+            return null;
+        }
+
+        var matches = volumes.Where(volume => IsPersistent(volume.Identity)
+            && volume.Identity.PersistentId == identity.PersistentId).ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    private static bool IsPersistent(DeviceIdentity? identity) =>
+        identity?.Confidence == DeviceIdentityConfidence.Persistent && !string.IsNullOrWhiteSpace(identity.PersistentId);
 
     private static bool IsMountedSource(DeviceSnapshot device, DeviceCapabilities requiredCapability)
     {
