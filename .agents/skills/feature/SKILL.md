@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Plan a new PSPMan feature before implementation. Use whenever the user requests a new feature, including when invoked as $feature.
+description: Plan a new feature before implementation. Use whenever the user requests a new feature, including when invoked as $feature.
 ---
 
 # Feature planning

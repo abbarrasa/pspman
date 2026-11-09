@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "skills": {
+    "constitution": {
+      "source": "abbarrasa/ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/constitution/SKILL.md",
+      "computedHash": "0b2401ee8e02247eec94a775b77db3a15f053de7830a8de3e81d1a502f03dbfd",
+      "installMode": "copy"
+    },
+    "feature": {
+      "source": "abbarrasa/ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/feature/SKILL.md",
+      "computedHash": "6290c01f26a1b7eacdf1d22110668a7f2bd85e5414bf2d2837246902ca9b2679",
+      "installMode": "copy"
+    },
+    "sdd": {
+      "source": "abbarrasa/ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sdd/SKILL.md",
+      "computedHash": "a550ed7ed0491f3712d0eed3a5d0454e2c177787cbce57fd51f526f20407d77e",
+      "installMode": "copy"
+    },
+    "sdd-change": {
+      "source": "abbarrasa/ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sdd-change/SKILL.md",
+      "computedHash": "20e108869ca68a982bfd694f7008e2de509ceb8e75cca7eb1bc151e0eb1c68a2",
+      "installMode": "copy"
+    },
+    "sdd-code-review": {
+      "source": "abbarrasa/ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sdd-code-review/SKILL.md",
+      "computedHash": "5f4707de1c80c8325f78de21c745be285bdcc2c8a6291972ff4a1e75893b72e8",
+      "installMode": "copy"
+    },
+    "sdd-status": {
+      "source": "abbarrasa/ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sdd-status/SKILL.md",
+      "computedHash": "949aea9c2ef51b7d3c5a0d79ca6fc58056487d8943c6cd6097273015a5e3a0d9",
+      "installMode": "copy"
+    }
+  }
+}
