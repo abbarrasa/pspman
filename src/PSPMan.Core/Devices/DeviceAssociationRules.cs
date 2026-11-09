@@ -13,7 +13,8 @@ public enum SourceResolutionStatus
 {
     Unavailable,
     Selected,
-    ChooseDevice
+    ChooseDevice,
+    ChooseVolume
 }
 
 /// <summary>Device resolution only; volume choice and file availability are evaluated separately.</summary>
@@ -21,6 +22,13 @@ public sealed record SourceResolution(
     SourceResolutionStatus Status,
     ImmutableArray<DeviceSnapshot> Candidates,
     DeviceKey? SelectedDevice);
+
+/// <summary>Volume resolution uses observed roots; it does not prove game-file existence.</summary>
+public sealed record SourceVolumeResolution(
+    SourceResolutionStatus Status,
+    DeviceKey? SelectedDevice,
+    ImmutableArray<VolumeSnapshot> Candidates,
+    VolumeSnapshot? SelectedVolume);
 
 public static class DeviceAssociationRules
 {
@@ -71,8 +79,16 @@ public static class DeviceAssociationRules
         ArgumentNullException.ThrowIfNull(state);
         return group switch
         {
-            SourceGroup.Optical => state with { OpticalSource = device },
-            SourceGroup.Removable => state with { RemovableSource = device },
+            SourceGroup.Optical => state with
+            {
+                OpticalSource = device,
+                OpticalVolume = state.OpticalSource == device ? state.OpticalVolume : null
+            },
+            SourceGroup.Removable => state with
+            {
+                RemovableSource = device,
+                RemovableVolume = state.RemovableSource == device ? state.RemovableVolume : null
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(group), group, "Unsupported source group.")
         };
     }
@@ -102,6 +118,50 @@ public static class DeviceAssociationRules
         };
     }
 
+    /// <summary>Retains an explicit device/volume choice for the corresponding source group.</summary>
+    public static DeviceSessionState ChooseVolume(DeviceSessionState state, SourceGroup group, VolumeKey volume)
+    {
+        var chosen = ChooseSource(state, group, volume.Device);
+        return group == SourceGroup.Optical
+            ? chosen with { OpticalVolume = volume }
+            : chosen with { RemovableVolume = volume };
+    }
+
+    /// <summary>Resolves a mounted source volume without file probes or automatic fallback.</summary>
+    public static SourceVolumeResolution ResolveSourceVolume(GameMedium medium,
+        DeviceInventorySnapshot inventory, DeviceSessionState state)
+    {
+        var source = ResolveSource(medium, inventory, state);
+        if (source.Status != SourceResolutionStatus.Selected)
+        {
+            return new SourceVolumeResolution(source.Status, null, [], null);
+        }
+
+        var device = source.Candidates.First(candidate => candidate.Key == source.SelectedDevice);
+        var volumes = device.Volumes
+            .Where(volume => IsAvailableVolume(device.Key, volume))
+            .DistinctBy(volume => volume.Key)
+            .ToImmutableArray();
+        var preferred = GetSourceGroup(medium) == SourceGroup.Optical
+            ? state.OpticalVolume
+            : state.RemovableVolume;
+
+        if (preferred is not null)
+        {
+            var selected = volumes.FirstOrDefault(volume => volume.Key == preferred.Value);
+            return new SourceVolumeResolution(
+                selected is null ? SourceResolutionStatus.Unavailable : SourceResolutionStatus.Selected,
+                device.Key, volumes, selected);
+        }
+
+        return volumes.Length switch
+        {
+            0 => new SourceVolumeResolution(SourceResolutionStatus.Unavailable, device.Key, volumes, null),
+            1 => new SourceVolumeResolution(SourceResolutionStatus.Selected, device.Key, volumes, volumes[0]),
+            _ => new SourceVolumeResolution(SourceResolutionStatus.ChooseVolume, device.Key, volumes, null)
+        };
+    }
+
     private static bool IsMountedSource(DeviceSnapshot device, DeviceCapabilities requiredCapability)
     {
         if (device.Medium == DeviceMedium.Psp
@@ -114,8 +174,11 @@ public static class DeviceAssociationRules
         }
 
         // An error on another volume must not hide a volume that is still mounted and available.
-        return device.Volumes.Any(volume => volume.Key.Device == device.Key
-            && volume.State == DeviceState.Ready
-            && !string.IsNullOrWhiteSpace(volume.Root));
+        return device.Volumes.Any(volume => IsAvailableVolume(device.Key, volume));
     }
+
+    private static bool IsAvailableVolume(DeviceKey device, VolumeSnapshot volume) =>
+        volume.Key.Device == device
+        && volume.State == DeviceState.Ready
+        && !string.IsNullOrWhiteSpace(volume.Root);
 }
