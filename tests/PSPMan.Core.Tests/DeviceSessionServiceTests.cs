@@ -357,6 +357,99 @@ public sealed class DeviceSessionServiceTests
         call.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
     }
 
+    [Fact]
+    public async Task SafeRemovalTargetsTheWholeDeviceAndPreventsMountsWhilePending()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true, AllowRemovals = true };
+        var device = Device("test") with { Capabilities = DeviceCapabilities.RemovableSource |
+            DeviceCapabilities.Mount | DeviceCapabilities.SafeRemoval };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        await service.RemoveDeviceAsync(device.Key);
+        var removal = await provider.NextRemoval();
+        Assert.Equal(device.Key, removal.Request.Device);
+        Assert.Equal(1, removal.Request.ExpectedRevision);
+        Assert.Equal("media-1", removal.Request.MediaGeneration);
+        Assert.Equal(DeviceState.Removing, service.Snapshot.Inventory.Devices[0].State);
+        Assert.Equal(0, provider.MountCount);
+
+        removal.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        var unmounted = device with { State = DeviceState.Unmounted,
+            Volumes = [device.Volumes[0] with { Root = null, State = DeviceState.Unmounted }] };
+        provider.Emit(new DeviceInventorySnapshot(2, [unmounted]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 2
+            && snapshot.Inventory.Devices[0].State == DeviceState.Unmounted);
+        Assert.Equal(DeviceState.Unmounted, service.Snapshot.Inventory.Devices[0].State);
+        Assert.Equal(0, provider.MountCount);
+    }
+
+    [Fact]
+    public async Task FailedRemovalPreservesNativePartialErrorState()
+    {
+        var provider = new ControlledProvider("test") { AllowRemovals = true };
+        var device = Device("test") with { Capabilities = DeviceCapabilities.RemovableSource |
+            DeviceCapabilities.SafeRemoval };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        await service.RemoveDeviceAsync(device.Key);
+        var removal = await provider.NextRemoval();
+        removal.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Failed,
+            new DeviceOperationError("Busy", "The volume is busy.", device.Volumes[0].Key)));
+        await Until(service, snapshot => snapshot.Inventory.Devices[0].State == DeviceState.Error);
+
+        var observed = service.Snapshot.Inventory.Devices[0];
+        Assert.Equal(DeviceState.Error, observed.State);
+        Assert.Equal("Busy", observed.Volumes[0].Error?.Code);
+        Assert.Equal("The volume is busy.", observed.Volumes[0].Error?.Message);
+    }
+
+    [Fact]
+    public async Task SuccessfulRemovalSuppressesRemountUntilTheMediaGenerationChanges()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true, AllowRemovals = true };
+        var device = Device("test") with { State = DeviceState.Ready,
+            Capabilities = DeviceCapabilities.RemovableSource | DeviceCapabilities.Mount | DeviceCapabilities.SafeRemoval };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        await service.RemoveDeviceAsync(device.Key);
+        var removal = await provider.NextRemoval();
+        removal.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        var sameMedia = device with { State = DeviceState.Unmounted,
+            Volumes = [device.Volumes[0] with { Root = null, State = DeviceState.Unmounted }] };
+        provider.Emit(new DeviceInventorySnapshot(2, [sameMedia]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 2
+            && snapshot.Inventory.Devices[0].State == DeviceState.Unmounted);
+        Assert.Equal(0, provider.MountCount);
+
+        var newMedia = sameMedia with { MediaGeneration = "media-2" };
+        provider.Emit(new DeviceInventorySnapshot(3, [newMedia]));
+        var mount = await provider.NextMount();
+        Assert.Equal(1, provider.MountCount);
+        mount.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+    }
+
+    [Fact]
+    public async Task RemovalIsRejectedWhileTheDeviceHasAnActiveMount()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true, AllowRemovals = true };
+        var device = UnmountedDevice() with { Capabilities = DeviceCapabilities.RemovableSource |
+            DeviceCapabilities.Mount | DeviceCapabilities.SafeRemoval };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        var mount = await provider.NextMount();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RemoveDeviceAsync(device.Key).AsTask());
+        Assert.Equal(0, provider.RemovalCount);
+        mount.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+    }
+
     [Theory]
     [InlineData(DeviceState.Ready, DeviceState.Ready, false)]
     [InlineData(DeviceState.Unavailable, DeviceState.Unmounted, true)]
@@ -416,13 +509,17 @@ public sealed class DeviceSessionServiceTests
         private bool _subscribed;
         private DeviceInventorySnapshot? _latest;
         private readonly Channel<PendingMount> _mounts = Channel.CreateUnbounded<PendingMount>();
+        private readonly Channel<PendingRemoval> _removals = Channel.CreateUnbounded<PendingRemoval>();
         private int _mountCount;
         private int _activeMounts;
         private readonly OperationConcurrencyProbe _concurrency = concurrency ?? new();
         public bool AllowMounts { get; init; }
+        public bool AllowRemovals { get; init; }
         public int MountCount => Volatile.Read(ref _mountCount);
+        public int RemovalCount { get; private set; }
         public int MaximumConcurrentMounts { get; private set; }
         public Task<PendingMount> NextMount() => _mounts.Reader.ReadAsync().AsTask().WaitAsync(Timeout);
+        public Task<PendingRemoval> NextRemoval() => _removals.Reader.ReadAsync().AsTask().WaitAsync(Timeout);
         public string ProviderId => id;
         public TaskCompletionSource<DeviceInventorySnapshot> Initial { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -467,8 +564,14 @@ public sealed class DeviceSessionServiceTests
             try { return await pending.Completion.Task.WaitAsync(cancellationToken); }
             finally { Interlocked.Decrement(ref _activeMounts); }
         }
-        public ValueTask<DeviceOperationResult> RemoveAsync(DeviceRemovalRequest request, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("T10 must not remove devices.");
+        public async ValueTask<DeviceOperationResult> RemoveAsync(DeviceRemovalRequest request, CancellationToken cancellationToken = default)
+        {
+            if (!AllowRemovals) throw new InvalidOperationException("Unexpected removal request.");
+            RemovalCount++;
+            var pending = new PendingRemoval(request);
+            Assert.True(_removals.Writer.TryWrite(pending));
+            return await pending.Completion.Task.WaitAsync(cancellationToken);
+        }
         public ValueTask DisposeAsync()
         {
             Disposed = true;
@@ -493,6 +596,12 @@ public sealed class DeviceSessionServiceTests
         {
             public void Dispose() => Interlocked.Decrement(ref owner._active);
         }
+    }
+
+    private sealed record PendingRemoval(DeviceRemovalRequest Request)
+    {
+        public TaskCompletionSource<DeviceOperationResult> Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
     private sealed record PendingMount(DeviceMountRequest Request)
     {
