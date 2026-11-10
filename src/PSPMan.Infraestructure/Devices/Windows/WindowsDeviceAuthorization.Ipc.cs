@@ -2,20 +2,20 @@ namespace PSPMan.Infraestructure.Devices.Windows;
 
 public sealed partial class WindowsDeviceAuthorization
 {
-    /// <summary>Prepare before a future UAC launch. No process is launched and no device is accessed.</summary>
+    /// <summary>Prepare before a UAC launch. This preparation neither launches a process nor accesses a device.</summary>
     internal static WindowsOperationIpcAttempt PrepareOperationIpc(WindowsOperationRequest request) =>
         WindowsOperationIpcAttempt.Create(request);
 }
 
 /// <summary>Owns one unpredictable endpoint and its initiating process lease, never credentials.</summary>
-internal sealed class WindowsOperationIpcAttempt : IDisposable
+internal sealed class WindowsOperationIpcAttempt : IWindowsOperationAttempt
 {
     private readonly IWindowsOperationProcess initiator;
     private readonly WindowsOperationIpc channel;
     private readonly WindowsOperationRequest request;
     private int disposed;
-    internal string PipeName { get; }
-    internal WindowsOperationProcessIdentity Initiator => initiator.Identity;
+    public string PipeName { get; }
+    public WindowsOperationProcessIdentity Initiator => initiator.Identity;
 
     private WindowsOperationIpcAttempt(string name, WindowsOperationRequest request,
         IWindowsOperationProcess initiator, IWindowsOperationPipe pipe)
@@ -54,7 +54,7 @@ internal sealed class WindowsOperationIpcAttempt : IDisposable
         catch { initiator.Dispose(); throw; }
     }
 
-    internal async Task<WindowsOperationReply> ExchangeAsync(IWindowsOperationProcess expectedHost,
+    public async Task<WindowsOperationReply> ExchangeAsync(IWindowsOperationProcess expectedHost,
         TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         try { return await channel.ExchangeAsync(request, expectedHost, timeout, cancellationToken).ConfigureAwait(false); }
