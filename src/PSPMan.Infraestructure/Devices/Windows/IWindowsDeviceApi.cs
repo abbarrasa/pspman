@@ -27,8 +27,18 @@ public sealed record WindowsStorageDevice(
     bool CanEject,
     WindowsDeviceError? Error = null);
 
-/// <summary>Only the volume's physical association; roots, labels and GUID identity follow in T25.</summary>
-public sealed record WindowsVolumeReference(string InterfacePath, WindowsStorageNumber? StorageNumber);
+public enum WindowsVolumeState { Unknown, Available, NoMedia, Unavailable }
+
+/// <summary>Observed volume identity and current roots; neither labels nor drive letters establish identity.</summary>
+public sealed record WindowsVolumeReference(string InterfacePath, WindowsStorageNumber? StorageNumber)
+{
+    public string? VolumeGuidPath { get; init; }
+    public string? Label { get; init; }
+    public ImmutableArray<string> MountPoints { get; init; } = [];
+    public WindowsVolumeState State { get; init; }
+    public WindowsDeviceError? Error { get; init; }
+    public bool IsMounted => State == WindowsVolumeState.Available && Error is null && !MountPoints.IsDefaultOrEmpty;
+}
 
 public sealed record WindowsStorageSnapshot(
     ImmutableArray<WindowsStorageDevice> Devices,

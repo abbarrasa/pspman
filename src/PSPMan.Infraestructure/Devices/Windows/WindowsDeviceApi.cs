@@ -8,7 +8,7 @@ using Microsoft.Win32.SafeHandles;
 namespace PSPMan.Infraestructure.Devices.Windows;
 
 /// <summary>Enumerates present storage interfaces using SetupAPI, Configuration Manager and read-only IOCTLs.</summary>
-public sealed class WindowsDeviceApi : IWindowsDeviceApi
+public sealed partial class WindowsDeviceApi : IWindowsDeviceApi
 {
     public ValueTask<WindowsStorageSnapshot> EnumerateStorageAsync(CancellationToken cancellationToken = default)
     {
@@ -18,11 +18,10 @@ public sealed class WindowsDeviceApi : IWindowsDeviceApi
         return new ValueTask<WindowsStorageSnapshot>(Task.Run(() => Enumerate(cancellationToken), cancellationToken));
     }
 
-    private static WindowsStorageSnapshot Enumerate(CancellationToken cancellationToken)
+    private static WindowsStorageSnapshot EnumerateCore(CancellationToken cancellationToken)
     {
         var errors = ImmutableArray.CreateBuilder<WindowsDeviceError>();
         var devices = ImmutableArray.CreateBuilder<WindowsStorageDevice>();
-        var volumes = ImmutableArray.CreateBuilder<WindowsVolumeReference>();
         foreach (var (classId, optical) in new[]
         {
             (new Guid("53f56307-b6bf-11d0-94f2-00a0c91efb8b"), false), // GUID_DEVINTERFACE_DISK
@@ -55,16 +54,9 @@ public sealed class WindowsDeviceApi : IWindowsDeviceApi
             }
         }
 
-        var volumeClass = new Guid("53f5630d-b6bf-11d0-94f2-00a0c91efb8b"); // GUID_DEVINTERFACE_VOLUME
-        foreach (var item in ReadInterfaces(volumeClass, errors, cancellationToken))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            using var handle = OpenDevice(item.Path, errors);
-            var number = handle.IsInvalid ? null : ReadStorageNumber(handle, errors);
-            volumes.Add(new WindowsVolumeReference(item.Path, number));
-        }
+        var volumes = ReadVolumes(errors, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return new WindowsStorageSnapshot(devices.ToImmutable(), volumes.ToImmutable(), errors.ToImmutable());
+        return new WindowsStorageSnapshot(devices.ToImmutable(), volumes, errors.ToImmutable());
     }
 
     private sealed record StorageInterface(string Path, uint Node, uint Capabilities, string? Name);
@@ -251,12 +243,12 @@ public sealed class WindowsDeviceApi : IWindowsDeviceApi
 
     private static WindowsDeviceError LastError(string operation) => Win32Error(operation, Marshal.GetLastPInvokeError());
     private static WindowsDeviceError Win32Error(string operation, int code) => new(
-        code switch { 5 => "AccessDenied", 21 => "NoMedia", _ => "NativeFailure" }, operation, code,
+        code switch { 5 => "AccessDenied", 21 or 1112 => "NoMedia", _ => "NativeFailure" }, operation, code,
         new Win32Exception(code).Message);
     private static WindowsDeviceError ConfigurationError(string operation, uint code) =>
         new("ConfigurationManagerFailure", operation, unchecked((int)code));
 
-    private static class Native
+    private static partial class Native
     {
         [StructLayout(LayoutKind.Sequential)]
         internal struct InterfaceData { public uint Size; public Guid ClassGuid; public uint Flags; public nuint Reserved; }
