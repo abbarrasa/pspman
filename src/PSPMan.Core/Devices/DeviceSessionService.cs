@@ -280,7 +280,12 @@ public sealed class DeviceSessionService : IAsyncDisposable
                     if (completedMount || completedRemoval) Publish(current, errors, revisions, update.Associations);
                     return;
                 }
-                try { _inventories[providerId] = Normalize(providerId, inventory); }
+                try
+                {
+                    var normalized = Normalize(providerId, inventory);
+                    _inventories[providerId] = normalized;
+                    InvalidateStaleOperations(providerId, normalized);
+                }
                 catch (InvalidDataException exception)
                 {
                     _inventories.Remove(providerId);
@@ -293,6 +298,33 @@ public sealed class DeviceSessionService : IAsyncDisposable
             }
         }
         Publish(current, errors, revisions, update.Associations);
+    }
+
+    private void InvalidateStaleOperations(string providerId, DeviceInventorySnapshot inventory)
+    {
+        foreach (var (deviceKey, work) in _activeMounts
+                     .Where(item => item.Key.ProviderId == providerId)
+                     .ToArray())
+        {
+            if (!IsCurrentDevice(inventory, deviceKey, work.Request.MediaGeneration))
+                _activeMounts.Remove(deviceKey);
+        }
+
+        foreach (var (deviceKey, work) in _activeRemovals
+                     .Where(item => item.Key.ProviderId == providerId)
+                     .ToArray())
+        {
+            if (!IsCurrentDevice(inventory, deviceKey, work.Request.MediaGeneration))
+                _activeRemovals.Remove(deviceKey);
+        }
+    }
+
+    private static bool IsCurrentDevice(DeviceInventorySnapshot inventory, DeviceKey key, string? mediaGeneration)
+    {
+        var device = inventory.Devices.FirstOrDefault(device => device.Key == key);
+        return device is not null
+            && device.State != DeviceState.Unavailable
+            && device.MediaGeneration == mediaGeneration;
     }
 
     private void Publish(DeviceSessionSnapshot previous, ImmutableDictionary<string, DeviceOperationError> errors,
