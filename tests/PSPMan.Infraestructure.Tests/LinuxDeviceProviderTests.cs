@@ -17,6 +17,7 @@ public sealed class LinuxDeviceProviderTests
                     {
                         ["Removable"] = UDisksPropertyValue.Boolean(true),
                         ["Ejectable"] = UDisksPropertyValue.Boolean(true),
+                        ["CanPowerOff"] = UDisksPropertyValue.Boolean(true),
                         ["ConnectionBus"] = UDisksPropertyValue.String("usb"),
                         ["Vendor"] = UDisksPropertyValue.String("Reader"),
                         ["Model"] = UDisksPropertyValue.String("Multi Slot")
@@ -45,6 +46,7 @@ public sealed class LinuxDeviceProviderTests
         var device = Assert.Single(inventory.Devices);
         Assert.Equal(LinuxDeviceKind.Usb, device.Kind);
         Assert.True(device.IsSourceEligible);
+        Assert.True(device.IsPowerOffSupported);
         var volume = Assert.Single(device.Volumes);
         Assert.Equal("Games", volume.Label);
         Assert.Equal("/dev/sdb1", volume.DevicePath);

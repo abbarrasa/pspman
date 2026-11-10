@@ -71,6 +71,7 @@ public sealed class LinuxDeviceObserver : IAsyncDisposable
             .OrderBy(device => device.ObjectPath, StringComparer.Ordinal)
             .Select(device => string.Join(";", device.ObjectPath, device.Kind,
                 device.IsSourceEligible, device.IsEjectable,
+                device.IsPowerOffSupported,
                 string.Join(",", device.Volumes
                     .OrderBy(volume => volume.ObjectPath, StringComparer.Ordinal)
                     .Select(volume => string.Join(":", volume.ObjectPath, volume.DevicePath,
