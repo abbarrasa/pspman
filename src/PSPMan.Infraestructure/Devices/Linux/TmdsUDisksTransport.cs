@@ -1,9 +1,11 @@
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Tmds.DBus.Protocol;
 
 namespace PSPMan.Infraestructure.Devices.Linux;
 
 /// <summary>Minimal typed ObjectManager transport for the UDisks2 system bus.</summary>
-public sealed class TmdsUDisksTransport : IUDisksTransport
+public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
 {
     private const string Destination = "org.freedesktop.UDisks2";
     private const string ObjectManagerPath = "/org/freedesktop/UDisks2";
@@ -71,6 +73,89 @@ public sealed class TmdsUDisksTransport : IUDisksTransport
     {
         _connection.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask<IAsyncEnumerable<UDisksChange>> SubscribeChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var channel = Channel.CreateUnbounded<UDisksChange>();
+        var observers = new List<IDisposable>();
+        try
+        {
+            observers.Add(await _connection.AddMatchAsync(
+                new MatchRule
+                {
+                    Type = MessageType.Signal,
+                    Interface = ObjectManagerInterface,
+                    Member = "InterfacesAdded"
+                },
+                static (message, _) => ReadObjectChange(message, UDisksChangeKind.InterfacesAdded),
+                notification => Publish(channel, notification),
+                emitOnCapturedContext: false).ConfigureAwait(false));
+            observers.Add(await _connection.AddMatchAsync(
+                new MatchRule
+                {
+                    Type = MessageType.Signal,
+                    Interface = ObjectManagerInterface,
+                    Member = "InterfacesRemoved"
+                },
+                static (message, _) => ReadObjectChange(message, UDisksChangeKind.InterfacesRemoved),
+                notification => Publish(channel, notification),
+                emitOnCapturedContext: false).ConfigureAwait(false));
+            observers.Add(await _connection.AddMatchAsync(
+                new MatchRule
+                {
+                    Type = MessageType.Signal,
+                    Interface = "org.freedesktop.DBus.Properties",
+                    Member = "PropertiesChanged"
+                },
+                static (message, _) => new UDisksChange(
+                    UDisksChangeKind.PropertiesChanged, message.PathAsString ?? string.Empty),
+                notification => Publish(channel, notification),
+                emitOnCapturedContext: false).ConfigureAwait(false));
+            cancellationToken.ThrowIfCancellationRequested();
+            return ReadChangesAsync(channel, observers, cancellationToken);
+        }
+        catch
+        {
+            foreach (var observer in observers)
+                observer.Dispose();
+            channel.Writer.TryComplete();
+            throw;
+        }
+    }
+
+    private static void Publish(Channel<UDisksChange> channel, Notification<UDisksChange> notification)
+    {
+        if (notification.IsCompletion)
+            channel.Writer.TryComplete(notification.Exception);
+        else
+            channel.Writer.TryWrite(notification.Value!);
+    }
+
+    private static UDisksChange ReadObjectChange(Message message, UDisksChangeKind kind)
+    {
+        var reader = message.GetBodyReader();
+        return new UDisksChange(kind, reader.ReadObjectPath().ToString());
+    }
+
+    private static async IAsyncEnumerable<UDisksChange> ReadChangesAsync(
+        Channel<UDisksChange> channel,
+        IReadOnlyList<IDisposable> observers,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        try
+        {
+            await foreach (var change in channel.Reader.ReadAllAsync(cancellationToken))
+                yield return change;
+        }
+        finally
+        {
+            foreach (var observer in observers)
+                observer.Dispose();
+            channel.Writer.TryComplete();
+        }
     }
 
     private static UDisksObjectManagerSnapshot ReadManagedObjects(Reader reader)
