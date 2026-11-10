@@ -133,10 +133,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: Transport/provider tests deliver insertion, removal and changed MountPoints without duplicate devices, stale roots or leaked subscriptions.
   - Evidence: Individual T19 plan explicitly approved. TmdsUDisksTransport subscribes to UDisks2 ObjectManager and PropertiesChanged signals through typed Notification callbacks; LinuxDeviceObserver subscribes before the initial inventory, refreshes snapshots after changes, suppresses unchanged duplicates and disposes observers cooperatively. Tests cover the initial-scan race, insertion/root refresh, duplicate suppression and cancellation cleanup: 2/2 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 876/876 (Core 619, Infraestructure 82, Desktop 175), no skips. No live UDisks service or hardware was exercised. Branch: `feature/004_T19_linux-udisks-observer`; no commits/pushes.
 
-- [ ] **T20. Mount Linux volumes through native authorization.** FR-3, FR-4, FR-5, FR-18
+- [x] **T20. Mount Linux volumes through native authorization.** FR-3, FR-4, FR-5, FR-18
   - Depends on: T19.
   - Work: Implement Filesystem.Mount and refresh actual mount state; preserve native denied/cancelled/service errors and allow Polkit interaction.
   - Done when: Transport assertions verify mount calls with native interaction allowed, reuse of existing mounts and accurate post-operation roots/errors without credentials or sudo.
+  - Evidence: Individual T20 plan explicitly approved. TmdsUDisksTransport now sends typed `org.freedesktop.UDisks2.Filesystem.Mount` calls with an empty `a{sv}` options dictionary, leaving authorization to the native Polkit flow; LinuxVolumeMounter reuses current MountPoints, returns the native root and preserves authorization/cancellation failures without shell, sudo or credential handling. Mount-service tests cover reuse, call parameters, authorization failure and cancellation: 4/4 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 880/880 (Core 619, Infraestructure 86, Desktop 175), no skips. No live UDisks/Polkit service or hardware was exercised. Branch: `feature/004_T20_linux-mount`; no commits/pushes.
 
 - [ ] **T21. Safely unmount all Linux volumes without forcing.** FR-14, FR-15, FR-18
   - Depends on: T20.
