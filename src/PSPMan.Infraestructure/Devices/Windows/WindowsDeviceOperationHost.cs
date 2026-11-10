@@ -5,7 +5,7 @@ public sealed record WindowsOperationTargetValidation(bool IsValid, WindowsDevic
     WindowsVolumeMountTarget? MountTarget = null, WindowsDeviceRemovalTarget? RemovalTarget = null,
     WindowsOpticalMediaTarget? OpticalTarget = null);
 
-/// <summary>Protocol target validation only. One-shot execution and transport arrive in later tasks.</summary>
+/// <summary>Fixed one-shot Windows operations; the authenticated entry remains separate from ordinary application startup.</summary>
 public sealed partial class WindowsDeviceOperationHost
 {
     public static WindowsOperationTargetValidation ValidateTarget(WindowsOperationRequest request, WindowsStorageSnapshot inventory)
