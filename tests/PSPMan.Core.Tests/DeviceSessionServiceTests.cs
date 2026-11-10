@@ -177,6 +177,128 @@ public sealed class DeviceSessionServiceTests
         Assert.Equal("Observation lost.", service.Snapshot.ProviderErrors["test"].Message);
     }
 
+    [Theory]
+    [InlineData(DeviceMedium.Optical, DeviceCapabilities.OpticalSource)]
+    [InlineData(DeviceMedium.Usb, DeviceCapabilities.RemovableSource)]
+    [InlineData(DeviceMedium.MemoryCard, DeviceCapabilities.RemovableSource)]
+    [InlineData(DeviceMedium.Psp, DeviceCapabilities.PspDestination)]
+    public async Task AutomaticallyRequestsEligibleMountsAndPublishesPendingWithoutARoot(
+        DeviceMedium medium, DeviceCapabilities capability)
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice() with { Medium = medium, Capabilities = capability | DeviceCapabilities.Mount };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(7, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        var call = await provider.NextMount();
+
+        Assert.Equal(device.Volumes[0].Key, call.Request.Volume);
+        Assert.Equal(7, call.Request.ExpectedRevision);
+        Assert.Equal("media-1", call.Request.MediaGeneration);
+        Assert.Equal(DeviceState.Mounting, service.Snapshot.Inventory.Devices[0].State);
+        Assert.Equal(DeviceState.Mounting, service.Snapshot.Inventory.Devices[0].Volumes[0].State);
+        Assert.Null(service.Snapshot.Inventory.Devices[0].Volumes[0].Root);
+    }
+
+    [Fact]
+    public async Task MountsEveryVolumeInSeriesAndDeduplicatesNotificationsWhilePending()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice();
+        device = device with { Volumes = device.Volumes.Add(device.Volumes[0] with
+            { Key = new VolumeKey(device.Key, "second-volume") }) };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        var first = await provider.NextMount();
+        provider.Emit(new DeviceInventorySnapshot(2, [device, device]));
+        provider.Emit(new DeviceInventorySnapshot(3, [device]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 3);
+        Assert.Equal(1, provider.MountCount);
+
+        first.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        var second = await provider.NextMount();
+
+        Assert.Equal("second-volume", second.Request.Volume.VolumeId);
+        Assert.Equal(3, second.Request.ExpectedRevision);
+        Assert.Equal(1, provider.MaximumConcurrentMounts);
+        second.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        await Until(service, snapshot => snapshot.Inventory.Devices[0].State != DeviceState.Mounting);
+        Assert.Equal(2, provider.MountCount);
+    }
+
+    [Fact]
+    public async Task ReusesMountedVolumesAndOnlyRequestsTheUnmountedOne()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = Device("test") with { Capabilities = DeviceCapabilities.RemovableSource | DeviceCapabilities.Mount };
+        device = device with { Volumes = device.Volumes.Add(device.Volumes[0] with
+            { Key = new VolumeKey(device.Key, "unmounted"), Root = null, State = DeviceState.Unmounted }) };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        var call = await provider.NextMount();
+
+        Assert.Equal("unmounted", call.Request.Volume.VolumeId);
+        Assert.Equal("/original-root", service.Snapshot.Inventory.Devices[0].Volumes[0].Root);
+        Assert.Equal(1, provider.MountCount);
+    }
+
+    [Fact]
+    public async Task SuccessDoesNotInventARootOrRemountAnAlreadyAttemptedVolume()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice();
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        var call = await provider.NextMount();
+
+        call.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        await Until(service, snapshot => snapshot.Inventory.Devices[0].State == DeviceState.Unmounted);
+        Assert.Null(service.Snapshot.Inventory.Devices[0].Volumes[0].Root);
+        provider.Emit(new DeviceInventorySnapshot(2, [device]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 2);
+        Assert.Equal(1, provider.MountCount);
+        var mounted = device with { State = DeviceState.Ready, Volumes = [device.Volumes[0] with
+            { State = DeviceState.Ready, Root = "/observed-root" }] };
+        provider.Emit(new DeviceInventorySnapshot(3, [mounted]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 3);
+
+        Assert.Equal("/observed-root", service.Snapshot.Inventory.Devices[0].Volumes[0].Root);
+        Assert.Equal(1, provider.MountCount);
+    }
+
+    [Theory]
+    [InlineData(DeviceState.Ready, DeviceState.Ready, false)]
+    [InlineData(DeviceState.Unavailable, DeviceState.Unmounted, true)]
+    [InlineData(DeviceState.Removing, DeviceState.Unmounted, true)]
+    [InlineData(DeviceState.Detecting, DeviceState.Unmounted, true)]
+    [InlineData(DeviceState.Ready, DeviceState.Mounting, true)]
+    public async Task DoesNotMountIneligibleVolumes(DeviceState deviceState, DeviceState volumeState, bool mountCapability)
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice() with { State = deviceState,
+            Capabilities = DeviceCapabilities.RemovableSource | (mountCapability ? DeviceCapabilities.Mount : DeviceCapabilities.None) };
+        device = device with { Volumes = [device.Volumes[0] with { State = volumeState }] };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        await service.SetAssociationsAsync(new DeviceSessionState());
+
+        Assert.Equal(0, provider.MountCount);
+    }
+
+    private static DeviceSnapshot UnmountedDevice()
+    {
+        var device = Device("test");
+        return device with { State = DeviceState.Unmounted,
+            Capabilities = device.Capabilities | DeviceCapabilities.Mount,
+            Volumes = [device.Volumes[0] with { State = DeviceState.Unmounted, Root = null }] };
+    }
+
     private static async Task Until(DeviceSessionService service, Func<DeviceSessionSnapshot, bool> predicate)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -206,6 +328,14 @@ public sealed class DeviceSessionServiceTests
     {
         private readonly Channel<DeviceInventorySnapshot> _changes = Channel.CreateUnbounded<DeviceInventorySnapshot>();
         private bool _subscribed;
+        private DeviceInventorySnapshot? _latest;
+        private readonly Channel<PendingMount> _mounts = Channel.CreateUnbounded<PendingMount>();
+        private int _mountCount;
+        private int _activeMounts;
+        public bool AllowMounts { get; init; }
+        public int MountCount => Volatile.Read(ref _mountCount);
+        public int MaximumConcurrentMounts { get; private set; }
+        public Task<PendingMount> NextMount() => _mounts.Reader.ReadAsync().AsTask().WaitAsync(Timeout);
         public string ProviderId => id;
         public TaskCompletionSource<DeviceInventorySnapshot> Initial { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource ReadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -217,7 +347,8 @@ public sealed class DeviceSessionServiceTests
         {
             SubscribedBeforeInitialRead = _subscribed;
             ReadStarted.TrySetResult();
-            return new ValueTask<DeviceInventorySnapshot>(Initial.Task.WaitAsync(cancellationToken));
+            return new ValueTask<DeviceInventorySnapshot>(_latest is { } latest
+                ? Task.FromResult(latest) : Initial.Task.WaitAsync(cancellationToken));
         }
 
         public async IAsyncEnumerable<DeviceInventorySnapshot> WatchChangesAsync(
@@ -231,10 +362,23 @@ public sealed class DeviceSessionServiceTests
             finally { SubscriptionStopped.TrySetResult(); }
         }
 
-        public void Emit(DeviceInventorySnapshot snapshot) => Assert.True(_changes.Writer.TryWrite(snapshot));
+        public void Emit(DeviceInventorySnapshot snapshot)
+        {
+            Volatile.Write(ref _latest, snapshot);
+            Assert.True(_changes.Writer.TryWrite(snapshot));
+        }
         public void FailObservation(Exception error) => Assert.True(_changes.Writer.TryComplete(error));
-        public ValueTask<DeviceOperationResult> MountAsync(DeviceMountRequest request, CancellationToken cancellationToken = default) =>
-            throw new InvalidOperationException("T10 must not mount devices.");
+        public async ValueTask<DeviceOperationResult> MountAsync(DeviceMountRequest request, CancellationToken cancellationToken = default)
+        {
+            if (!AllowMounts) throw new InvalidOperationException("Unexpected mount request.");
+            Interlocked.Increment(ref _mountCount);
+            var active = Interlocked.Increment(ref _activeMounts);
+            MaximumConcurrentMounts = Math.Max(MaximumConcurrentMounts, active);
+            var pending = new PendingMount(request);
+            Assert.True(_mounts.Writer.TryWrite(pending));
+            try { return await pending.Completion.Task.WaitAsync(cancellationToken); }
+            finally { Interlocked.Decrement(ref _activeMounts); }
+        }
         public ValueTask<DeviceOperationResult> RemoveAsync(DeviceRemovalRequest request, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("T10 must not remove devices.");
         public ValueTask DisposeAsync()
@@ -244,4 +388,9 @@ public sealed class DeviceSessionServiceTests
             return ValueTask.CompletedTask;
         }
     }
+    private sealed record PendingMount(DeviceMountRequest Request)
+    {
+        public TaskCompletionSource<DeviceOperationResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
 }

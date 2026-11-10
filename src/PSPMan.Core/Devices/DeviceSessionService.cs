@@ -9,7 +9,7 @@ public sealed record DeviceSessionSnapshot(
     ImmutableDictionary<string, long> ProviderRevisions,
     ImmutableDictionary<string, DeviceOperationError> ProviderErrors);
 
-/// <summary>Owns provider observation and disposal. No mounting or UI work is performed here.</summary>
+/// <summary>Owns provider observation, automatic mounting and disposal; performs no UI work.</summary>
 public sealed class DeviceSessionService : IAsyncDisposable
 {
     private readonly IDeviceProvider[] _providers;
@@ -18,6 +18,11 @@ public sealed class DeviceSessionService : IAsyncDisposable
         new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
     private readonly Dictionary<string, DeviceInventorySnapshot> _inventories = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedObservers = new(StringComparer.Ordinal);
+    private readonly HashSet<MountAttempt> _mountAttempts = [];
+    private readonly Dictionary<DeviceKey, MountWork> _activeMounts = [];
+    private readonly Dictionary<MountAttempt, DeviceOperationError> _mountErrors = [];
+    private readonly List<Task> _mountTasks = [];
+    private readonly object _mountTaskGate = new();
     private CancellationTokenSource? _lifetime;
     private Task[] _workers = [];
     private Task _processor = Task.CompletedTask;
@@ -149,6 +154,18 @@ public sealed class DeviceSessionService : IAsyncDisposable
 
     private void Apply(SessionUpdate update)
     {
+        var completedMount = false;
+        if (update.CompletedMount is { } work
+            && _activeMounts.TryGetValue(work.Request.Volume.Device, out var active) && ReferenceEquals(active, work))
+        {
+            _activeMounts.Remove(work.Request.Volume.Device);
+            completedMount = true;
+            if (update.MountResult is { Status: not DeviceOperationStatus.Succeeded } result)
+            {
+                _mountErrors[work.Attempt] = result.Error
+                    ?? new DeviceOperationError("MountFailed", "The volume could not be mounted.", work.Request.Volume);
+            }
+        }
         var current = Snapshot;
         var errors = current.ProviderErrors;
         var revisions = current.ProviderRevisions;
@@ -163,7 +180,11 @@ public sealed class DeviceSessionService : IAsyncDisposable
             else if (update.Inventory is { } inventory)
             {
                 if (_failedObservers.Contains(providerId)
-                    || (revisions.TryGetValue(providerId, out var previous) && inventory.Revision <= previous)) return;
+                    || (revisions.TryGetValue(providerId, out var previous) && inventory.Revision <= previous))
+                {
+                    if (completedMount) Publish(current, errors, revisions, update.Associations);
+                    return;
+                }
                 try { _inventories[providerId] = Normalize(providerId, inventory); }
                 catch (InvalidDataException exception)
                 {
@@ -182,13 +203,99 @@ public sealed class DeviceSessionService : IAsyncDisposable
     private void Publish(DeviceSessionSnapshot previous, ImmutableDictionary<string, DeviceOperationError> errors,
         ImmutableDictionary<string, long> revisions, DeviceSessionState? associations)
     {
+        var scheduled = PrepareMounts();
         var inventory = new DeviceInventorySnapshot(previous.Inventory.Revision + 1,
             _providers.Where(provider => _inventories.ContainsKey(provider.ProviderId))
-                .SelectMany(provider => _inventories[provider.ProviderId].Devices).ToImmutableArray());
+                .SelectMany(provider => _inventories[provider.ProviderId].Devices)
+                .Select(WithMountState).ToImmutableArray());
         var snapshot = new DeviceSessionSnapshot(inventory,
             DeviceAssociationRules.ReconcileAssociations(associations ?? previous.Associations, inventory), revisions, errors);
         Volatile.Write(ref _snapshot, snapshot);
+        lock (_mountTaskGate)
+        {
+            _mountTasks.RemoveAll(task => task.IsCompleted);
+            foreach (var work in scheduled)
+            {
+                var token = _lifetime!.Token;
+                _mountTasks.Add(Task.Run(() => MountAndObserveAsync(work, token)));
+            }
+        }
         SnapshotChanged?.Invoke(this, snapshot);
+    }
+
+    private List<MountWork> PrepareMounts()
+    {
+        var scheduled = new List<MountWork>();
+        if (_lifetime is null || _lifetime.IsCancellationRequested) return scheduled;
+        var present = _inventories.Values.SelectMany(inventory => inventory.Devices)
+            .Where(device => device.State != DeviceState.Unavailable)
+            .ToDictionary(device => device.Key, device => device.MediaGeneration);
+        _mountAttempts.RemoveWhere(attempt => !present.TryGetValue(attempt.Volume.Device, out var generation)
+            || generation != attempt.MediaGeneration);
+        foreach (var attempt in _mountErrors.Keys.Where(attempt => !_mountAttempts.Contains(attempt)).ToArray())
+            _mountErrors.Remove(attempt);
+
+        foreach (var provider in _providers)
+        {
+            if (!_inventories.TryGetValue(provider.ProviderId, out var observed)) continue;
+            foreach (var device in observed.Devices)
+            {
+                if (_activeMounts.ContainsKey(device.Key)
+                    || (device.Capabilities & DeviceCapabilities.Mount) == 0
+                    || (device.Capabilities & (DeviceCapabilities.OpticalSource | DeviceCapabilities.RemovableSource
+                        | DeviceCapabilities.PspDestination)) == 0
+                    || device.State is DeviceState.Detecting or DeviceState.Removing or DeviceState.Unavailable) continue;
+                var volume = device.Volumes.FirstOrDefault(volume => volume.State == DeviceState.Unmounted
+                    && string.IsNullOrWhiteSpace(volume.Root) && volume.Error is null
+                    && !_mountAttempts.Contains(new MountAttempt(volume.Key, device.MediaGeneration)));
+                if (volume is null) continue;
+                var attempt = new MountAttempt(volume.Key, device.MediaGeneration);
+                var work = new MountWork(provider, new DeviceMountRequest(volume.Key, observed.Revision, device.MediaGeneration), attempt);
+                _mountAttempts.Add(attempt);
+                _activeMounts.Add(device.Key, work);
+                scheduled.Add(work);
+            }
+        }
+        return scheduled;
+    }
+
+    private DeviceSnapshot WithMountState(DeviceSnapshot device)
+    {
+        if (device.State is DeviceState.Detecting or DeviceState.Removing or DeviceState.Unavailable) return device;
+        _activeMounts.TryGetValue(device.Key, out var active);
+        var volumes = device.Volumes.Select(volume =>
+        {
+            if (volume.State == DeviceState.Ready && !string.IsNullOrWhiteSpace(volume.Root)) return volume;
+            if (active is not null && active.Request.MediaGeneration == device.MediaGeneration && active.Request.Volume == volume.Key)
+                return volume with { State = DeviceState.Mounting, Root = null };
+            return _mountErrors.TryGetValue(new MountAttempt(volume.Key, device.MediaGeneration), out var error)
+                ? volume with { State = DeviceState.Error, Root = null, Error = error } : volume;
+        }).ToImmutableArray();
+        var pending = active is not null && active.Request.MediaGeneration == device.MediaGeneration;
+        return device with { Volumes = volumes,
+            State = pending ? DeviceState.Mounting : volumes.Any(volume => volume.Error is not null)
+                ? DeviceState.Error : device.State };
+    }
+
+    private async Task MountAndObserveAsync(MountWork work, CancellationToken token)
+    {
+        DeviceOperationResult result;
+        try { result = await work.Provider.MountAsync(work.Request, token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+        catch (Exception exception)
+        {
+            result = new DeviceOperationResult(DeviceOperationStatus.Failed,
+                new DeviceOperationError("MountFailed", exception.Message, work.Request.Volume));
+        }
+        if (token.IsCancellationRequested) return;
+        DeviceInventorySnapshot? inventory = null;
+        DeviceOperationError? error = null;
+        try { inventory = await work.Provider.GetSnapshotAsync(token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
+        catch (Exception exception) { error = new DeviceOperationError("DeviceObservationFailed", exception.Message); }
+        if (token.IsCancellationRequested) return;
+        await _updates.Writer.WriteAsync(new SessionUpdate(work.Provider.ProviderId, inventory, error,
+            CompletedMount: work, MountResult: result), token).ConfigureAwait(false);
     }
 
     private static DeviceInventorySnapshot Normalize(string providerId, DeviceInventorySnapshot inventory)
@@ -218,6 +325,17 @@ public sealed class DeviceSessionService : IAsyncDisposable
     {
         _lifetime?.Cancel();
         await Task.WhenAll(_workers).ConfigureAwait(false);
+        if (_lifetime is not null)
+        {
+            // Drain observations already queued before cancellation so no mount task can be added
+            // after we capture the task list. The processor remains alive for completions.
+            var drained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            await _updates.Writer.WriteAsync(new SessionUpdate(Applied: drained)).ConfigureAwait(false);
+            await drained.Task.ConfigureAwait(false);
+            Task[] mounts;
+            lock (_mountTaskGate) mounts = _mountTasks.ToArray();
+            await Task.WhenAll(mounts).ConfigureAwait(false);
+        }
         _updates.Writer.TryComplete();
         await _processor.ConfigureAwait(false);
         foreach (var provider in _providers) await provider.DisposeAsync().ConfigureAwait(false);
@@ -226,5 +344,8 @@ public sealed class DeviceSessionService : IAsyncDisposable
 
     private sealed record SessionUpdate(string? ProviderId = null, DeviceInventorySnapshot? Inventory = null,
         DeviceOperationError? Error = null, bool Terminal = false, DeviceSessionState? Associations = null,
-        TaskCompletionSource? Applied = null);
+        TaskCompletionSource? Applied = null, MountWork? CompletedMount = null, DeviceOperationResult? MountResult = null);
+
+    private sealed record MountAttempt(VolumeKey Volume, string? MediaGeneration);
+    private sealed record MountWork(IDeviceProvider Provider, DeviceMountRequest Request, MountAttempt Attempt);
 }
