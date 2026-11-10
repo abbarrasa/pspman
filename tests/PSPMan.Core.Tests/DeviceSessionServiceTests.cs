@@ -271,6 +271,92 @@ public sealed class DeviceSessionServiceTests
         Assert.Equal(1, provider.MountCount);
     }
 
+    [Fact]
+    public async Task AuthorizationDenialPublishesAnErrorWithoutAutomaticallyRetrying()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice();
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        var call = await provider.NextMount();
+        call.Completion.SetResult(new DeviceOperationResult(
+            DeviceOperationStatus.AuthorizationDenied,
+            new DeviceOperationError("AuthorizationDenied", "Authorization was denied.", call.Request.Volume)));
+
+        await Until(service, snapshot => snapshot.Inventory.Devices[0].State == DeviceState.Error);
+        Assert.Equal("AuthorizationDenied", service.Snapshot.Inventory.Devices[0].Volumes[0].Error?.Code);
+        Assert.Equal(1, provider.MountCount);
+    }
+
+    [Fact]
+    public async Task ExplicitRetryClearsThePreviousErrorAndRequestsTheVolumeAgain()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice();
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        var first = await provider.NextMount();
+        first.Completion.SetResult(new DeviceOperationResult(
+            DeviceOperationStatus.Cancelled,
+            new DeviceOperationError("AuthorizationCancelled", "Authorization was cancelled.", first.Request.Volume)));
+        await Until(service, snapshot => snapshot.Inventory.Devices[0].State == DeviceState.Error);
+
+        await service.RetryMountAsync(first.Request.Volume);
+        var retry = await provider.NextMount();
+        Assert.Equal(first.Request.Volume, retry.Request.Volume);
+        Assert.Equal(DeviceState.Mounting, service.Snapshot.Inventory.Devices[0].State);
+
+        retry.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        await Until(service, snapshot => snapshot.Inventory.Devices[0].State == DeviceState.Unmounted);
+        Assert.Equal(2, provider.MountCount);
+    }
+
+    [Fact]
+    public async Task MountAuthorizationIsSerializedAcrossDevices()
+    {
+        var concurrency = new OperationConcurrencyProbe();
+        var provider = new ControlledProvider("test", concurrency) { AllowMounts = true };
+        var first = UnmountedDevice() with { Key = new DeviceKey("test", "first"),
+            Volumes = [new VolumeSnapshot(new VolumeKey(new DeviceKey("test", "first"), "volume"),
+                "First", null, new DeviceIdentity("first-volume", DeviceIdentityConfidence.Persistent), DeviceState.Unmounted)] };
+        var second = UnmountedDevice() with { Key = new DeviceKey("test", "second"),
+            Volumes = [new VolumeSnapshot(new VolumeKey(new DeviceKey("test", "second"), "volume"),
+                "Second", null, new DeviceIdentity("second-volume", DeviceIdentityConfidence.Persistent), DeviceState.Unmounted)] };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [first, second]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+
+        var firstCall = await provider.NextMount();
+        Assert.Equal(1, concurrency.Maximum);
+
+        firstCall.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        var secondCall = await provider.NextMount();
+        Assert.Equal(1, concurrency.Maximum);
+        secondCall.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+    }
+
+    [Fact]
+    public async Task SessionAssociationsRemainAvailableWhileAuthorizationIsPending()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice();
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        var call = await provider.NextMount();
+
+        var associations = DeviceAssociationRules.ChooseVolume(service.Snapshot.Associations,
+            SourceGroup.Removable, call.Request.Volume);
+        await service.SetAssociationsAsync(associations);
+
+        Assert.Equal(call.Request.Volume, service.Snapshot.Associations.RemovableVolume);
+        call.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+    }
+
     [Theory]
     [InlineData(DeviceState.Ready, DeviceState.Ready, false)]
     [InlineData(DeviceState.Unavailable, DeviceState.Unmounted, true)]
@@ -324,7 +410,7 @@ public sealed class DeviceSessionServiceTests
                 new DeviceIdentity("synthetic-volume", DeviceIdentityConfidence.Persistent), DeviceState.Ready)]);
     }
 
-    private sealed class ControlledProvider(string id) : IDeviceProvider
+    private sealed class ControlledProvider(string id, OperationConcurrencyProbe? concurrency = null) : IDeviceProvider
     {
         private readonly Channel<DeviceInventorySnapshot> _changes = Channel.CreateUnbounded<DeviceInventorySnapshot>();
         private bool _subscribed;
@@ -332,6 +418,7 @@ public sealed class DeviceSessionServiceTests
         private readonly Channel<PendingMount> _mounts = Channel.CreateUnbounded<PendingMount>();
         private int _mountCount;
         private int _activeMounts;
+        private readonly OperationConcurrencyProbe _concurrency = concurrency ?? new();
         public bool AllowMounts { get; init; }
         public int MountCount => Volatile.Read(ref _mountCount);
         public int MaximumConcurrentMounts { get; private set; }
@@ -371,6 +458,7 @@ public sealed class DeviceSessionServiceTests
         public async ValueTask<DeviceOperationResult> MountAsync(DeviceMountRequest request, CancellationToken cancellationToken = default)
         {
             if (!AllowMounts) throw new InvalidOperationException("Unexpected mount request.");
+            using var operation = _concurrency.Enter();
             Interlocked.Increment(ref _mountCount);
             var active = Interlocked.Increment(ref _activeMounts);
             MaximumConcurrentMounts = Math.Max(MaximumConcurrentMounts, active);
@@ -386,6 +474,24 @@ public sealed class DeviceSessionServiceTests
             Disposed = true;
             _changes.Writer.TryComplete();
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class OperationConcurrencyProbe
+    {
+        private int _active;
+        public int Maximum { get; private set; }
+
+        public IDisposable Enter()
+        {
+            var active = Interlocked.Increment(ref _active);
+            Maximum = Math.Max(Maximum, active);
+            return new Exit(this);
+        }
+
+        private sealed class Exit(OperationConcurrencyProbe owner) : IDisposable
+        {
+            public void Dispose() => Interlocked.Decrement(ref owner._active);
         }
     }
     private sealed record PendingMount(DeviceMountRequest Request)
