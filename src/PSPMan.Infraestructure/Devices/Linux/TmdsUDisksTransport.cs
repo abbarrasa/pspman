@@ -105,6 +105,8 @@ public sealed class TmdsUDisksTransport : IUDisksTransport
             return UDisksPropertyValue.Boolean(value.GetBool());
         if (value.Type == VariantValueType.String)
             return UDisksPropertyValue.String(value.GetString());
+        if (value.Type == VariantValueType.ObjectPath)
+            return UDisksPropertyValue.ObjectPath(value.GetObjectPath().ToString());
         if (value.Type == VariantValueType.Array && value.ItemType == VariantValueType.Byte)
             return UDisksPropertyValue.Bytes(System.Text.Encoding.UTF8.GetString(value.GetArray<byte>()));
         if (value.Type == VariantValueType.Array && value.ItemType == VariantValueType.Array
