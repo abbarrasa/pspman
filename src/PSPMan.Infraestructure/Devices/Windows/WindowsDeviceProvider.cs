@@ -1,8 +1,9 @@
 using System.Collections.Immutable;
+using PSPMan.Core.Devices;
 
 namespace PSPMan.Infraestructure.Devices.Windows;
 
-public enum WindowsDeviceKind { Usb, Optical, MemoryCard }
+public enum WindowsDeviceKind { Usb, Optical, MemoryCard, Psp }
 
 public sealed record WindowsPhysicalDevice(
     string InstanceId,
@@ -13,7 +14,15 @@ public sealed record WindowsPhysicalDevice(
     bool IsSourceEligible,
     bool CanEject,
     ImmutableArray<WindowsVolumeReference> Volumes,
-    WindowsDeviceError? Error);
+    WindowsDeviceError? Error)
+{
+    public WindowsUsbMetadata? UsbMetadata { get; init; }
+    public PspUsbRecognitionResult? PspRecognition { get; init; }
+    public bool IsPspDestination => PspRecognition?.Status == PspUsbRecognitionStatus.Recognized;
+    public DeviceIdentity Identity { get; init; } = new(null, DeviceIdentityConfidence.SessionOnly);
+    public DeviceIdentity MediaIdentity { get; init; } = new(null, DeviceIdentityConfidence.SessionOnly);
+    public string? MediaGeneration { get; init; }
+}
 
 public sealed record WindowsDeviceInventory(
     ImmutableArray<WindowsPhysicalDevice> Devices,
@@ -23,6 +32,7 @@ public sealed record WindowsDeviceInventory(
 public sealed class WindowsDeviceProvider(IWindowsDeviceApi api)
 {
     private readonly IWindowsDeviceApi _api = api ?? throw new ArgumentNullException(nameof(api));
+    private readonly WindowsUsbIdentityMapper _usbIdentity = new();
 
     public async ValueTask<WindowsDeviceInventory> GetInventoryAsync(CancellationToken cancellationToken = default)
     {
@@ -50,7 +60,7 @@ public sealed class WindowsDeviceProvider(IWindowsDeviceApi api)
                 .Select(volume => volume.State == WindowsVolumeState.Available && volume.Error is null
                     ? volume : volume with { MountPoints = [] }).ToImmutableArray(),
             device.Error)).ToImmutableArray();
-        return new WindowsDeviceInventory(result, errors.ToImmutable());
+        return new WindowsDeviceInventory(_usbIdentity.Map(result, devices), errors.ToImmutable());
     }
 
     private static bool IsSupported(WindowsStorageDevice device) => device.IsOptical || device.IsRemovable
