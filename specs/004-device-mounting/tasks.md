@@ -121,10 +121,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: Fixtures produce one physical row with its volumes, preserve current roots, ignore internal non-target storage and classify ambiguous removable sources informatively as Memory Card.
   - Evidence: Individual T17 plan explicitly approved. LinuxDeviceProvider joins typed Block objects to removable Drive parents, keeps empty optical readers, preserves labels/device paths/mount roots, excludes non-removable internal drives and classifies unknown removable buses as Memory Card without changing source eligibility. T17 fixture tests passed 3/3. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 871/871 (Core 619, Infraestructure 77, Desktop 175), no skips. Branch: `feature/004_T17_linux-device-provider`; no commits/pushes.
 
-- [ ] **T18. Read Linux USB ancestry and persistent identity metadata.** FR-2, FR-13, FR-14, FR-19
+- [x] **T18. Read Linux USB ancestry and persistent identity metadata.** FR-2, FR-13, FR-14, FR-19
   - Depends on: T15, T17.
   - Work: Implement LinuxUsbMetadataReader against injected sysfs roots; join USB descriptors to storage devices and retain identity confidence/media generation.
   - Done when: Fixtures cover PSP recognition, USB card readers, missing serials and changed media without using directory names or assuming reader identity identifies its card.
+  - Evidence: Individual T18 plan explicitly approved. LinuxUsbMetadataReader reads VID/PID, USB mass-storage interfaces and reader serials from an injected sysfs ancestry, marks missing serials ambiguous, keeps media generations separate by observed block ancestry and never reads directory or volume labels as identity. Fixtures cover PSP recognition, a USB reader, missing serials and changed media: 3/3 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 874/874 (Core 619, Infraestructure 80, Desktop 175), no skips. Physical hardware and native sysfs integration remain pending for later acceptance. Branch: `feature/004_T18_linux-usb-metadata`; no commits/pushes.
 
 - [ ] **T19. Observe Linux device and root changes.** FR-1, FR-5, FR-6, FR-14
   - Depends on: T18.
