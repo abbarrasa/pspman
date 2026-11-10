@@ -10,6 +10,10 @@ public interface IUDisksClient : IAsyncDisposable
     ValueTask<string> MountAsync(string filesystemObjectPath,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This D-Bus client does not support mounting.");
+
+    ValueTask UnmountAsync(string filesystemObjectPath,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This D-Bus client does not support unmounting.");
 }
 
 public interface IUDisksTransport : IAsyncDisposable
@@ -20,6 +24,10 @@ public interface IUDisksTransport : IAsyncDisposable
     ValueTask<string> MountAsync(string filesystemObjectPath,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This D-Bus transport does not support mounting.");
+
+    ValueTask UnmountAsync(string filesystemObjectPath,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This D-Bus transport does not support unmounting.");
 }
 
 public sealed class UDisksObjectManagerSnapshot
