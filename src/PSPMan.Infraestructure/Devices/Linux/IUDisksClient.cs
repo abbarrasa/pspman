@@ -61,6 +61,7 @@ public enum UDisksPropertyType
     String,
     Bytes,
     StringArray,
+    ObjectPath,
     Unsupported
 }
 
@@ -71,12 +72,15 @@ public sealed record UDisksPropertyValue(UDisksPropertyType Type, object Value)
     public static UDisksPropertyValue Bytes(string value) => new(UDisksPropertyType.Bytes, value);
     public static UDisksPropertyValue StringArray(params string[] values) =>
         new(UDisksPropertyType.StringArray, values);
+    public static UDisksPropertyValue ObjectPath(string value) =>
+        new(UDisksPropertyType.ObjectPath, value);
     public static UDisksPropertyValue Unsupported(object value) =>
         new(UDisksPropertyType.Unsupported, value);
 
     public bool AsBoolean() => Get<bool>(UDisksPropertyType.Boolean);
     public string AsString() => Get<string>(UDisksPropertyType.String);
     public string AsBytes() => Get<string>(UDisksPropertyType.Bytes);
+    public string AsObjectPath() => Get<string>(UDisksPropertyType.ObjectPath);
     public ImmutableArray<string> AsStringArray() =>
         Get<string[]>(UDisksPropertyType.StringArray).ToImmutableArray();
 

@@ -115,10 +115,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: Inventory decodes typed drive/block/filesystem data; missing service and malformed replies produce explicit failures, with no localized command parsing.
   - Evidence: Individual T16 plan explicitly approved. Tmds.DBus.Protocol 0.94.1 is pinned in Infraestructure and the typed ObjectManager transport decodes UDisks2 object paths, interfaces, variants and byte/string-array properties without shell or localized command parsing. Fake-transport tests cover typed drive/block/filesystem inventory, unavailable service, malformed replies, cancellation and disposal: 4/4 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 868/868 (Core 619, Infraestructure 74, Desktop 175), no skips. Branch: `feature/004_T16_linux-dbus-client`; no commits/pushes.
 
-- [ ] **T17. Normalize Linux physical devices and mounted volumes.** FR-3, FR-5, FR-6, FR-18, FR-19
+- [x] **T17. Normalize Linux physical devices and mounted volumes.** FR-3, FR-5, FR-6, FR-18, FR-19
   - Depends on: T16.
   - Work: Create LinuxDeviceProvider inventory mapping for parent drives, empty readers, optical media, volume labels, mount roots and source capabilities.
   - Done when: Fixtures produce one physical row with its volumes, preserve current roots, ignore internal non-target storage and classify ambiguous removable sources informatively as Memory Card.
+  - Evidence: Individual T17 plan explicitly approved. LinuxDeviceProvider joins typed Block objects to removable Drive parents, keeps empty optical readers, preserves labels/device paths/mount roots, excludes non-removable internal drives and classifies unknown removable buses as Memory Card without changing source eligibility. T17 fixture tests passed 3/3. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 871/871 (Core 619, Infraestructure 77, Desktop 175), no skips. Branch: `feature/004_T17_linux-device-provider`; no commits/pushes.
 
 - [ ] **T18. Read Linux USB ancestry and persistent identity metadata.** FR-2, FR-13, FR-14, FR-19
   - Depends on: T15, T17.
