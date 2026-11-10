@@ -127,10 +127,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: Fixtures cover PSP recognition, USB card readers, missing serials and changed media without using directory names or assuming reader identity identifies its card.
   - Evidence: Individual T18 plan explicitly approved. LinuxUsbMetadataReader reads VID/PID, USB mass-storage interfaces and reader serials from an injected sysfs ancestry, marks missing serials ambiguous, keeps media generations separate by observed block ancestry and never reads directory or volume labels as identity. Fixtures cover PSP recognition, a USB reader, missing serials and changed media: 3/3 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 874/874 (Core 619, Infraestructure 80, Desktop 175), no skips. Physical hardware and native sysfs integration remain pending for later acceptance. Branch: `feature/004_T18_linux-usb-metadata`; no commits/pushes.
 
-- [ ] **T19. Observe Linux device and root changes.** FR-1, FR-5, FR-6, FR-14
+- [x] **T19. Observe Linux device and root changes.** FR-1, FR-5, FR-6, FR-14
   - Depends on: T18.
   - Work: Add UDisks object/property subscriptions, initial-scan race handling and subscription cleanup.
   - Done when: Transport/provider tests deliver insertion, removal and changed MountPoints without duplicate devices, stale roots or leaked subscriptions.
+  - Evidence: Individual T19 plan explicitly approved. TmdsUDisksTransport subscribes to UDisks2 ObjectManager and PropertiesChanged signals through typed Notification callbacks; LinuxDeviceObserver subscribes before the initial inventory, refreshes snapshots after changes, suppresses unchanged duplicates and disposes observers cooperatively. Tests cover the initial-scan race, insertion/root refresh, duplicate suppression and cancellation cleanup: 2/2 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 876/876 (Core 619, Infraestructure 82, Desktop 175), no skips. No live UDisks service or hardware was exercised. Branch: `feature/004_T19_linux-udisks-observer`; no commits/pushes.
 
 - [ ] **T20. Mount Linux volumes through native authorization.** FR-3, FR-4, FR-5, FR-18
   - Depends on: T19.
