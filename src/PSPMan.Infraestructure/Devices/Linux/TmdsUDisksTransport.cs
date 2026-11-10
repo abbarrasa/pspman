@@ -69,6 +69,46 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         }
     }
 
+    public async ValueTask<string> MountAsync(
+        string filesystemObjectPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filesystemObjectPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var message = CreateMountMessage();
+            var mountPoint = await _connection.CallMethodAsync(message,
+                static (reply, _) => reply.GetBodyReader().ReadString()).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return mountPoint;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (DBusErrorReplyException exception)
+        {
+            throw new UDisksTransportException(exception.ErrorName,
+                exception.ErrorMessage, exception);
+        }
+        catch (Exception exception)
+        {
+            throw new UDisksTransportException("DbusError",
+                "The UDisks2 mount call failed.", exception);
+        }
+
+        MessageBuffer CreateMountMessage()
+        {
+            using var writer = _connection.GetMessageWriter();
+            writer.WriteMethodCallHeader(Destination, filesystemObjectPath,
+                "org.freedesktop.UDisks2.Filesystem", "a{sv}", "Mount");
+            var options = writer.WriteDictionaryStart();
+            writer.WriteDictionaryEnd(options);
+            return writer.CreateMessage();
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
         _connection.Dispose();

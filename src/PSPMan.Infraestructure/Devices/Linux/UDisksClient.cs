@@ -34,6 +34,34 @@ public sealed class UDisksClient(IUDisksTransport transport) : IUDisksClient
         }
     }
 
+    public async ValueTask<string> MountAsync(
+        string filesystemObjectPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filesystemObjectPath);
+        try
+        {
+            return await transport.MountAsync(filesystemObjectPath, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (UDisksClientException)
+        {
+            throw;
+        }
+        catch (UDisksTransportException exception)
+        {
+            throw new UDisksClientException(exception.Code, exception.Message, exception);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new UDisksClientException("MountFailed", "The UDisks2 mount call failed.", exception);
+        }
+    }
+
     public ValueTask DisposeAsync() => transport.DisposeAsync();
 
     private static void Validate(UDisksObjectManagerSnapshot snapshot)
