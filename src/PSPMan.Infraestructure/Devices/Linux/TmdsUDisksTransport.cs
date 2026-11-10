@@ -20,6 +20,16 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         cancellationToken.ThrowIfCancellationRequested();
         if (DBusAddress.System is not { } address)
             throw new UDisksTransportException("ServiceUnavailable", "The system D-Bus address is unavailable.");
+        return await ConnectAsync(address, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Connects to an explicit D-Bus address for isolated integration environments.</summary>
+    public static async ValueTask<TmdsUDisksTransport> ConnectAsync(
+        string address,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(address);
+        cancellationToken.ThrowIfCancellationRequested();
         var connection = new DBusConnection(address);
         try
         {
@@ -55,6 +65,11 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         {
             throw;
         }
+        catch (DBusErrorReplyException exception)
+        {
+            throw new UDisksTransportException(exception.ErrorName,
+                exception.ErrorMessage, exception);
+        }
         catch (Exception exception)
         {
             throw new UDisksTransportException("DbusError", "The UDisks2 ObjectManager call failed.", exception);
@@ -63,8 +78,8 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         MessageBuffer CreateGetManagedObjectsMessage()
         {
             using var writer = _connection.GetMessageWriter();
-            writer.WriteMethodCallHeader(Destination, ObjectManagerPath, ObjectManagerInterface, "",
-                "GetManagedObjects");
+            writer.WriteMethodCallHeader(Destination, ObjectManagerPath, ObjectManagerInterface,
+                member: "GetManagedObjects", signature: "");
             return writer.CreateMessage();
         }
     }
@@ -102,7 +117,7 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         {
             using var writer = _connection.GetMessageWriter();
             writer.WriteMethodCallHeader(Destination, filesystemObjectPath,
-                "org.freedesktop.UDisks2.Filesystem", "a{sv}", "Mount");
+                "org.freedesktop.UDisks2.Filesystem", member: "Mount", signature: "a{sv}");
             var options = writer.WriteDictionaryStart();
             writer.WriteDictionaryEnd(options);
             return writer.CreateMessage();
@@ -141,7 +156,7 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         {
             using var writer = _connection.GetMessageWriter();
             writer.WriteMethodCallHeader(Destination, filesystemObjectPath,
-                "org.freedesktop.UDisks2.Filesystem", "a{sv}", "Unmount");
+                "org.freedesktop.UDisks2.Filesystem", member: "Unmount", signature: "a{sv}");
             var options = writer.WriteDictionaryStart();
             writer.WriteDictionaryEnd(options);
             return writer.CreateMessage();
@@ -191,7 +206,7 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         {
             using var writer = _connection.GetMessageWriter();
             writer.WriteMethodCallHeader(Destination, driveObjectPath,
-                "org.freedesktop.UDisks2.Drive", "a{sv}", method);
+                "org.freedesktop.UDisks2.Drive", member: method, signature: "a{sv}");
             var options = writer.WriteDictionaryStart();
             writer.WriteDictionaryEnd(options);
             return writer.CreateMessage();
@@ -322,13 +337,20 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         if (value.Type == VariantValueType.ObjectPath)
             return UDisksPropertyValue.ObjectPath(value.GetObjectPath().ToString());
         if (value.Type == VariantValueType.Array && value.ItemType == VariantValueType.Byte)
-            return UDisksPropertyValue.Bytes(System.Text.Encoding.UTF8.GetString(value.GetArray<byte>()));
-        if (value.Type == VariantValueType.Array && value.ItemType == VariantValueType.Array
-            && value.ValueType == VariantValueType.Byte)
+            return UDisksPropertyValue.Bytes(DecodeNativePath(value.GetArray<byte>()));
+        if (value.Type == VariantValueType.Array && value.ItemType == VariantValueType.String)
+            return UDisksPropertyValue.StringArray(value.GetArray<string>());
+        if (value.Type == VariantValueType.Array && value.ItemType == VariantValueType.Array)
         {
-            return UDisksPropertyValue.StringArray(value.GetArray<byte[]>()
-                .Select(bytes => System.Text.Encoding.UTF8.GetString(bytes)).ToArray());
+            var items = value.GetArray<VariantValue>();
+            if (items.All(item => item.Type == VariantValueType.Array
+                && item.ItemType == VariantValueType.Byte))
+                return UDisksPropertyValue.StringArray(items
+                    .Select(item => DecodeNativePath(item.GetArray<byte>())).ToArray());
         }
         return UDisksPropertyValue.Unsupported(name);
     }
+
+    private static string DecodeNativePath(byte[] bytes) =>
+        System.Text.Encoding.UTF8.GetString(bytes).TrimEnd('\0');
 }
