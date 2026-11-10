@@ -23,6 +23,7 @@ public sealed class DeviceSessionService : IAsyncDisposable
     private readonly Dictionary<MountAttempt, DeviceOperationError> _mountErrors = [];
     private readonly List<Task> _mountTasks = [];
     private readonly object _mountTaskGate = new();
+    private readonly SemaphoreSlim _authorizationGate = new(1, 1);
     private CancellationTokenSource? _lifetime;
     private Task[] _workers = [];
     private Task _processor = Task.CompletedTask;
@@ -74,6 +75,20 @@ public sealed class DeviceSessionService : IAsyncDisposable
         }
         var applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await _updates.Writer.WriteAsync(new SessionUpdate(Associations: state, Applied: applied), cancellationToken).ConfigureAwait(false);
+        await applied.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Explicitly retries a volume whose previous mount attempt failed.</summary>
+    public async ValueTask RetryMountAsync(VolumeKey volume, CancellationToken cancellationToken = default)
+    {
+        lock (_lifecycle)
+        {
+            ObjectDisposedException.ThrowIf(_disposeTask is not null, this);
+            if (_lifetime is null) throw new InvalidOperationException("Device observation has not started.");
+        }
+        var applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await _updates.Writer.WriteAsync(new SessionUpdate(RetryVolume: volume, Applied: applied), cancellationToken)
+            .ConfigureAwait(false);
         await applied.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -154,6 +169,21 @@ public sealed class DeviceSessionService : IAsyncDisposable
 
     private void Apply(SessionUpdate update)
     {
+        if (update.RetryVolume is { } retryVolume)
+        {
+            if (!_mountErrors.Keys.Any(attempt => attempt.Volume == retryVolume))
+                throw new InvalidOperationException("The volume has no failed mount attempt to retry.");
+
+            foreach (var attempt in _mountErrors.Keys.Where(attempt => attempt.Volume == retryVolume).ToArray())
+            {
+                _mountErrors.Remove(attempt);
+                _mountAttempts.Remove(attempt);
+            }
+            Publish(Snapshot, Snapshot.ProviderErrors, Snapshot.ProviderRevisions, associations: null);
+            update.Applied?.TrySetResult();
+            return;
+        }
+
         var completedMount = false;
         if (update.CompletedMount is { } work
             && _activeMounts.TryGetValue(work.Request.Volume.Device, out var active) && ReferenceEquals(active, work))
@@ -280,7 +310,12 @@ public sealed class DeviceSessionService : IAsyncDisposable
     private async Task MountAndObserveAsync(MountWork work, CancellationToken token)
     {
         DeviceOperationResult result;
-        try { result = await work.Provider.MountAsync(work.Request, token).ConfigureAwait(false); }
+        try
+        {
+            await _authorizationGate.WaitAsync(token).ConfigureAwait(false);
+            try { result = await work.Provider.MountAsync(work.Request, token).ConfigureAwait(false); }
+            finally { _authorizationGate.Release(); }
+        }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { return; }
         catch (Exception exception)
         {
@@ -344,7 +379,8 @@ public sealed class DeviceSessionService : IAsyncDisposable
 
     private sealed record SessionUpdate(string? ProviderId = null, DeviceInventorySnapshot? Inventory = null,
         DeviceOperationError? Error = null, bool Terminal = false, DeviceSessionState? Associations = null,
-        TaskCompletionSource? Applied = null, MountWork? CompletedMount = null, DeviceOperationResult? MountResult = null);
+        TaskCompletionSource? Applied = null, MountWork? CompletedMount = null, DeviceOperationResult? MountResult = null,
+        VolumeKey? RetryVolume = null);
 
     private sealed record MountAttempt(VolumeKey Volume, string? MediaGeneration);
     private sealed record MountWork(IDeviceProvider Provider, DeviceMountRequest Request, MountAttempt Attempt);
