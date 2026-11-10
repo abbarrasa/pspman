@@ -88,11 +88,30 @@ public sealed class UDisksClientTests
         Assert.True(transport.Disposed);
     }
 
+    [Fact]
+    public async Task DelegatesEjectAndPowerOffAndPreservesNativeErrors()
+    {
+        var transport = new FakeUDisksTransport(powerOffException: new UDisksTransportException(
+            "org.freedesktop.UDisks2.Error.Busy", "The drive is busy."));
+        await using var client = new UDisksClient(transport);
+
+        await client.EjectAsync("/org/freedesktop/UDisks2/drives/optical");
+        var error = await Assert.ThrowsAsync<UDisksClientException>(() =>
+            client.PowerOffAsync("/org/freedesktop/UDisks2/drives/usb").AsTask());
+
+        Assert.Equal(["/org/freedesktop/UDisks2/drives/optical"], transport.EjectedPaths);
+        Assert.Equal(["/org/freedesktop/UDisks2/drives/usb"], transport.PoweredOffPaths);
+        Assert.Equal("org.freedesktop.UDisks2.Error.Busy", error.Code);
+    }
+
     private sealed class FakeUDisksTransport(
         UDisksObjectManagerSnapshot? snapshot = null,
-        UDisksTransportException? exception = null) : IUDisksTransport
+        UDisksTransportException? exception = null,
+        UDisksTransportException? powerOffException = null) : IUDisksTransport
     {
         public bool Disposed { get; private set; }
+        public List<string> EjectedPaths { get; } = [];
+        public List<string> PoweredOffPaths { get; } = [];
 
         public ValueTask<UDisksObjectManagerSnapshot> GetManagedObjectsAsync(
             CancellationToken cancellationToken = default)
@@ -100,6 +119,24 @@ public sealed class UDisksClientTests
             cancellationToken.ThrowIfCancellationRequested();
             if (exception is not null) throw exception;
             return ValueTask.FromResult(snapshot!);
+        }
+
+        public ValueTask EjectAsync(string driveObjectPath,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            EjectedPaths.Add(driveObjectPath);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask PowerOffAsync(string driveObjectPath,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            PoweredOffPaths.Add(driveObjectPath);
+            if (powerOffException is not null)
+                throw powerOffException;
+            return ValueTask.CompletedTask;
         }
 
         public ValueTask DisposeAsync()

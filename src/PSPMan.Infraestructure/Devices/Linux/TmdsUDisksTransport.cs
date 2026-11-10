@@ -148,6 +148,56 @@ public sealed class TmdsUDisksTransport : IUDisksTransport, IUDisksChangeSource
         }
     }
 
+    public ValueTask EjectAsync(
+        string driveObjectPath,
+        CancellationToken cancellationToken = default) =>
+        InvokeDriveOperationAsync(driveObjectPath, "Eject", "eject", cancellationToken);
+
+    public ValueTask PowerOffAsync(
+        string driveObjectPath,
+        CancellationToken cancellationToken = default) =>
+        InvokeDriveOperationAsync(driveObjectPath, "PowerOff", "power-off", cancellationToken);
+
+    private async ValueTask InvokeDriveOperationAsync(
+        string driveObjectPath,
+        string method,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driveObjectPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var message = CreateDriveOperationMessage();
+            await _connection.CallMethodAsync(message, static (_, _) => 0).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (DBusErrorReplyException exception)
+        {
+            throw new UDisksTransportException(exception.ErrorName,
+                exception.ErrorMessage, exception);
+        }
+        catch (Exception exception)
+        {
+            throw new UDisksTransportException("DbusError",
+                $"The UDisks2 {operation} call failed.", exception);
+        }
+
+        MessageBuffer CreateDriveOperationMessage()
+        {
+            using var writer = _connection.GetMessageWriter();
+            writer.WriteMethodCallHeader(Destination, driveObjectPath,
+                "org.freedesktop.UDisks2.Drive", "a{sv}", method);
+            var options = writer.WriteDictionaryStart();
+            writer.WriteDictionaryEnd(options);
+            return writer.CreateMessage();
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
         _connection.Dispose();

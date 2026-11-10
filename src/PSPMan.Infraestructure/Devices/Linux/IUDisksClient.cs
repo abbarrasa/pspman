@@ -14,6 +14,14 @@ public interface IUDisksClient : IAsyncDisposable
     ValueTask UnmountAsync(string filesystemObjectPath,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This D-Bus client does not support unmounting.");
+
+    ValueTask EjectAsync(string driveObjectPath,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This D-Bus client does not support ejecting.");
+
+    ValueTask PowerOffAsync(string driveObjectPath,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This D-Bus client does not support powering off drives.");
 }
 
 public interface IUDisksTransport : IAsyncDisposable
@@ -28,6 +36,14 @@ public interface IUDisksTransport : IAsyncDisposable
     ValueTask UnmountAsync(string filesystemObjectPath,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This D-Bus transport does not support unmounting.");
+
+    ValueTask EjectAsync(string driveObjectPath,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This D-Bus transport does not support ejecting.");
+
+    ValueTask PowerOffAsync(string driveObjectPath,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This D-Bus transport does not support powering off drives.");
 }
 
 public sealed class UDisksObjectManagerSnapshot

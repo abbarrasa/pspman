@@ -90,6 +90,60 @@ public sealed class UDisksClient(IUDisksTransport transport) : IUDisksClient
         }
     }
 
+    public async ValueTask EjectAsync(
+        string driveObjectPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driveObjectPath);
+        try
+        {
+            await transport.EjectAsync(driveObjectPath, cancellationToken).ConfigureAwait(false);
+        }
+        catch (UDisksClientException)
+        {
+            throw;
+        }
+        catch (UDisksTransportException exception)
+        {
+            throw new UDisksClientException(exception.Code, exception.Message, exception);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new UDisksClientException("EjectFailed", "The UDisks2 eject call failed.", exception);
+        }
+    }
+
+    public async ValueTask PowerOffAsync(
+        string driveObjectPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(driveObjectPath);
+        try
+        {
+            await transport.PowerOffAsync(driveObjectPath, cancellationToken).ConfigureAwait(false);
+        }
+        catch (UDisksClientException)
+        {
+            throw;
+        }
+        catch (UDisksTransportException exception)
+        {
+            throw new UDisksClientException(exception.Code, exception.Message, exception);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new UDisksClientException("PowerOffFailed", "The UDisks2 power-off call failed.", exception);
+        }
+    }
+
     public ValueTask DisposeAsync() => transport.DisposeAsync();
 
     private static void Validate(UDisksObjectManagerSnapshot snapshot)

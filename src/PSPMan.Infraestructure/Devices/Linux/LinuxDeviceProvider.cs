@@ -22,6 +22,7 @@ public sealed class LinuxPhysicalDevice
     public required string DisplayName { get; init; }
     public required bool IsSourceEligible { get; init; }
     public required bool IsEjectable { get; init; }
+    public bool IsPowerOffSupported { get; init; }
     public required ImmutableArray<LinuxVolume> Volumes { get; init; }
 }
 
@@ -84,7 +85,8 @@ public sealed class LinuxDeviceProvider(IUDisksClient client) : IAsyncDisposable
             ObjectPath = item.ObjectPath,
             Kind = kind,
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Removable device" : displayName,
-            IsEjectable = TryBoolean(drive, "Ejectable", out var ejectable) && ejectable
+            IsEjectable = TryBoolean(drive, "Ejectable", out var ejectable) && ejectable,
+            IsPowerOffSupported = TryBoolean(drive, "CanPowerOff", out var canPowerOff) && canPowerOff
         };
     }
 
@@ -171,6 +173,7 @@ public sealed class LinuxDeviceProvider(IUDisksClient client) : IAsyncDisposable
         public required LinuxDeviceKind Kind { get; init; }
         public required string DisplayName { get; init; }
         public required bool IsEjectable { get; init; }
+        public bool IsPowerOffSupported { get; init; }
         public List<LinuxVolume> VolumesBuilder { get; } = [];
 
         public LinuxPhysicalDevice Build() => new()
@@ -180,6 +183,7 @@ public sealed class LinuxDeviceProvider(IUDisksClient client) : IAsyncDisposable
             DisplayName = DisplayName,
             IsSourceEligible = true,
             IsEjectable = IsEjectable,
+            IsPowerOffSupported = IsPowerOffSupported,
             Volumes = VolumesBuilder.ToImmutableArray()
         };
     }
