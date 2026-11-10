@@ -25,7 +25,7 @@ public sealed class LinuxPhysicalDevice
     public required ImmutableArray<LinuxVolume> Volumes { get; init; }
 }
 
-public sealed class LinuxVolume
+public sealed record LinuxVolume
 {
     public required string ObjectPath { get; init; }
     public required string DevicePath { get; init; }

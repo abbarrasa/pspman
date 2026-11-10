@@ -139,10 +139,11 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Done when: Transport assertions verify mount calls with native interaction allowed, reuse of existing mounts and accurate post-operation roots/errors without credentials or sudo.
   - Evidence: Individual T20 plan explicitly approved. TmdsUDisksTransport now sends typed `org.freedesktop.UDisks2.Filesystem.Mount` calls with an empty `a{sv}` options dictionary, leaving authorization to the native Polkit flow; LinuxVolumeMounter reuses current MountPoints, returns the native root and preserves authorization/cancellation failures without shell, sudo or credential handling. Mount-service tests cover reuse, call parameters, authorization failure and cancellation: 4/4 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 880/880 (Core 619, Infraestructure 86, Desktop 175), no skips. No live UDisks/Polkit service or hardware was exercised. Branch: `feature/004_T20_linux-mount`; no commits/pushes.
 
-- [ ] **T21. Safely unmount all Linux volumes without forcing.** FR-14, FR-15, FR-18
+- [x] **T21. Safely unmount all Linux volumes without forcing.** FR-14, FR-15, FR-18
   - Depends on: T20.
   - Work: Implement ordinary per-volume Unmount sequencing and actual-state refresh for partial failure before drive removal.
   - Done when: A busy volume stops removal and returns its native error; already-unmounted volumes are not fabricated as mounted and no force option is sent.
+  - Evidence: Individual T21 plan explicitly approved. TmdsUDisksTransport now sends typed `org.freedesktop.UDisks2.Filesystem.Unmount` calls with an empty options dictionary and no force option; LinuxVolumeUnmountCoordinator skips unmounted volumes, sequences all current mounts, refreshes after each operation, stops on native busy/authorization errors and returns the observed partial state. Coordinator tests cover no-op, multi-volume sequencing, busy failure/refresh and cancellation: 4/4 passed. Full verification: `dotnet build PSPMan.slnx --no-restore` passed with 0 warnings/errors; `dotnet test PSPMan.slnx --no-build --no-restore` passed 884/884 (Core 619, Infraestructure 90, Desktop 175), no skips. No live UDisks service or hardware was exercised. Branch: `feature/004_T21_linux-safe-unmount`; no commits/pushes.
 
 - [ ] **T22. Complete Linux eject and physical-device power-off.** FR-15, FR-16
   - Depends on: T21.
