@@ -13,7 +13,7 @@ public sealed record WindowsOperationRequest(int Version, Guid RequestId, Window
 public sealed record WindowsOperationReply(int Version, Guid RequestId, WindowsElevatedOperation Operation,
     bool Completed, WindowsDeviceRemovalFailure? Failure = null);
 
-/// <summary>Version-one fixed-operation codec only; IPC, peer authentication and UAC are separate work.</summary>
+/// <summary>Fixed-operation codec and narrowly scoped Windows authorization, separate from ordinary UI startup.</summary>
 public sealed partial class WindowsDeviceAuthorization
 {
     public const int ProtocolVersion = 1;
