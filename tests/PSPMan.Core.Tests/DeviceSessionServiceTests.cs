@@ -450,6 +450,84 @@ public sealed class DeviceSessionServiceTests
         mount.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
     }
 
+    [Fact]
+    public async Task LateMountCompletionCannotClearAReplacementMediaMount()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        var device = UnmountedDevice();
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        var first = await provider.NextMount();
+
+        var replacement = device with { MediaGeneration = "media-2" };
+        provider.Emit(new DeviceInventorySnapshot(2, [replacement]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 2);
+
+        first.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        var second = await provider.NextMount();
+        Assert.Equal("media-2", second.Request.MediaGeneration);
+        Assert.Equal(DeviceState.Mounting, service.Snapshot.Inventory.Devices[0].State);
+
+        second.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+    }
+
+    [Fact]
+    public async Task LateRemovalCompletionCannotClearAReplacementRemoval()
+    {
+        var provider = new ControlledProvider("test") { AllowRemovals = true };
+        var device = Device("test") with { Capabilities = DeviceCapabilities.RemovableSource |
+            DeviceCapabilities.SafeRemoval };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [device]));
+        await using var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        await service.RemoveDeviceAsync(device.Key);
+        var first = await provider.NextRemoval();
+
+        var replacement = device with { MediaGeneration = "media-2" };
+        provider.Emit(new DeviceInventorySnapshot(2, [replacement]));
+        await Until(service, snapshot => snapshot.ProviderRevisions["test"] == 2);
+        await service.RemoveDeviceAsync(device.Key);
+        first.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+        var second = await provider.NextRemoval();
+        await Task.Yield();
+        Assert.Equal(DeviceState.Removing, service.Snapshot.Inventory.Devices[0].State);
+
+        second.Completion.SetResult(new DeviceOperationResult(DeviceOperationStatus.Succeeded));
+    }
+
+    [Fact]
+    public async Task DisposalCancelsPendingMountAndClosesProviderSubscriptions()
+    {
+        var provider = new ControlledProvider("test") { AllowMounts = true };
+        provider.Initial.SetResult(new DeviceInventorySnapshot(1, [UnmountedDevice()]));
+        var service = new DeviceSessionService([provider]);
+        await service.StartAsync().WaitAsync(Timeout);
+        _ = await provider.NextMount();
+
+        await service.DisposeAsync().AsTask().WaitAsync(Timeout);
+
+        Assert.True(provider.SubscriptionStopped.Task.IsCompletedSuccessfully);
+        Assert.True(provider.Disposed);
+    }
+
+    [Fact]
+    public async Task ThreeProvidersKeepIndependentInventories()
+    {
+        var first = new ControlledProvider("first");
+        var second = new ControlledProvider("second");
+        var third = new ControlledProvider("third");
+        first.Initial.SetResult(new DeviceInventorySnapshot(1, [Device("first")]));
+        second.Initial.SetResult(new DeviceInventorySnapshot(1, [Device("second")]));
+        third.Initial.SetResult(new DeviceInventorySnapshot(1, [Device("third")]));
+        await using var service = new DeviceSessionService([first, second, third]);
+
+        await service.StartAsync().WaitAsync(Timeout);
+
+        Assert.Equal(3, service.Snapshot.Inventory.Devices.Length);
+        Assert.Equal(1, service.Snapshot.ProviderRevisions["third"]);
+    }
+
     [Theory]
     [InlineData(DeviceState.Ready, DeviceState.Ready, false)]
     [InlineData(DeviceState.Unavailable, DeviceState.Unmounted, true)]
