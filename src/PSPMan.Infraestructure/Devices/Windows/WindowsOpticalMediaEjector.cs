@@ -120,7 +120,7 @@ public sealed class WindowsOpticalMediaEjector
         }
     }
 
-    private static WindowsDeviceRemovalFailure? ValidateTarget(WindowsStorageSnapshot snapshot, WindowsOpticalMediaTarget target,
+    internal static WindowsDeviceRemovalFailure? ValidateTarget(WindowsStorageSnapshot snapshot, WindowsOpticalMediaTarget target,
         out WindowsStorageDevice? device)
     {
         device = null;
