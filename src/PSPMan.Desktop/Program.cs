@@ -1,15 +1,17 @@
 ﻿using Avalonia;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace PSPMan.Desktop;
 
 sealed class Program
 {
-    // Initialization code. Don't use any Avalonia, third-party APIs or any
-    // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
-    // yet and stuff might break.
+    // Only the fixed helper bootstrap may run before Avalonia; it does not initialize UI/catalog services.
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
+    public static int Main(string[] args) => ProgramDispatch.Run(args, StartDesktop);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int StartDesktop(string[] args) => BuildAvaloniaApp()
         .StartWithClassicDesktopLifetime(args);
 
     // Avalonia configuration, don't remove; also used by visual designer.
