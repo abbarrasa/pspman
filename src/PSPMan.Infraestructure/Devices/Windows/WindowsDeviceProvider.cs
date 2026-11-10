@@ -46,7 +46,9 @@ public sealed class WindowsDeviceProvider(IWindowsDeviceApi api)
             IsSourceEligible: true, device.CanEject,
             snapshot.Volumes.Where(volume => device.StorageNumber is { } number
                 && volume.StorageNumber == number && !ambiguous.Contains(number))
-                .DistinctBy(volume => volume.InterfacePath, StringComparer.OrdinalIgnoreCase).ToImmutableArray(),
+                .DistinctBy(volume => volume.VolumeGuidPath ?? volume.InterfacePath, StringComparer.OrdinalIgnoreCase)
+                .Select(volume => volume.State == WindowsVolumeState.Available && volume.Error is null
+                    ? volume : volume with { MountPoints = [] }).ToImmutableArray(),
             device.Error)).ToImmutableArray();
         return new WindowsDeviceInventory(result, errors.ToImmutable());
     }
