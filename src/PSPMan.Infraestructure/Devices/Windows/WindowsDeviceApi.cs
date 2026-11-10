@@ -46,11 +46,13 @@ public sealed partial class WindowsDeviceApi : IWindowsDeviceApi
                     errors.Add(ConfigurationError("CM_Get_Parent", parentResult));
 
                 var bus = descriptor?.Bus ?? WindowsStorageBus.Unknown;
+                var ancestry = bus == WindowsStorageBus.Usb
+                    ? ReadUsbAncestry(item.Node, errors, cancellationToken) : ImmutableArray<WindowsPnpNode>.Empty;
                 devices.Add(new WindowsStorageDevice(instanceId, parentId, item.Path,
                     descriptor?.DisplayName ?? item.Name ?? "Removable device", number, bus, optical,
                     IsRemovable: descriptor?.RemovableMedia == true || (item.Capabilities & 0x4) != 0,
                     CanEject: optical || (item.Capabilities & 0x2) != 0,
-                    Error: errors.Count > errorStart ? errors[errorStart] : null));
+                    Error: errors.Count > errorStart ? errors[errorStart] : null) { UsbAncestry = ancestry });
             }
         }
 

@@ -25,7 +25,10 @@ public sealed record WindowsStorageDevice(
     bool IsOptical,
     bool IsRemovable,
     bool CanEject,
-    WindowsDeviceError? Error = null);
+    WindowsDeviceError? Error = null)
+{
+    public ImmutableArray<WindowsPnpNode> UsbAncestry { get; init; } = [];
+}
 
 public enum WindowsVolumeState { Unknown, Available, NoMedia, Unavailable }
 
@@ -34,6 +37,8 @@ public sealed record WindowsVolumeReference(string InterfacePath, WindowsStorage
 {
     public string? VolumeGuidPath { get; init; }
     public string? Label { get; init; }
+    /// <summary>Formatting observation only, not a unique card identity.</summary>
+    public uint? FileSystemSerialNumber { get; init; }
     public ImmutableArray<string> MountPoints { get; init; } = [];
     public WindowsVolumeState State { get; init; }
     public WindowsDeviceError? Error { get; init; }

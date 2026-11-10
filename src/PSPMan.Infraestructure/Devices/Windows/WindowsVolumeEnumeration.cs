@@ -60,7 +60,7 @@ public sealed partial class WindowsDeviceApi
         cancellationToken.ThrowIfCancellationRequested();
         var label = new StringBuilder(261);
         var available = Native.GetVolumeInformationW(guidPath, label, (uint)label.Capacity,
-            out _, out _, out _, IntPtr.Zero, 0);
+            out var serial, out _, out _, IntPtr.Zero, 0);
         WindowsDeviceError? mediaError = null;
         if (!available)
         {
@@ -73,6 +73,7 @@ public sealed partial class WindowsDeviceApi
         {
             VolumeGuidPath = guidPath,
             Label = available ? label.ToString() : null,
+            FileSystemSerialNumber = available ? serial : null,
             MountPoints = state == WindowsVolumeState.Available ? mountPoints : [],
             State = state,
             Error = errors.Count > errorStart ? errors[errorStart] : null
