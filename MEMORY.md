@@ -7,7 +7,7 @@ Durable context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 - PSPMan catalogs removable-media PSP games; CRUD and CSV export/import/template flows are implemented. Deployment, scanning and copying are not.
 - Desktop composes SQLite at the OS local application-data path PSPMan/catalog.db. Corrupt startup/read state is reported without repair and disables catalog mutations.
 - Avalonia typed bindings cover catalog/details, editing, confirmed deletion, CSV flows and device selection. ViewLocator preserves namespaces when mapping ViewModel to View.
-- Spec 004 revision 0.3, plan/tasks revision 0.1 are approved. T01–T44 and authorized AUD-1 corrections are complete; [tasks](./specs/004-device-mounting/tasks.md) hold approval/evidence. T45 is the next task, not started.
+- Spec 004 revision 0.3, plan/tasks revision 0.1 are approved. T01–T45 and authorized AUD-1 corrections are complete; [tasks](./specs/004-device-mounting/tasks.md) hold approval/evidence. T46 is next, not started.
 
 ## Domain and persistence
 
@@ -53,7 +53,8 @@ Durable context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 
 ## Latest evidence and pending acceptance
 
-- T44: build zero warnings/errors; regression passed 1404 (Core 619, Infraestructure 495, Desktop 290), four Windows-native skips, 1408 total. Eleven new lifecycle cases and focused coverage passed 56/56. Owner/async state machines: 100% lines; synchronous/init branches 88.88%/75%, cleanup/shutdown 100%; default-native/cancelled-close/post-factory race branches remain qualified. See [task evidence](./specs/004-device-mounting/tasks.md) for exact scope and commands.
-- Linux/X11 startup and normal Alt+F4 close passed with temporary catalog and a private D-Bus lacking UDisks activation; process exited 0. Portal/FUSE warnings belong to that isolated desktop environment. No real-device operations occurred.
+- T45 added eight fully awaited MainWindow/ApplicationDeviceLifetime functional cases: Linux/Windows-shaped roots, duplicate/missing labels, optical versus shared USB/card source and volume preferences, two per-game PSP choices, empty/unique devices, unchanged catalog and zero native mutations. Only tests/evidence changed in feature/004_T45_device-selection-flow; no game files or real devices were used.
+- Latest build: zero warnings/errors. Regression passed 1412 (Core 619, Infraestructure 495, Desktop 298), four Windows-native skips, 1416 total; separate T45 coverage passed 8/8. Options/presentation/MainViewModel attachment measured 100% lines/branches; invalid/stale/failure/reconnection paths remain outside this narrow filter. See [task evidence](./specs/004-device-mounting/tasks.md) for exact scope/percentages, not whole-feature coverage.
+- T44 Linux/X11 startup and normal Alt+F4 close passed with temporary catalog and a private D-Bus lacking UDisks activation; exit 0. Portal/FUSE warnings belonged to that isolated desktop environment. T45 did not repeat native startup because production/UI code was unchanged.
 - Ordinary startup now enables discovery/automatic mounting: do not launch against arbitrary hardware for smoke tests. [Pending native validation](./specs/004-device-mounting/pending-validation.md) retains Windows VM/CI/UAC/apphost/hardware and Linux Polkit procedures; native/all-model acceptance remains unverified.
 - Historical [CRUD](./specs/001-crud-game/coverage.md), [export](./specs/002-export-games/coverage.md) and [import](./specs/003-import-games/coverage.md) evidence remains scoped to its revision. [Import graphical validation](./specs/003-import-games/manual-validation.md) observed Linux flows; physical removal, native Windows/macOS pickers and Excel formula/display/round-trip checks remain pending.
