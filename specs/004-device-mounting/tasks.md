@@ -366,6 +366,7 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Depends on: T48.
   - Work: Use explicitly selected disposable source hardware and available PSPs to execute the Linux discovery/mount/authorization part of manual-validation.md.
   - Done when: Observed startup/hot insertion, existing mount reuse, per-volume roots and Polkit approval/denial are documented with hardware coverage; unavailable mandatory cases keep this task incomplete.
+  - Readiness only, 2026-11-13: The user approved the plan but confirmed no test media are available. [Readiness evidence](./manual-validation.md#t49-readiness--2026-11-13) records safe non-mutating checks: Linux x86_64, busctl/udisksctl/pkcheck available, a graphical environment variable present, no conventional system-bus socket visible, and systemctl unable to query services because systemd is not PID 1. These are agent-environment observations, not proof of host service failure or a working graphical Polkit agent. No application launch, device selection, storage inventory, mounting or native authorization was performed. Only documentation/memory changed; no new build/tests were needed, and native completion criteria remain unmet. Branch `feature/004_T49_linux-native-mount-validation`; no commits/pushes. Resume only with selected backed-up media, a usable native environment and explicit target authorization; T50 is not started.
 
 - [ ] **T50. Observe Linux removal, reconnection and session behavior.** FR-6, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, NFR-1, NFR-3
   - Depends on: T49.
