@@ -7,7 +7,7 @@ Durable context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 - PSPMan catalogs removable-media PSP games; CRUD and CSV export/import/template flows are implemented. Deployment, scanning and copying are not.
 - Desktop composes SQLite at the OS local application-data path PSPMan/catalog.db. Corrupt startup/read state is reported without repair and disables catalog mutations.
 - Avalonia typed bindings cover catalog/details, editing, confirmed deletion, CSV flows and device selection. ViewLocator preserves namespaces when mapping ViewModel to View.
-- Spec 004 revision 0.3, plan/tasks revision 0.1 are approved. T01–T47 and authorized AUD-1 corrections are complete; [tasks](./specs/004-device-mounting/tasks.md) hold approval/evidence. T48 is next, not started.
+- Spec 004 revision 0.3, plan/tasks revision 0.1 are approved. T01–T48 and AUD-1 are complete; [tasks](./specs/004-device-mounting/tasks.md) retain evidence. T49 is next, not started; native acceptance and formal review remain pending.
 
 ## Domain and persistence
 
@@ -34,6 +34,7 @@ Durable context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 - Headless tests use Avalonia.Headless 12.1.4, FluentTheme and a nonparallel collection. Result-less async callbacks require HeadlessTestDispatcher.DispatchAsync or explicit Dispatch<bool>; bare Dispatch(async () => ...) can return Task<Task>. Import uses explicit Dispatch<int>.
 - The [headless audit](./specs/004-device-mounting/headless-audit.md) corrected five result-less sites, a recycled-button assertion and a later Core/UI publication race. Await visible UI projection, not only Core's revision; capture retired commands, not recycled button instances, for stale-action checks.
 - Never instrument coverage while another test/app uses shared binaries: it caused BadImageFormatException. Rebuild and run sequentially. Preserve mixed legacy line endings; check added-line whitespace.
+- Coverlet injects the standard netstandard facade into instrumented Core. Its architecture guard explicitly permits that exact assembly name alongside System references; it still rejects non-framework dependencies. This test-only compatibility correction was explicitly authorized in T48.
 - The auto-PR workflow targets dev and requires GitHub Actions PR permission. Feature planning requires approval; its validator needs PyYAML.
 
 ## Device state, lifetime and safety
@@ -54,7 +55,7 @@ Durable context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 ## Latest evidence and pending acceptance
 
 - T45/T46 provide 16 awaited MainWindow/lifetime flows for selections, responsive pending operations, explicit retries, no fallback, fresh-root recovery and restart reset. T47 adds scoped compiled dependency/direct-IL guards, three-provider flows with sealed catalog-read/write spies and eight unsafe/credential protocol rejection cases. No production defect or repair; only tests/evidence changed in feature/004_T47_feature-boundaries-catalog-regressions. Guards are not process-wide I/O interception or native security certification.
-- Latest build: zero warnings/errors. Regression passed 1434 (Core 619, Infraestructure 503, Desktop 312), four Windows-native skips, 1438 total; focused T47 checks passed 6/6 Desktop and 127/127 Infraestructure. Historical T46 focused coverage passed 16/16; see [task evidence](./specs/004-device-mounting/tasks.md) for scoped percentages/gaps. Whole-feature coverage remains T48, not measured by T47.
-- T44 Linux/X11 startup and normal Alt+F4 close passed with temporary catalog and a private D-Bus lacking UDisks activation; exit 0. Portal/FUSE warnings belonged to that isolated desktop environment. T45–T47 did not repeat native startup because production/UI code was unchanged.
+- T48 build passed with zero warnings/errors; regression passed 1434 (619/503/312), four Windows skips. [Coverage report](./specs/004-device-mounting/coverage.md): owning Core 95.91% lines/90.53% branches, Infraestructure 73.90%/62.38%, Desktop 93.00%/89.09%. Full instrumented Desktop passed 312/312 after the authorized facade allowance; initial failed evidence remains historical. No production changes or coverage exclusions in feature/004_T48_build-regression-coverage.
+- T44 Linux/X11 startup and normal Alt+F4 close passed with temporary catalog and a private D-Bus lacking UDisks activation; exit 0. Portal/FUSE warnings belonged to that isolated desktop environment. T45–T48 did not repeat native startup because production/UI code was unchanged.
 - Ordinary startup now enables discovery/automatic mounting: do not launch against arbitrary hardware for smoke tests. [Pending native validation](./specs/004-device-mounting/pending-validation.md) retains Windows VM/CI/UAC/apphost/hardware and Linux Polkit procedures; native/all-model acceptance remains unverified.
 - Historical [CRUD](./specs/001-crud-game/coverage.md), [export](./specs/002-export-games/coverage.md) and [import](./specs/003-import-games/coverage.md) evidence remains scoped to its revision. [Import graphical validation](./specs/003-import-games/manual-validation.md) observed Linux flows; physical removal, native Windows/macOS pickers and Excel formula/display/round-trip checks remain pending.
