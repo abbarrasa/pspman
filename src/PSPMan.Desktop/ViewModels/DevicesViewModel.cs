@@ -36,6 +36,8 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
     public ImmutableArray<DeviceItemViewModel> Devices => _presentation.Devices;
     public ImmutableArray<DeviceItemViewModel> Sources => _presentation.Sources;
     public ImmutableArray<DeviceItemViewModel> PspDestinations => _presentation.Destinations;
+    public ImmutableArray<DeviceItemViewModel> OtherDevices => Devices.Where(device => !device.IsSource && !device.IsPspDestination).ToImmutableArray();
+    public bool HasOtherDevices => !OtherDevices.IsEmpty;
     public ImmutableArray<DeviceProviderErrorViewModel> ProviderErrors => _presentation.Errors;
     public bool IsEmpty => Devices.IsEmpty;
     public bool IsDetecting => _presentation.Detecting;
@@ -77,7 +79,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
                 ProjectSources(snapshot);
                 ProjectDestination(snapshot);
                 foreach (var row in oldRows) row.RefreshCommands();
-                foreach (var property in new[] { nameof(Devices), nameof(Sources), nameof(PspDestinations), nameof(ProviderErrors),
+                foreach (var property in new[] { nameof(Devices), nameof(Sources), nameof(PspDestinations), nameof(OtherDevices), nameof(HasOtherDevices), nameof(ProviderErrors),
                     nameof(IsEmpty), nameof(IsDetecting), nameof(HasErrors), nameof(StatusText) }) OnPropertyChanged(property);
             }
         });
