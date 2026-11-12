@@ -1,18 +1,24 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:PSPMan.Desktop.ViewModels"
+        xmlns:views="using:PSPMan.Desktop.Views"
         xmlns:games="using:PSPMan.Core.Games"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="650"
-        x:Class="PSPMan.Desktop.Views.MainWindow"
-        x:DataType="vm:MainViewModel"
+        x:Class="PSPMan.Desktop.Views.MainWindow" x:Name="WindowRoot"
+        x:DataType="vm:MainViewModel" x:CompileBindings="True"
         Width="1200" Height="650" MinWidth="900" MinHeight="450"
         Icon="/Assets/avalonia-logo.ico"
         Title="PSPMan">
     <Design.DataContext>
         <vm:MainViewModel />
     </Design.DataContext>
+    <Window.Resources>
+        <views:DeviceWorkspaceWidthConverter x:Key="CatalogColumnWidth" WithDevices="170" WithoutDevices="240" />
+        <views:DeviceWorkspaceWidthConverter x:Key="EditorColumnWidth" WithDevices="240" WithoutDevices="360" />
+        <views:DeviceWorkspaceWidthConverter x:Key="DeviceColumnWidth" WithDevices="270" WithoutDevices="0" />
+    </Window.Resources>
 
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" Margin="20">
         <Grid ColumnDefinitions="*,Auto">
@@ -131,7 +137,13 @@
                        IsVisible="{Binding HasDistinctOperationError}"
                        TextWrapping="Wrap" />
         </StackPanel>
-        <Grid Grid.Row="5" ColumnDefinitions="240,*,360" Margin="0,20,0,0">
+        <Grid x:Name="CatalogWorkspace" Grid.Row="5" Margin="0,20,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding #WindowRoot.((vm:MainViewModel)DataContext).HasDevices, Converter={StaticResource CatalogColumnWidth}}" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="{Binding #WindowRoot.((vm:MainViewModel)DataContext).HasDevices, Converter={StaticResource EditorColumnWidth}}" />
+                <ColumnDefinition Width="{Binding #WindowRoot.((vm:MainViewModel)DataContext).HasDevices, Converter={StaticResource DeviceColumnWidth}}" />
+            </Grid.ColumnDefinitions>
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
                 <StackPanel Grid.Row="1">
@@ -139,6 +151,7 @@
                                IsVisible="{Binding IsEmpty}" />
                 </StackPanel>
                 <ListBox x:Name="GamesList" Grid.Row="2" ItemsSource="{Binding Games}"
+                         AutomationProperties.Name="Game catalog"
                          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
                          IsVisible="{Binding HasGames}">
                     <ListBox.ItemTemplate>
@@ -169,12 +182,60 @@
             <TextBlock Grid.Column="1" Margin="20,0,0,0"
                        Text="Select a game to view its details."
                        IsVisible="{Binding NeedsSelection}" />
-            <ScrollViewer Grid.Column="1" Margin="20,0,0,0"
+            <ScrollViewer x:Name="GameDetailsScrollViewer" Grid.Column="1" Margin="12,0,0,0"
+                          HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Selected game details"
                           IsVisible="{Binding HasSelection}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Game details" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock Text="Title" FontWeight="SemiBold" />
                     <TextBlock x:Name="SelectedTitleText" Text="{Binding SelectedTitleText}" TextWrapping="Wrap" />
+                    <Border x:Name="GameDestinationPanel" IsVisible="{Binding HasDevices}"
+                            BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1" Padding="8">
+                        <StackPanel DataContext="{Binding Devices}" x:DataType="vm:DevicesViewModel" Spacing="5">
+                            <TextBlock Text="PSP destination" FontWeight="SemiBold" />
+                            <TextBlock x:Name="PspDestinationStatusText" Text="{Binding GameDestination.StatusText}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="SelectedPspNameText" Text="{Binding GameDestination.SelectedDeviceName}"
+                                       FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <ItemsControl ItemsSource="{Binding GameDestination.Volumes}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DeviceVolumeViewModel">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Root}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ItemsControl x:Name="PspDestinationOptions" ItemsSource="{Binding GameDestination.Options}"
+                                          IsVisible="{Binding GameDestination.HasDestinationChoices}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PspDestinationOptionViewModel">
+                                        <StackPanel Spacing="3" Margin="0,4">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Choice.Device.ProviderId}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Choice.Device.DeviceId}" TextWrapping="Wrap" />
+                                            <ItemsControl ItemsSource="{Binding Volumes}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:DeviceVolumeViewModel">
+                                                        <StackPanel Spacing="2">
+                                                            <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding Root}" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock Text="Selected PSP" IsVisible="{Binding IsSelected}" />
+                                            <Button x:Name="ChoosePspButton" Content="Use PSP"
+                                                    AutomationProperties.Name="{Binding Name, StringFormat='Use PSP {0}'}"
+                                                    Command="{Binding SelectCommand}" IsEnabled="{Binding CanSelect}"
+                                                    HorizontalAlignment="Left" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding DestinationSelectionError}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
                     <TextBlock Text="Medium" FontWeight="SemiBold" />
                     <TextBlock x:Name="SelectedMediumText" Text="{Binding SelectedMediumText}" />
                     <TextBlock Text="DVD number" FontWeight="SemiBold" />
@@ -200,7 +261,8 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <ScrollViewer Grid.Column="2" Margin="20,0,0,0"
+            <ScrollViewer x:Name="GameEditorScrollViewer" Grid.Column="2" Margin="12,0,0,0"
+                          HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Game editor"
                           IsVisible="{Binding IsEditorAvailable}">
                 <StackPanel Spacing="6">
                     <TextBlock Text="Game editor" FontSize="18" FontWeight="SemiBold" />
@@ -284,6 +346,10 @@
                             HorizontalAlignment="Left" />
                 </StackPanel>
             </ScrollViewer>
+            <Border Grid.Column="3" IsVisible="{Binding HasDevices}" Margin="12,0,0,0"
+                    BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1" CornerRadius="4">
+                <views:DevicesView x:Name="DevicePanel" DataContext="{Binding Devices}" />
+            </Border>
         </Grid>
     </Grid>
 </Window>

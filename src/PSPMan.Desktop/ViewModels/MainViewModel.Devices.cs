@@ -8,6 +8,7 @@ public partial class MainViewModel
 
     /// <summary>Caller-owned device state; optional for existing catalog-only consumers.</summary>
     public DevicesViewModel? Devices { get; }
+    public bool HasDevices => Devices is not null;
 
     private void UpdateSelectedGameDevices() => Devices?.SetSelectedGame(SelectedGame?.Id,
         SelectedGame?.Medium, SelectedGame?.Location, _mountedPathSyntax);
