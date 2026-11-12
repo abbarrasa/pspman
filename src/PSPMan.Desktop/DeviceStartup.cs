@@ -45,7 +45,7 @@ public sealed class DeviceStartup : IAsyncDisposable
         }
     }
 
-    // Application lifetime wiring and actual discovery activation belong to T44.
+    // The application owner starts discovery only after its window has initialized.
     public Task StartAsync(CancellationToken cancellationToken = default) => Session?.StartAsync(cancellationToken) ?? Task.CompletedTask;
     public ValueTask DisposeAsync() => Session?.DisposeAsync() ?? ValueTask.CompletedTask;
 }

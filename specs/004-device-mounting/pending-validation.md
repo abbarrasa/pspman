@@ -12,7 +12,7 @@ The last recorded T38 regression passed 1328 tests and explicitly skipped four W
 
 All checkboxes below remain open until an actual execution record supports closure. A skipped test, zero observed removable volumes or an unavailable model is a remaining gap, not a pass. Virtual-device evidence and physical-device evidence must be recorded separately. T36's suite implementation is complete, but its Windows-native execution remains pending. T49–T53 retain their existing completion gates.
 
-The visible device workflow is not yet wired into the application as of T38. Execute end-to-end UI procedures only after their dependent implementation tasks, including T44 and T48, are complete and execution is authorized. This document does not start T39 or the formal validation/code-review phase.
+T44 wires the visible device workflow into the application: ordinary startup now begins discovery and may automatically mount supported attached devices. Do not launch it against arbitrary hardware for a smoke test. Execute native end-to-end procedures only after their dependent tasks, including T48, are complete and execution is authorized with the safety gates below. An isolated private D-Bus with no UDisks service can check Linux startup/close without device operations, but cannot certify real hardware or Polkit. This document does not start T45 or the formal validation/code-review phase.
 
 ## Architecture and tools
 

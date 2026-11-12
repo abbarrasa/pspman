@@ -100,7 +100,7 @@ public sealed class DevicesViewTests
     public async Task VisibleSourceAndVolumeActionsPreserveIndependentGroups(bool missingLabels)
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await ui.Dispatch(async () =>
+        await ui.DispatchAsync(async () =>
         {
             var card = Device("card", DeviceMedium.MemoryCard);
             card = card with { Volumes = [card.Volumes[0] with { Label = missingLabels ? null : "Games" },
@@ -127,7 +127,7 @@ public sealed class DevicesViewTests
     public async Task DisconnectedExplicitSourceShowsUnavailableInsteadOfSwitchingToAnother()
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await ui.Dispatch(async () =>
+        await ui.DispatchAsync(async () =>
         {
             await using var test = await Fixture.Create(Device("one"), Device("two"));
             await Click(test.Window, SourceButton(test.Window, "one"));
@@ -145,7 +145,7 @@ public sealed class DevicesViewTests
     public async Task RemovalDisablesOnlyItsDeviceAndNativeVetoAllowsExplicitRetry()
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await ui.Dispatch(async () =>
+        await ui.DispatchAsync(async () =>
         {
             await using var test = await Fixture.Create(Device("one"), Device("two"));
             await Click(test.Window, RemovalButton(test.Window, "one"));
@@ -167,7 +167,7 @@ public sealed class DevicesViewTests
     public async Task FailedMountHasVisibleNativeErrorAndAnEnabledRetryAction()
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await ui.Dispatch(async () =>
+        await ui.DispatchAsync(async () =>
         {
             var device = Device("one");
             device = device with { Capabilities = device.Capabilities | DeviceCapabilities.Mount, State = DeviceState.Unmounted,
@@ -209,16 +209,19 @@ public sealed class DevicesViewTests
     public async Task OldAndDisposedOptionsDisableTheirBoundActionsAndCannotApplySelections()
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await ui.Dispatch(async () =>
+        await ui.DispatchAsync(async () =>
         {
             await using var test = await Fixture.Create(Device("one"), Device("two"));
             var oldButton = SourceButton(test.Window, "one");
             var old = (SourceChoice)oldButton.DataContext!;
+            var oldCommand = oldButton.Command;
             var one = Device("one");
             await test.Publish(one with { Volumes = [one.Volumes[0] with { Root = "/media/new" }] }, Device("two"));
             Assert.False(old.CanSelect);
             Assert.False(old.SelectCommand.CanExecute(null));
-            Assert.False(oldButton.IsEnabled);
+            // The presenter may reuse this button for a fresh choice; validate the retired action.
+            Assert.Same(old.SelectCommand, oldCommand);
+            Assert.False(oldCommand!.CanExecute(null));
             await old.SelectCommand.ExecuteAsync(null); Pump();
             Assert.Null(test.Session.Snapshot.Associations.RemovableSource);
             var currentButton = SourceButton(test.Window, "one");

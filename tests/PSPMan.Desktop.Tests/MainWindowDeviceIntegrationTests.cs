@@ -257,6 +257,8 @@ public sealed class MainWindowDeviceIntegrationTests
             Provider.Inventory = new(Provider.Inventory.Revision + 1, devices.ToImmutableArray());
             Provider.Changes.Writer.TryWrite(Provider.Inventory);
             await Until(() => Session.Snapshot.ProviderRevisions.GetValueOrDefault("test") == Provider.Inventory.Revision);
+            // Core publishes its snapshot before the UI subscriber has projected it.
+            await Until(() => Devices.Devices.Select(row => row.Key).SequenceEqual(devices.Select(device => device.Key)));
         }
         public async ValueTask DisposeAsync() { Window.Close(); Devices.Dispose(); await Session.DisposeAsync(); }
     }

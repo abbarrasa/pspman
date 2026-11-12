@@ -19,7 +19,7 @@ public class GameCatalogImportFlowTests
         using var data = new ImportData(Header);
         var before = File.ReadAllBytes(data.CatalogPath);
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var vm = CatalogStartup.CreateMainViewModel(data.Folder, importFilePicker: new CancelledPicker());
             var window = new MainWindow { DataContext = vm };
@@ -48,7 +48,7 @@ public class GameCatalogImportFlowTests
         using var data = new ImportData(Header + first + "Unattempted;Usb;;/later.rar;ISO;1;\n");
         var source = new FailingApplySource(Header.Length + first.Length);
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var repository = new SqliteGameRecordRepository(data.CatalogPath);
             var vm = new MainViewModel(new GameCatalogService(repository), null,
@@ -127,7 +127,7 @@ public class GameCatalogImportFlowTests
         using var data = new ImportData(Header);
         var before = File.ReadAllBytes(data.CatalogPath);
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var window = data.OpenWindow();
             try
@@ -191,7 +191,7 @@ public class GameCatalogImportFlowTests
         Assert.True(saved.IsSuccess, saved.Error);
         var before = File.ReadAllBytes(data.CatalogPath);
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var window = data.OpenWindow();
             try
@@ -295,7 +295,7 @@ public class GameCatalogImportFlowTests
     {
         using var data = new ImportData(Header + "Game;Usb;;/game.rar;ISO;1024;\nInvalid;Usb;;/bad.rar;ISO;bad;\n");
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var window = data.OpenWindow();
             try
@@ -350,7 +350,7 @@ public class GameCatalogImportFlowTests
         using var data = new ImportData(scenario == "empty" ? Header : scenario == "malformed"
             ? Header + "\"unterminated" : Header + "Game;Usb;;/game.rar;ISO;1;\n");
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var window = data.OpenWindow();
             try
@@ -398,7 +398,7 @@ public class GameCatalogImportFlowTests
         var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var source = new BlockingSource(entered, release);
         using var session = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
-        await session.Dispatch(async () =>
+        await session.Dispatch<int>(async () =>
         {
             var repository = new SqliteGameRecordRepository(data.CatalogPath);
             var vm = new MainViewModel(new GameCatalogService(repository), null,
