@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -16,7 +17,7 @@ using PSPMan.Infraestructure.Devices;
 namespace PSPMan.Desktop.Tests;
 
 [Collection("Headless UI")]
-public sealed class DeviceMountingFlowTests
+public sealed partial class DeviceMountingFlowTests
 {
     [Theory]
     [InlineData(MountedPathSyntax.Linux, false)]
@@ -273,29 +274,38 @@ public sealed class DeviceMountingFlowTests
         public DevicesViewModel Devices => Main.Devices!;
         private readonly Repository repository;
         private readonly Provider provider;
+        public Provider Operations => provider;
+        private readonly bool controlled;
         private readonly ApplicationDeviceLifetime lifetime;
         private readonly GameRecord[] original;
         private int? exitCode;
 
-        private Fixture(MountedPathSyntax syntax, DeviceSnapshot[] devices)
+        private Fixture(MountedPathSyntax syntax, DeviceSnapshot[] devices, bool controlled = false, GameRecord[]? records = null)
         {
+            this.controlled = controlled;
             Syntax = syntax;
+            if (records is not null)
+                (UsbGame, CardGame, DvdGame, OtherDvdGame) = (records[0], records[1], records[2], records[3]);
             original = [UsbGame, CardGame, DvdGame, OtherDvdGame];
             repository = new(original);
             Main = new(new GameCatalogService(repository), null, mountedPathSyntax: syntax);
             Window = new MainWindow { DataContext = Main, Width = 900, Height = 450 };
             provider = new(devices);
+            provider.Controlled = controlled;
             lifetime = new(Window, Main, code => { exitCode = code; Window.Close(); }, _ =>
                 ValueTask.FromResult(new DeviceProviderFactoryResult([provider])));
         }
 
-        public static async Task<Fixture> Create(MountedPathSyntax syntax, params DeviceSnapshot[] devices)
+        public static Task<Fixture> Create(MountedPathSyntax syntax, params DeviceSnapshot[] devices) => Start(new(syntax, devices));
+        public static Task<Fixture> CreateControlled(MountedPathSyntax syntax, DeviceSnapshot[] devices, GameRecord[]? records = null) =>
+            Start(new(syntax, devices, true, records));
+        public GameRecord[] Records => original.ToArray();
+        private static async Task<Fixture> Start(Fixture test)
         {
-            var test = new Fixture(syntax, devices);
             try
             {
                 test.Window.Show(); await test.lifetime.Initialization.WaitAsync(TimeSpan.FromSeconds(10));
-                await Until(() => test.Devices.Devices.Length == devices.Length && !test.Devices.IsDetecting);
+                await Until(() => test.Devices.Devices.Length == test.provider.Inventory.Devices.Length && !test.Devices.IsDetecting);
                 return test;
             }
             catch { await test.DisposeAsync(); throw; }
@@ -306,8 +316,20 @@ public sealed class DeviceMountingFlowTests
             Assert.Equal(original, Main.Games);
             Assert.Equal(original, repository.List());
             Assert.Equal(0, repository.Writes);
-            Assert.Equal(0, provider.Mounts);
-            Assert.Equal(0, provider.Removals);
+            if (!controlled)
+            {
+                Assert.Equal(0, provider.Mounts);
+                Assert.Equal(0, provider.Removals);
+            }
+        }
+
+        public async Task Publish(params DeviceSnapshot[] devices)
+        {
+            var previous = Devices.Devices;
+            provider.SetInventory(devices, publish: true);
+            await Until(() => !Devices.Devices.Equals(previous)
+                && Devices.Devices.Select(row => row.Key).OrderBy(key => key.DeviceId)
+                    .SequenceEqual(devices.Select(device => device.Key).OrderBy(key => key.DeviceId)));
         }
 
         public async ValueTask DisposeAsync()
@@ -335,24 +357,42 @@ public sealed class DeviceMountingFlowTests
         public void Delete(Guid id) { Writes++; throw new InvalidOperationException("Device selection must not delete catalog records."); }
     }
 
-    // Inventory-only fake: roots describe observations, never real files or native devices.
+    // Controlled fake: roots and operation results are observations, never real files or native devices.
     private sealed class Provider(params DeviceSnapshot[] devices) : IDeviceProvider
     {
         public string ProviderId => "flow";
-        private readonly DeviceInventorySnapshot inventory = new(1, devices.ToImmutableArray());
+        private DeviceInventorySnapshot inventory = new(1, devices.ToImmutableArray());
+        public DeviceInventorySnapshot Inventory => Volatile.Read(ref inventory);
+        public bool Controlled;
+        private readonly Channel<DeviceInventorySnapshot> changes = Channel.CreateUnbounded<DeviceInventorySnapshot>();
+        public readonly Channel<TaskCompletionSource<DeviceOperationResult>> MountRequests = Channel.CreateUnbounded<TaskCompletionSource<DeviceOperationResult>>();
+        public readonly Channel<TaskCompletionSource<DeviceOperationResult>> RemovalRequests = Channel.CreateUnbounded<TaskCompletionSource<DeviceOperationResult>>();
+        public void SetInventory(DeviceSnapshot[] next, bool publish = false)
+        {
+            var snapshot = new DeviceInventorySnapshot(Inventory.Revision + 1, next.ToImmutableArray());
+            Volatile.Write(ref inventory, snapshot);
+            if (publish) Assert.True(changes.Writer.TryWrite(snapshot));
+        }
         public int Mounts, Removals, Watches, Unsubscriptions, Disposals;
         public ValueTask<DeviceInventorySnapshot> GetSnapshotAsync(CancellationToken token = default)
-        { token.ThrowIfCancellationRequested(); return ValueTask.FromResult(inventory); }
+        { token.ThrowIfCancellationRequested(); return ValueTask.FromResult(Inventory); }
         public async IAsyncEnumerable<DeviceInventorySnapshot> WatchChangesAsync([EnumeratorCancellation] CancellationToken token = default)
         {
             Interlocked.Increment(ref Watches);
-            try { yield return inventory; await Task.Delay(Timeout.Infinite, token); }
+            try { yield return Inventory; await foreach (var snapshot in changes.Reader.ReadAllAsync(token)) yield return snapshot; }
             finally { Interlocked.Increment(ref Unsubscriptions); }
         }
         public ValueTask<DeviceOperationResult> MountAsync(DeviceMountRequest request, CancellationToken token = default)
-        { Interlocked.Increment(ref Mounts); throw new InvalidOperationException("Ready volumes must not be mounted again."); }
+        { Interlocked.Increment(ref Mounts); return Pending(MountRequests, token); }
         public ValueTask<DeviceOperationResult> RemoveAsync(DeviceRemovalRequest request, CancellationToken token = default)
-        { Interlocked.Increment(ref Removals); throw new InvalidOperationException("This selection flow must not remove devices."); }
+        { Interlocked.Increment(ref Removals); return Pending(RemovalRequests, token); }
+        private async ValueTask<DeviceOperationResult> Pending(Channel<TaskCompletionSource<DeviceOperationResult>> requests, CancellationToken token)
+        {
+            if (!Controlled) throw new InvalidOperationException("Selection-only flows must not operate devices.");
+            var completion = new TaskCompletionSource<DeviceOperationResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Assert.True(requests.Writer.TryWrite(completion));
+            return await completion.Task.WaitAsync(token);
+        }
         public ValueTask DisposeAsync() { Interlocked.Increment(ref Disposals); return ValueTask.CompletedTask; }
     }
 }
