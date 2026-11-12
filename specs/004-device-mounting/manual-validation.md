@@ -2,12 +2,14 @@
 
 Specification: approved [spec.md](./spec.md), revision 0.3
 Plan: approved [plan.md](./plan.md), revision 0.1
-Evidence scope: T01 documentation research only; FR-2 and NFR-1.
+Evidence scope of the recognition research below: T01 documentation only; FR-2 and NFR-1. Current implementation/test evidence is tracked in [tasks](./tasks.md).
 Research date: 2026-11-09
+
+Future work: [Pending validation runbook](./pending-validation.md) records the required environments, tools, safety prerequisites and execution steps for remaining Windows/Linux native and hardware checks. All of its execution cases remain pending.
 
 ## Verdict and evidence levels
 
-T01's documentary matrix is complete. All-model PSP recognition and Linux/Windows device behavior are **not yet verified**. No PSP was connected, inspected, mounted or ejected for this task, and PSPMan's device feature is not implemented. This document does not certify any physical console, firmware or OS combination.
+T01's documentary matrix is complete. All-model PSP recognition and Linux/Windows hardware acceptance are **not yet verified**. No PSP was connected, inspected, mounted or ejected for T01; the feature was not implemented at that research baseline. Later automated implementation evidence does not certify any physical console, firmware or OS combination; see the current task record and pending runbook above.
 
 - **Manufacturer documented:** Sony documentation establishes a feature or operating prerequisite; it does not establish a USB VID/PID mapping unless explicitly stated.
 - **Registry documented:** a public USB ID dataset names a device presentation; this is not manufacturer certification, a complete descriptor capture or proof of a model-family mapping.
