@@ -51,6 +51,10 @@ public sealed class WindowsOperationProtocolTests
 
     [Theory]
     [InlineData("operation", "format")]
+    [InlineData("operation", "repair")]
+    [InlineData("operation", "repartition")]
+    [InlineData("operation", "copyGame")]
+    [InlineData("operation", "forceUnmount")]
     [InlineData("operation", "MountVolume")]
     [InlineData("deviceInstanceId", "cmd.exe /c echo unsafe")]
     [InlineData("deviceInstanceId", "C:\\folder\\catalog.db")]
@@ -71,6 +75,10 @@ public sealed class WindowsOperationProtocolTests
     [InlineData("interfacePath")]
     [InlineData("isRemovable")]
     [InlineData("force")]
+    [InlineData("password")]
+    [InlineData("credentials")]
+    [InlineData("repair")]
+    [InlineData("format")]
     [InlineData("$type")]
     public void UnknownFieldsCannotExtendTheOperation(string field)
     {
