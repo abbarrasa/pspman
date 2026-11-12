@@ -13,7 +13,12 @@ public sealed record PspDestinationChoice(Guid GameId, long GameVersion, DeviceK
 
 public sealed record GameDestinationViewModel(Guid? GameId, DestinationResolutionStatus Status,
     ImmutableArray<PspDestinationChoice> Candidates, DeviceKey? PreferredDevice, DeviceKey? SelectedDevice,
-    ImmutableArray<DeviceVolumeViewModel> Volumes, string StatusText);
+    ImmutableArray<DeviceVolumeViewModel> Volumes, string StatusText)
+{
+    public ImmutableArray<PspDestinationOptionViewModel> Options { get; init; } = [];
+    public string? SelectedDeviceName => Candidates.FirstOrDefault(choice => choice.Device == SelectedDevice)?.Name;
+    public bool HasDestinationChoices => Candidates.Length > 1 || (Status == DestinationResolutionStatus.Unavailable && !Candidates.IsEmpty);
+}
 
 public sealed partial class DevicesViewModel
 {
@@ -29,8 +34,14 @@ public sealed partial class DevicesViewModel
     private static GameDestinationViewModel NoGameDestination() => new(null, DestinationResolutionStatus.Unavailable,
         [], null, null, [], "Select a game to choose its PSP destination.");
 
-    private void InitializeDestinationCommands() => ChoosePspCommand = new AsyncRelayCommand<PspDestinationChoice>(
-        SelectPspAsync, choice => IsCurrentDestination(choice));
+    private void InitializeDestinationCommands()
+    {
+        ChoosePspCommand = new AsyncRelayCommand<PspDestinationChoice>(SelectPspAsync, choice => IsCurrentDestination(choice));
+        ChoosePspCommand.CanExecuteChanged += (_, _) => _postToUi(() =>
+        {
+            lock (_gate) foreach (var option in GameDestination.Options) option.RefreshAvailability();
+        });
+    }
 
     /// <summary>Receives catalog metadata only. Device choices never modify catalog records.</summary>
     public void SetSelectedGame(Guid? gameId, GameMedium? medium, string? location, MountedPathSyntax syntax)
@@ -68,6 +79,7 @@ public sealed partial class DevicesViewModel
 
     private void ProjectGameDestination()
     {
+        var previous = GameDestination;
         if (_selectedGameId is not { } gameId) GameDestination = NoGameDestination();
         else
         {
@@ -89,8 +101,14 @@ public sealed partial class DevicesViewModel
                     DestinationResolutionStatus.ChooseDevice => "Choose a PSP destination for this game.",
                     _ => preferred is not null ? "The selected PSP destination is unavailable. Choose another PSP explicitly."
                         : "PSP destination unavailable."
-                });
+                })
+            {
+                Options = choices.Select(choice => new PspDestinationOptionViewModel(choice,
+                    choice.Device == resolution.SelectedDevice, () => ChoosePspCommand.CanExecute(choice),
+                    () => ChoosePspCommand.ExecuteAsync(choice))).ToImmutableArray()
+            };
         }
+        foreach (var option in previous.Options) option.RefreshAvailability();
         OnPropertyChanged(nameof(GameDestination));
         ChoosePspCommand.NotifyCanExecuteChanged();
     }
