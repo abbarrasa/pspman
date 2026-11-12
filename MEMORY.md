@@ -7,7 +7,7 @@ Durable context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 - PSPMan catalogs removable-media PSP games; CRUD and CSV export/import/template flows are implemented. Deployment, scanning and copying are not.
 - Desktop composes SQLite at the OS local application-data path PSPMan/catalog.db. Corrupt startup/read state is reported without repair and disables catalog mutations.
 - Avalonia typed bindings cover catalog/details, editing, confirmed deletion, CSV flows and device selection. ViewLocator preserves namespaces when mapping ViewModel to View.
-- Spec 004 revision 0.3, plan/tasks revision 0.1 are approved. T01–T48 and AUD-1 are complete. T49's plan is approved but native execution is pending: no test media are available. [Readiness evidence](./specs/004-device-mounting/manual-validation.md#t49-readiness--2026-11-13) records non-mutating prerequisites only; T50 is not started. Native acceptance and formal review remain pending.
+- Spec 004 revision 0.3, plan/tasks revision 0.1 are approved. T01–T48 and AUD-1 are complete. T49–T53 remain open: no physical test media or accessible Windows machine/VM. T49's plan is approved; T50–T53 native execution is not started. User-authorized [documentary consolidation](./specs/004-device-mounting/pending-validation.md#current-blockers-and-restart-order) retains dependencies, safety gates and resume steps; no provisioning or formal validation/acceptance is authorized by it.
 
 ## Domain and persistence
 
