@@ -9,7 +9,7 @@ namespace PSPMan.Desktop.ViewModels;
 public sealed record DeviceProviderErrorViewModel(string ProviderId, string ErrorText);
 
 /// <summary>Observes a caller-owned session; never starts discovery or performs native operations.</summary>
-public sealed class DevicesViewModel : ViewModelBase, IDisposable
+public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
 {
     private readonly DeviceSessionService? _session;
     private readonly Action<Action> _postToUi;
@@ -26,6 +26,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         _session = session;
         _postToUi = postToUi ?? (action => Dispatcher.UIThread.Post(action));
         _startupError = startupError;
+        InitializeSourceCommands();
         if (session is not null) session.SnapshotChanged += OnSnapshotChanged;
         Update(session?.Snapshot ?? new(new(0, []), new DeviceSessionState(),
             ImmutableDictionary<string, long>.Empty, ImmutableDictionary<string, DeviceOperationError>.Empty));
@@ -71,6 +72,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
                     devices.Where(device => device.IsPspDestination).ToImmutableArray(), errors,
                     devices.Any(device => device.State == DeviceState.Detecting)
                         || (_session is not null && snapshot.Inventory.Revision == 0 && devices.IsEmpty && errors.IsEmpty));
+                ProjectSources(snapshot);
                 foreach (var property in new[] { nameof(Devices), nameof(Sources), nameof(PspDestinations), nameof(ProviderErrors),
                     nameof(IsEmpty), nameof(IsDetecting), nameof(HasErrors), nameof(StatusText) }) OnPropertyChanged(property);
             }
@@ -86,6 +88,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
             ++_version;
         }
         if (_session is not null) _session.SnapshotChanged -= OnSnapshotChanged;
+        DisposeSourceCommands();
     }
 
     private sealed record Presentation(ImmutableArray<DeviceItemViewModel> Devices,
