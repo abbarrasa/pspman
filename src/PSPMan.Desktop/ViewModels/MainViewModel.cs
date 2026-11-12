@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PSPMan.Core.Games;
+using PSPMan.Core.Devices;
 using PSPMan.Desktop.Services;
 
 namespace PSPMan.Desktop.ViewModels;
@@ -25,8 +26,12 @@ public partial class MainViewModel : ViewModelBase
     public MainViewModel(GameCatalogService? catalogService, string? catalogError,
         IGameExportFolderPicker? exportFolderPicker = null,
         IGameCatalogExportWriter? exportWriter = null, string? catalogPath = null,
-        IGameImportFilePicker? importFilePicker = null, GameCatalogImportService? importService = null)
+        IGameImportFilePicker? importFilePicker = null, GameCatalogImportService? importService = null,
+        DevicesViewModel? devicesViewModel = null, MountedPathSyntax? mountedPathSyntax = null)
     {
+        Devices = devicesViewModel;
+        _mountedPathSyntax = mountedPathSyntax ?? (OperatingSystem.IsWindows() ? MountedPathSyntax.Windows : MountedPathSyntax.Linux);
+        UpdateSelectedGameDevices();
         _importFilePicker = importFilePicker;
         ImportService = importService;
         _exportFolderPicker = exportFolderPicker;
@@ -234,6 +239,7 @@ public partial class MainViewModel : ViewModelBase
 
     partial void OnSelectedGameChanged(GameRecord? value)
     {
+        UpdateSelectedGameDevices();
         StartEditCommand.NotifyCanExecuteChanged();
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
