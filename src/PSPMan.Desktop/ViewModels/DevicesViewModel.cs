@@ -61,8 +61,9 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
             lock (_gate)
             {
                 if (_disposed || version != _version) return;
+                var oldRows = Devices;
                 var devices = (snapshot.Inventory.Devices.IsDefault ? [] : snapshot.Inventory.Devices)
-                    .Select(device => new DeviceItemViewModel(device)).ToImmutableArray();
+                    .Select(device => ProjectDevice(snapshot, device)).ToImmutableArray();
                 var errors = snapshot.ProviderErrors.OrderBy(pair => pair.Key, StringComparer.Ordinal)
                     .Select(pair => new DeviceProviderErrorViewModel(pair.Key, DeviceItemViewModel.FormatError(pair.Value)!)).ToImmutableArray();
                 if (_startupError is not null)
@@ -73,6 +74,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
                     devices.Any(device => device.State == DeviceState.Detecting)
                         || (_session is not null && snapshot.Inventory.Revision == 0 && devices.IsEmpty && errors.IsEmpty));
                 ProjectSources(snapshot);
+                foreach (var row in oldRows) row.RefreshCommands();
                 foreach (var property in new[] { nameof(Devices), nameof(Sources), nameof(PspDestinations), nameof(ProviderErrors),
                     nameof(IsEmpty), nameof(IsDetecting), nameof(HasErrors), nameof(StatusText) }) OnPropertyChanged(property);
             }
@@ -89,6 +91,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
         }
         if (_session is not null) _session.SnapshotChanged -= OnSnapshotChanged;
         DisposeSourceCommands();
+        PostOperationRefresh(disposing: true);
     }
 
     private sealed record Presentation(ImmutableArray<DeviceItemViewModel> Devices,
