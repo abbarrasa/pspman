@@ -9,13 +9,14 @@ using PSPMan.Core.Games;
 
 namespace PSPMan.Desktop.ViewModels;
 
-public sealed record SourceChoice(SourceGroup Group, DeviceKey Device, long Revision, string? MediaGeneration,
-    string Name, ImmutableArray<DeviceVolumeViewModel> Volumes);
-public sealed record SourceVolumeChoice(SourceGroup Group, VolumeKey Volume, long Revision, string? MediaGeneration,
-    string Label, string Root);
 public sealed record SourceSelectionViewModel(SourceResolutionStatus Status, ImmutableArray<SourceChoice> Candidates,
     ImmutableArray<SourceVolumeChoice> Volumes, DeviceKey? PreferredDevice, DeviceKey? SelectedDevice,
-    VolumeKey? SelectedVolume, string? Root, string StatusText);
+    VolumeKey? SelectedVolume, string? Root, string StatusText)
+{
+    public bool HasMultipleVolumes => Volumes.Length > 1;
+    public string? SelectedDeviceName => Candidates.FirstOrDefault(choice => choice.Device == SelectedDevice)?.Name;
+    public string? SelectedVolumeLabel => Volumes.FirstOrDefault(choice => choice.Volume == SelectedVolume)?.Label;
+}
 
 public sealed partial class DevicesViewModel
 {
@@ -40,6 +41,19 @@ public sealed partial class DevicesViewModel
     {
         ChooseSourceCommand = new AsyncRelayCommand<SourceChoice>(choice => SelectSourceAsync(choice, null), choice => IsCurrentChoice(choice, null));
         ChooseSourceVolumeCommand = new AsyncRelayCommand<SourceVolumeChoice>(choice => SelectSourceAsync(null, choice), choice => IsCurrentChoice(null, choice));
+        ChooseSourceCommand.CanExecuteChanged += (_, _) => PostSourceAvailability();
+        ChooseSourceVolumeCommand.CanExecuteChanged += (_, _) => PostSourceAvailability();
+    }
+
+    private void PostSourceAvailability() => _postToUi(() =>
+    {
+        lock (_gate) { RefreshSourceChoices(OpticalSource); RefreshSourceChoices(RemovableSource); }
+    });
+
+    private static void RefreshSourceChoices(SourceSelectionViewModel source)
+    {
+        foreach (var choice in source.Candidates) choice.RefreshAvailability();
+        foreach (var choice in source.Volumes) choice.RefreshAvailability();
     }
 
     private bool IsCurrentChoice(SourceChoice? source, SourceVolumeChoice? volume, DeviceSessionSnapshot? observation = null)
@@ -103,8 +117,12 @@ public sealed partial class DevicesViewModel
 
     private void ProjectSources(DeviceSessionSnapshot snapshot)
     {
+        var oldOptical = OpticalSource;
+        var oldRemovable = RemovableSource;
         OpticalSource = ProjectSource(SourceGroup.Optical, snapshot);
         RemovableSource = ProjectSource(SourceGroup.Removable, snapshot);
+        RefreshSourceChoices(oldOptical);
+        RefreshSourceChoices(oldRemovable);
         ProjectSourcePath();
         OnPropertyChanged(nameof(OpticalSource));
         OnPropertyChanged(nameof(RemovableSource));
@@ -112,7 +130,7 @@ public sealed partial class DevicesViewModel
         ChooseSourceVolumeCommand.NotifyCanExecuteChanged();
     }
 
-    private static SourceSelectionViewModel ProjectSource(SourceGroup group, DeviceSessionSnapshot snapshot)
+    private SourceSelectionViewModel ProjectSource(SourceGroup group, DeviceSessionSnapshot snapshot)
     {
         var medium = group == SourceGroup.Optical ? GameMedium.Dvd : GameMedium.Usb;
         var source = DeviceAssociationRules.ResolveSource(medium, snapshot.Inventory, snapshot.Associations);
@@ -120,11 +138,20 @@ public sealed partial class DevicesViewModel
         var choices = source.Candidates.Select(device =>
         {
             var row = new DeviceItemViewModel(device);
-            return new SourceChoice(group, device.Key, snapshot.Inventory.Revision, device.MediaGeneration, row.Name, row.Volumes);
+            var choice = new SourceChoice(group, device.Key, snapshot.Inventory.Revision, device.MediaGeneration, row.Name, row.Volumes);
+            choice.ConfigureSelection(source.SelectedDevice == device.Key, () => ChooseSourceCommand.CanExecute(choice),
+                () => ChooseSourceCommand.ExecuteAsync(choice));
+            return choice;
         }).ToImmutableArray();
         var selected = source.Candidates.SingleOrDefault(device => device.Key == volume.SelectedDevice);
-        var volumes = volume.Candidates.Select(candidate => new SourceVolumeChoice(group, candidate.Key, snapshot.Inventory.Revision,
-            selected?.MediaGeneration, string.IsNullOrWhiteSpace(candidate.Label) ? "Unlabelled volume" : candidate.Label, candidate.Root!)).ToImmutableArray();
+        var volumes = volume.Candidates.Select(candidate =>
+        {
+            var choice = new SourceVolumeChoice(group, candidate.Key, snapshot.Inventory.Revision,
+                selected?.MediaGeneration, string.IsNullOrWhiteSpace(candidate.Label) ? "Unlabelled volume" : candidate.Label, candidate.Root!);
+            choice.ConfigureSelection(volume.SelectedVolume?.Key == candidate.Key, () => ChooseSourceVolumeCommand.CanExecute(choice),
+                () => ChooseSourceVolumeCommand.ExecuteAsync(choice));
+            return choice;
+        }).ToImmutableArray();
         var preferred = group == SourceGroup.Optical ? snapshot.Associations.OpticalSource : snapshot.Associations.RemovableSource;
         return new(volume.Status, choices, volumes, preferred, volume.SelectedDevice, volume.SelectedVolume?.Key,
             volume.SelectedVolume?.Root, volume.Status switch

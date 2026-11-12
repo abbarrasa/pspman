@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PSPMan.Desktop.ViewModels"
+             x:Class="PSPMan.Desktop.Views.DevicesView"
+             x:DataType="vm:DevicesViewModel" x:CompileBindings="True">
+    <UserControl.Resources>
+        <DataTemplate x:Key="VolumeTemplate" x:DataType="vm:DeviceVolumeViewModel">
+            <StackPanel Spacing="3" Margin="12,4,0,4">
+                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Key.VolumeId}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Root}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding StateText}" />
+                <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" />
+                <Button x:Name="RetryMountButton" Content="Retry mount" AutomationProperties.Name="Retry volume mount"
+                        Command="{Binding RetryMountCommand}" IsEnabled="{Binding CanRetryMount}" HorizontalAlignment="Left" />
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="DeviceTemplate" x:DataType="vm:DeviceItemViewModel">
+            <Border BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,4">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Key.ProviderId}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Identifier}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding MediumText}" />
+                    <TextBlock Text="{Binding StateText}" />
+                    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsPending}" Height="4" />
+                    <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" />
+                    <ItemsControl ItemsSource="{Binding Volumes}" ItemTemplate="{StaticResource VolumeTemplate}" />
+                    <Button x:Name="RemoveDeviceButton" Content="{Binding RemovalText}" AutomationProperties.Name="{Binding RemovalText}"
+                            Command="{Binding RemoveCommand}" IsEnabled="{Binding CanRemove}" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="SourceSelectionTemplate" x:DataType="vm:SourceSelectionViewModel">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SelectedDeviceName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SelectedVolumeLabel}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Root}" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding Candidates}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SourceChoice">
+                            <Border BorderBrush="{DynamicResource ThemeBorderMidBrush}" BorderThickness="1" Padding="8" Margin="0,2">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Device.ProviderId}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Device.DeviceId}" TextWrapping="Wrap" />
+                                    <ItemsControl ItemsSource="{Binding Volumes}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DeviceVolumeViewModel">
+                                                <StackPanel Spacing="2" Margin="8,2,0,2">
+                                                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding Key.VolumeId}" TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding Root}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="Selected source" IsVisible="{Binding IsSelected}" />
+                                    <Button x:Name="ChooseSourceButton" Content="Use source" AutomationProperties.Name="{Binding Name, StringFormat='Use source {0}'}"
+                                            Command="{Binding SelectCommand}" IsEnabled="{Binding CanSelect}" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel IsVisible="{Binding HasMultipleVolumes}" Spacing="4">
+                    <TextBlock Text="Source volume" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding Volumes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SourceVolumeChoice">
+                                <StackPanel Spacing="3" Margin="8,2,0,6">
+                                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Volume.VolumeId}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Root}" TextWrapping="Wrap" />
+                                    <TextBlock Text="Selected volume" IsVisible="{Binding IsSelected}" />
+                                    <Button x:Name="ChooseVolumeButton" Content="Use volume" AutomationProperties.Name="{Binding Root, StringFormat='Use source volume {0}'}"
+                                            Command="{Binding SelectCommand}" IsEnabled="{Binding CanSelect}" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+    <ScrollViewer x:Name="DevicesScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                  AutomationProperties.Name="Devices and sources">
+        <StackPanel Spacing="12" Margin="8">
+            <TextBlock Text="Devices" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsDetecting}" Height="4" />
+            <ItemsControl ItemsSource="{Binding ProviderErrors}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DeviceProviderErrorViewModel">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding ProviderId}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{Binding DeviceActionError}" TextWrapping="Wrap" />
+            <TextBlock Text="Game sources" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="CD/DVD source" FontWeight="SemiBold" />
+            <ContentControl x:Name="OpticalSourceSelector" Content="{Binding OpticalSource}" ContentTemplate="{StaticResource SourceSelectionTemplate}" />
+            <TextBlock Text="USB / Memory Card source" FontWeight="SemiBold" />
+            <ContentControl x:Name="RemovableSourceSelector" Content="{Binding RemovableSource}" ContentTemplate="{StaticResource SourceSelectionTemplate}" />
+            <TextBlock Text="{Binding SourceSelectionError}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding SourcePathStatusText}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding ConstructedSourcePath}" TextWrapping="Wrap" />
+            <ItemsControl x:Name="SourceDevices" ItemsSource="{Binding Sources}" ItemTemplate="{StaticResource DeviceTemplate}" />
+            <TextBlock Text="PSP destinations" FontSize="18" FontWeight="SemiBold" />
+            <ItemsControl x:Name="PspDevices" ItemsSource="{Binding PspDestinations}" ItemTemplate="{StaticResource DeviceTemplate}" />
+            <StackPanel IsVisible="{Binding HasOtherDevices}" Spacing="4">
+                <TextBlock Text="Other devices" FontSize="18" FontWeight="SemiBold" />
+                <ItemsControl x:Name="OtherDevices" ItemsSource="{Binding OtherDevices}" ItemTemplate="{StaticResource DeviceTemplate}" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
