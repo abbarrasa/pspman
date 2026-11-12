@@ -338,6 +338,8 @@ Plan: approved [plan.md](./plan.md), revision 0.1
 
 ## Coverage and acceptance checkpoints
 
+The [pending validation runbook](./pending-validation.md) records future Windows VM/CI/native hardware and Linux acceptance procedures, required tools, safety gates and evidence requirements. It does not change task approvals/completion states or execute T49–T53; native gaps remain pending.
+
 | Requirement | Main tasks |
 | --- | --- |
 | FR-1 | T02, T10, T16–T19, T24–T27, T36–T37, T44, T49, T51 |

@@ -41,6 +41,8 @@ Durable project context; see [AGENTS.md](./AGENTS.md) for standing instructions.
 
 ## Verification and remaining acceptance
 
+- [Pending native validation runbook](./specs/004-device-mounting/pending-validation.md) records Windows VM/QEMU-KVM, optional Docker-managed VM/CI, read-only/native-security/UAC/hardware and Linux Polkit procedures with safety gates and evidence criteria. Documentation only: no environment provisioning, workflow change or execution; all cases remain pending and T39 is not started.
+
 - [CRUD](./specs/001-crud-game/coverage.md), [export](./specs/002-export-games/coverage.md) and [import](./specs/003-import-games/coverage.md) reports retain measured evidence. Import T01–T34 are recorded in [tasks](./specs/003-import-games/tasks.md).
 - Import coverage run: 639 tests pass; owning-suite line/branch coverage is Core 98.09%/96.13%, Infraestructure 97.08%/85.19%, Desktop 89.65%/87.69%. Native startup/pickers and defensive paths account for remaining gaps.
 - [Import graphical validation](./specs/003-import-games/manual-validation.md) observed Linux/X11 template, native pickers, preview/cancel/confirm, offline creation, duplicate handling, empty-Notes update, no-ops and source/validation errors. A graphical follow-up removed the temporary CSV after saving began: verification failed, two of 2,000 games remained saved, and later writes stopped. Decoded-stream read failure remains automated T32 evidence; physical device removal was not observed.
