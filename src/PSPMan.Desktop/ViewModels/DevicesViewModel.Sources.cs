@@ -136,20 +136,10 @@ public sealed partial class DevicesViewModel
             });
     }
 
-    /// <summary>Accepts game metadata only; MainViewModel selected-game wiring belongs to T41.</summary>
+    /// <summary>Updates source metadata while retaining the currently requested game identity.</summary>
     public void SetGameSource(GameMedium? medium, string? location, MountedPathSyntax syntax)
     {
-        long version;
-        lock (_gate) { if (_disposed) return; version = ++_gameInputVersion; }
-        _postToUi(() =>
-        {
-            lock (_gate)
-            {
-                if (_disposed || version != _gameInputVersion) return;
-                _gameMedium = medium; _gameLocation = location; _pathSyntax = syntax;
-                ProjectSourcePath();
-            }
-        });
+        lock (_gate) SetSelectedGame(_requestedGameId, medium, location, syntax);
     }
 
     private void ProjectSourcePath()

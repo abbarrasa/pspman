@@ -27,6 +27,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
         _postToUi = postToUi ?? (action => Dispatcher.UIThread.Post(action));
         _startupError = startupError;
         InitializeSourceCommands();
+        InitializeDestinationCommands();
         if (session is not null) session.SnapshotChanged += OnSnapshotChanged;
         Update(session?.Snapshot ?? new(new(0, []), new DeviceSessionState(),
             ImmutableDictionary<string, long>.Empty, ImmutableDictionary<string, DeviceOperationError>.Empty));
@@ -74,6 +75,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
                     devices.Any(device => device.State == DeviceState.Detecting)
                         || (_session is not null && snapshot.Inventory.Revision == 0 && devices.IsEmpty && errors.IsEmpty));
                 ProjectSources(snapshot);
+                ProjectDestination(snapshot);
                 foreach (var row in oldRows) row.RefreshCommands();
                 foreach (var property in new[] { nameof(Devices), nameof(Sources), nameof(PspDestinations), nameof(ProviderErrors),
                     nameof(IsEmpty), nameof(IsDetecting), nameof(HasErrors), nameof(StatusText) }) OnPropertyChanged(property);
@@ -91,6 +93,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
         }
         if (_session is not null) _session.SnapshotChanged -= OnSnapshotChanged;
         DisposeSourceCommands();
+        _postToUi(() => ChoosePspCommand.NotifyCanExecuteChanged());
         PostOperationRefresh(disposing: true);
     }
 
