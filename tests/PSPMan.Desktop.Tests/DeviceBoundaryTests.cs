@@ -13,7 +13,8 @@ public sealed class DeviceBoundaryTests
     {
         var references = typeof(DeviceSessionService).Assembly.GetReferencedAssemblies();
         Assert.NotEmpty(references);
-        Assert.All(references, reference => Assert.True(reference.Name == "System.Runtime"
+        // Coverlet adds the standard netstandard facade while instrumenting Core.
+        Assert.All(references, reference => Assert.True(reference.Name is "System.Runtime" or "netstandard"
             || reference.Name!.StartsWith("System.", StringComparison.Ordinal), reference.FullName));
     }
 
