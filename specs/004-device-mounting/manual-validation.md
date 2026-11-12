@@ -84,3 +84,21 @@ Later native entries must record the actual OS, console family/firmware/storage 
 - Public USB registry values were checked against the pinned source; PSPLINK's product ID was cross-checked against its authors' pinned rule and documentation.
 - No product code, automated tests, dependency files, system configuration or user devices were modified. Automated build/test execution is not applicable to this documentation-only task.
 - Documentary readiness does not satisfy final all-model or native-platform acceptance. Those remain pending for their owning tasks.
+
+## T49 readiness — 2026-11-13
+
+Status: **Pending; no test media available.** The user approved the T49 plan and then confirmed that no media are available for the physical checks. No target device was selected or authorized for mounting. None of the hardware/model matrix rows or native authorization cases can be closed from this observation.
+
+Non-mutating prerequisite checks in the agent's execution environment:
+
+| Check | Command | Observed result |
+| --- | --- | --- |
+| Platform | `uname -sm` | Linux x86_64 |
+| Tool availability | `command -v` for busctl, udisksctl and pkcheck | All three commands available; no device or authorization operation invoked |
+| Conventional system-bus socket | `test -S /run/dbus/system_bus_socket` | Absent in this execution environment |
+| Graphical environment hint | Test only whether DISPLAY or WAYLAND_DISPLAY is set | Present; this does not verify graphical access or a Polkit agent |
+| Service status | `systemctl is-active dbus.service udisks2.service polkit.service` | Failed: systemd is not PID 1 and the system-scope bus could not be reached; service health not established |
+
+These observations concern only the environment visible to the agent, not a diagnosis of the user's physical desktop. Tool availability does not establish a working system D-Bus, UDisks2 or graphical Polkit agent. No services were installed, started or reconfigured. PSPMan was not launched, no storage inventory or game content was read, and no mount/unmount/eject operation was requested. No build/tests were repeated for this documentation-only readiness record; T48 results remain historical evidence, not new T49 native evidence.
+
+To resume, provide selected backed-up disposable media and any available PSP, verify access to a real Linux desktop/system bus/UDisks2/Polkit agent, and explicitly authorize the selected targets before ordinary startup can automatically mount them. Then execute T49's startup/hot insertion, existing mount reuse, individual volume roots and genuine Polkit approval/denial/cancellation cases. Do not substitute mocks, change authorization policy or run the application as root to close these gaps. T49 remains unchecked; T50 and later tasks have not been started by this readiness check.
