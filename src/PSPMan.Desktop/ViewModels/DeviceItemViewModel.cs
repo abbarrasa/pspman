@@ -1,13 +1,28 @@
 using System;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
 using PSPMan.Core.Devices;
 
 namespace PSPMan.Desktop.ViewModels;
 
 /// <summary>A typed presentation of one immutable observation, not a device-operation service.</summary>
-public sealed class DeviceItemViewModel
+public sealed class DeviceItemViewModel : ViewModelBase
 {
+    private Func<bool> _canRemove = () => false;
+    public bool CanRemove => _canRemove();
+    public IAsyncRelayCommand RemoveCommand { get; private set; } = new AsyncRelayCommand(() => Task.CompletedTask, () => false);
+    public string RemovalText => MediumText == "CD/DVD" ? "Eject" : "Safely remove";
+
+    internal void ConfigureRemoval(Func<bool> canRemove, Func<Task> remove)
+    { _canRemove = canRemove; RemoveCommand = new AsyncRelayCommand(remove, () => CanRemove); }
+    internal void RefreshCommands()
+    {
+        OnPropertyChanged(nameof(CanRemove));
+        RemoveCommand.NotifyCanExecuteChanged();
+        foreach (var volume in Volumes) volume.RefreshCommands();
+    }
     public DeviceItemViewModel(DeviceSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -54,8 +69,15 @@ public sealed class DeviceItemViewModel
     };
 }
 
-public sealed class DeviceVolumeViewModel
+public sealed class DeviceVolumeViewModel : ViewModelBase
 {
+    private Func<bool> _canRetry = () => false;
+    public bool CanRetryMount => _canRetry();
+    public IAsyncRelayCommand RetryMountCommand { get; private set; } = new AsyncRelayCommand(() => Task.CompletedTask, () => false);
+    internal void ConfigureRetry(Func<bool> canRetry, Func<Task> retry)
+    { _canRetry = canRetry; RetryMountCommand = new AsyncRelayCommand(retry, () => CanRetryMount); }
+    internal void RefreshCommands()
+    { OnPropertyChanged(nameof(CanRetryMount)); RetryMountCommand.NotifyCanExecuteChanged(); }
     public DeviceVolumeViewModel(VolumeSnapshot snapshot, DeviceState deviceState)
     {
         ArgumentNullException.ThrowIfNull(snapshot);

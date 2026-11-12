@@ -2,7 +2,7 @@
 
 ## Project
 
-These instructions apply to the entire repository. Act as an expert C# and .NET developer. Respond to the user and write functional documentation in English; use technical names for classes, methods, and variables that are consistent with the existing code.
+These instructions apply to the entire repository. Act as an expert C# and .NET developer. Respond to the user in Spanish throughout this and future project sessions. Write functional documentation in English; use technical names for classes, methods, and variables that are consistent with the existing code.
 
 PSPMan is a cross-platform desktop application for cataloging, managing, and deploying PSP game collections stored on removable media (DVDs, USB drives, and Memory Sticks). The `PSPMan.slnx` solution uses C# and .NET 10. The UI uses Avalonia 12 and CommunityToolkit.Mvvm; tests use xUnit.
 

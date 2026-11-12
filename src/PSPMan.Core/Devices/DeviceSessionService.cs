@@ -7,7 +7,10 @@ public sealed record DeviceSessionSnapshot(
     DeviceInventorySnapshot Inventory,
     DeviceSessionState Associations,
     ImmutableDictionary<string, long> ProviderRevisions,
-    ImmutableDictionary<string, DeviceOperationError> ProviderErrors);
+    ImmutableDictionary<string, DeviceOperationError> ProviderErrors)
+{
+    public ImmutableHashSet<VolumeKey> RetryableMounts { get; init; } = [];
+}
 
 /// <summary>Owns provider observation, automatic mounting and disposal; performs no UI work.</summary>
 public sealed class DeviceSessionService : IAsyncDisposable
@@ -83,7 +86,8 @@ public sealed class DeviceSessionService : IAsyncDisposable
     }
 
     /// <summary>Explicitly retries a volume whose previous mount attempt failed.</summary>
-    public async ValueTask RetryMountAsync(VolumeKey volume, CancellationToken cancellationToken = default)
+    public async ValueTask RetryMountAsync(VolumeKey volume, CancellationToken cancellationToken = default,
+        DeviceInventorySnapshot? observation = null)
     {
         lock (_lifecycle)
         {
@@ -91,13 +95,14 @@ public sealed class DeviceSessionService : IAsyncDisposable
             if (_lifetime is null) throw new InvalidOperationException("Device observation has not started.");
         }
         var applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await _updates.Writer.WriteAsync(new SessionUpdate(RetryVolume: volume, Applied: applied), cancellationToken)
+        await _updates.Writer.WriteAsync(new SessionUpdate(RetryVolume: volume, Applied: applied, Observation: observation), cancellationToken)
             .ConfigureAwait(false);
         await applied.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Requests safe removal of a complete physical device and all its volumes.</summary>
-    public async ValueTask RemoveDeviceAsync(DeviceKey device, CancellationToken cancellationToken = default)
+    public async ValueTask RemoveDeviceAsync(DeviceKey device, CancellationToken cancellationToken = default,
+        DeviceInventorySnapshot? observation = null)
     {
         lock (_lifecycle)
         {
@@ -105,7 +110,7 @@ public sealed class DeviceSessionService : IAsyncDisposable
             if (_lifetime is null) throw new InvalidOperationException("Device observation has not started.");
         }
         var applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await _updates.Writer.WriteAsync(new SessionUpdate(RemoveDevice: device, Applied: applied), cancellationToken)
+        await _updates.Writer.WriteAsync(new SessionUpdate(RemoveDevice: device, Applied: applied, Observation: observation), cancellationToken)
             .ConfigureAwait(false);
         await applied.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -187,8 +192,13 @@ public sealed class DeviceSessionService : IAsyncDisposable
 
     private void Apply(SessionUpdate update)
     {
+        // Validate on the serialized processor, not only before the caller queues its request.
+        if (update.Observation is { } observation && observation.Revision != Snapshot.Inventory.Revision)
+            throw new InvalidOperationException("The device observation has changed. Use the current device list.");
         if (update.RetryVolume is { } retryVolume)
         {
+            if (_activeMounts.ContainsKey(retryVolume.Device) || _activeRemovals.ContainsKey(retryVolume.Device))
+                throw new InvalidOperationException("The device has an active operation.");
             if (!_mountErrors.Keys.Any(attempt => attempt.Volume == retryVolume))
                 throw new InvalidOperationException("The volume has no failed mount attempt to retry.");
 
@@ -336,7 +346,8 @@ public sealed class DeviceSessionService : IAsyncDisposable
                 .SelectMany(provider => _inventories[provider.ProviderId].Devices)
                 .Select(WithMountState).ToImmutableArray());
         var snapshot = new DeviceSessionSnapshot(inventory,
-            DeviceAssociationRules.ReconcileAssociations(associations ?? previous.Associations, inventory), revisions, errors);
+            DeviceAssociationRules.ReconcileAssociations(associations ?? previous.Associations, inventory), revisions, errors)
+        { RetryableMounts = _mountErrors.Keys.Select(attempt => attempt.Volume).ToImmutableHashSet() };
         Volatile.Write(ref _snapshot, snapshot);
         lock (_mountTaskGate)
         {
@@ -414,7 +425,7 @@ public sealed class DeviceSessionService : IAsyncDisposable
             volumes = volumes.Select(volume => volume.Key == errorVolume
                 ? volume with { State = DeviceState.Error, Error = removalError } : volume).ToImmutableArray();
         }
-        return device with { Volumes = volumes,
+        return device with { Volumes = volumes, Error = removalError ?? device.Error,
             State = _removalErrors.ContainsKey(device.Key) ? DeviceState.Error
                 : pending ? DeviceState.Mounting : volumes.Any(volume => volume.Error is not null)
                     ? DeviceState.Error : device.State };
@@ -526,7 +537,7 @@ public sealed class DeviceSessionService : IAsyncDisposable
         DeviceOperationError? Error = null, bool Terminal = false, DeviceSessionState? Associations = null,
         TaskCompletionSource? Applied = null, MountWork? CompletedMount = null, DeviceOperationResult? MountResult = null,
         VolumeKey? RetryVolume = null, DeviceKey? RemoveDevice = null, RemovalWork? CompletedRemoval = null,
-        DeviceOperationResult? RemovalResult = null);
+        DeviceOperationResult? RemovalResult = null, DeviceInventorySnapshot? Observation = null);
 
     private sealed record MountAttempt(VolumeKey Volume, string? MediaGeneration);
     private sealed record MountWork(IDeviceProvider Provider, DeviceMountRequest Request, MountAttempt Attempt);
