@@ -14,6 +14,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
     private readonly DeviceSessionService? _session;
     private readonly Action<Action> _postToUi;
     private readonly DeviceOperationError? _startupError;
+    private readonly bool _initializing;
     private readonly object _gate = new();
     private bool _disposed;
     private long _requestedRevision = -1;
@@ -21,11 +22,12 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
     private Presentation _presentation = new([], [], [], [], false);
 
     public DevicesViewModel(DeviceSessionService? session = null, Action<Action>? postToUi = null,
-        DeviceOperationError? startupError = null)
+        DeviceOperationError? startupError = null, bool initializing = false)
     {
         _session = session;
         _postToUi = postToUi ?? (action => Dispatcher.UIThread.Post(action));
         _startupError = startupError;
+        _initializing = initializing;
         InitializeSourceCommands();
         InitializeDestinationCommands();
         if (session is not null) session.SnapshotChanged += OnSnapshotChanged;
@@ -74,7 +76,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
                 // Publish one complete state before raising any binding notifications.
                 _presentation = new(devices, devices.Where(device => device.IsSource).ToImmutableArray(),
                     devices.Where(device => device.IsPspDestination).ToImmutableArray(), errors,
-                    devices.Any(device => device.State == DeviceState.Detecting)
+                    _initializing || devices.Any(device => device.State == DeviceState.Detecting)
                         || (_session is not null && snapshot.Inventory.Revision == 0 && devices.IsEmpty && errors.IsEmpty));
                 ProjectSources(snapshot);
                 ProjectDestination(snapshot);
