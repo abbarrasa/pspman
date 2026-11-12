@@ -372,25 +372,31 @@ Plan: approved [plan.md](./plan.md), revision 0.1
   - Depends on: T49.
   - Work: Execute Linux safe-remove/busy-volume, disconnect/reconnect, source selection, per-game PSP and restart scenarios without file copying.
   - Done when: Native observations confirm actual errors, whole-device scope, fresh roots, no fallback/remount loop and restart semantics; missing hardware cases remain incomplete.
+  - Pending, 2026-11-13: The user agreed to leave T49–T50 pending because no test media are available. T49 is still incomplete; no native T50 execution occurred. [Consolidated restart gates](./pending-validation.md#current-blockers-and-restart-order) retain the unchanged dependency and required resources.
 
 - [ ] **T51. Observe Windows startup, mounting and UAC authorization.** FR-1, FR-2, FR-3, FR-4, FR-5, FR-18, FR-19, NFR-1, NFR-4, NFR-5
   - Depends on: T48.
   - Work: On Windows, validate discovery/mount roots and allow/deny/cancel elevation with explicitly selected devices; exercise development and published operation-host launch paths.
   - Done when: Real Windows observations and both launch paths are documented, normal UI stays unelevated and UAC failures are reported without prompt loops; absent Windows access keeps this task incomplete.
+  - Feasibility only, 2026-11-13: The user confirmed no Windows machine or accessible Windows VM, in addition to no test media. No T51 execution, provisioning, CI creation, apphost/UAC operation or device action occurred. The authorized [documentary consolidation](./pending-validation.md#current-blockers-and-restart-order) records prerequisites and restart order, not approval of a T51 execution plan.
 
 - [ ] **T52. Observe Windows removal, reconnection and session behavior.** FR-6, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, NFR-1, NFR-3
   - Depends on: T51.
   - Work: Execute Windows multi-volume removal/veto, optical eject, root-changing reconnect, per-game PSP and restart scenarios with no game copying.
   - Done when: Actual Windows errors/states and source/destination behavior meet the acceptance criteria; no forced removal, stale-root reuse or silent fallback is observed, with missing cases kept incomplete.
+  - Pending: T51 is incomplete and Windows/media resources are unavailable; no T52 execution is authorized or recorded. Follow the consolidated runbook only after the prerequisite and individual authorization gates are met.
 
 - [ ] **T53. Reconcile all-model evidence and final acceptance readiness.** FR-1–FR-19, NFR-1–NFR-5
   - Depends on: T50, T52.
   - Work: Reconcile the PSP model/storage matrix, all ACs, native observations and automated results in manual-validation.md and coverage.md; review constitution compliance and prepare validation handoff.
   - Done when: Every acceptance criterion has current supporting evidence, all-model recognition coverage is substantiated and mandatory platform/hardware gaps are resolved; the user is asked to authorize the separate validation/code-review phase, without declaring the feature implemented.
+  - Pending: T50/T52 and mandatory native/model evidence are incomplete. The user-authorized documentary consolidation does not execute or complete T53 or authorize formal validation. Existing automated T48 coverage remains valid for its recorded scope, not as a substitute for native evidence.
 
 ## Coverage and acceptance checkpoints
 
 The [pending validation runbook](./pending-validation.md) records future Windows VM/CI/native hardware and Linux acceptance procedures, required tools, safety gates and evidence requirements. It does not change task approvals/completion states or execute T49–T53; native gaps remain pending.
+
+Documentary consolidation, authorized 2026-11-13: recorded the user's unavailable media/Windows resources, unchanged dependencies, architecture/tool options and exact restart gates. Updated the runbook's historical baseline to T48 and its measurement-only checkpoint, without closing any native task. No code, requirements, tests or environment settings changed; no new build/tests/native operations were run. Markdown/link consistency and `git diff --check` were checked. Branch `docs/004_native-validation-pending`; no commits/pushes. T01–T48 and AUD-1 remain complete, T49–T53 remain unchecked, and formal validation/acceptance is not started by this consolidation.
 
 | Requirement | Main tasks |
 | --- | --- |

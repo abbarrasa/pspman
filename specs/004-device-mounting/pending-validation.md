@@ -2,17 +2,34 @@
 
 Status: **Pending execution**
 Recorded: 2026-11-12
+Consolidated: 2026-11-13 (documentation only, explicitly authorized by the user)
 Scope: existing acceptance gaps under approved specification 0.3 and plan 0.1; no new product requirements or authorization to execute operations.
 
 See [tasks](./tasks.md) for dependencies, [specification](./spec.md) for acceptance criteria and [recognition matrix](./manual-validation.md) for model-specific evidence.
 
 ## Baseline and evidence rules
 
-The last recorded T38 regression passed 1328 tests and explicitly skipped four Windows-native checks on Linux. Headless UI, fake platform boundaries and isolated fake UDisks transport results do not certify Windows kernel behavior, physical hardware, native authorization or all PSP models. No new tests were executed when writing this runbook.
+The latest recorded [T48 measurement](./coverage.md) passed 1434 regression tests and explicitly skipped four Windows-native checks on Linux. Its owning-suite coverage runs passed after the authorized test-only netstandard-facade correction. These are historical automated results, not new native observations from this consolidation. Headless UI, fake platform boundaries and isolated fake UDisks transport results do not certify Windows kernel behavior, physical hardware, native authorization or all PSP models. No new tests were executed when consolidating this runbook.
 
 All checkboxes below remain open until an actual execution record supports closure. A skipped test, zero observed removable volumes or an unavailable model is a remaining gap, not a pass. Virtual-device evidence and physical-device evidence must be recorded separately. T36's suite implementation is complete, but its Windows-native execution remains pending. T49–T53 retain their existing completion gates.
 
-T44 wires the visible device workflow into the application: ordinary startup now begins discovery and may automatically mount supported attached devices. Do not launch it against arbitrary hardware for a smoke test. Execute native end-to-end procedures only after their dependent tasks, including T48, are complete and execution is authorized with the safety gates below. An isolated private D-Bus with no UDisks service can check Linux startup/close without device operations, but cannot certify real hardware or Polkit. This document does not start T45 or the formal validation/code-review phase.
+T44 wires the visible device workflow into the application: ordinary startup now begins discovery and may automatically mount supported attached devices. Do not launch it against arbitrary hardware for a smoke test. Execute native end-to-end procedures only after their dependent tasks, including T48, are complete and execution is authorized with the safety gates below. An isolated private D-Bus with no UDisks service can check Linux startup/close without device operations, but cannot certify real hardware or Polkit. This consolidation does not execute T49–T53 or start the formal validation/code-review phase.
+
+## Current blockers and restart order
+
+The user confirmed that no physical test media and no Windows machine or accessible Windows VM are available. T49–T50 are left pending; the T51 feasibility discussion did not authorize execution, environment provisioning or device operations. On 2026-11-13 the user authorized this documentary consolidation only. Requirements, approved document revisions, task dependencies and completion criteria are unchanged.
+
+| Task | Dependency | Current blocker | Environment/tools and steps to resume |
+| --- | --- | --- | --- |
+| T49 — Linux discovery/mount/authorization | T48, complete | No selected disposable media or PSP; native service/Polkit readiness not established | Provide backed-up selected media, a real Linux desktop with .NET 10, system D-Bus, UDisks2 and a graphical Polkit agent; confirm targets/operations before startup. Follow [safety preparation](#safety-and-preparation--required-before-execution), then [L1](#l1--remaining-native-linux-acceptance-t49t50) discovery/insertion, existing-root reuse, per-volume mounting and genuine approval/denial/cancellation checks. |
+| T50 — Linux removal/reconnection/session | T49, incomplete | Dependency plus missing media; multi-source/two-PSP cases also require that hardware | Complete T49 first. Use the same native stack, selected multi-volume/removable/optical devices and available PSPs. Follow L1's removal/session steps and the [W4 scenario descriptions](#w4--windows-removal-and-session-behavior-t52-ac-2ac-5ac-8), recording Linux observations rather than Windows expectations. |
+| T51 — Windows discovery/mount/UAC | T48, complete | No Windows machine or accessible VM; no selected media | First obtain a separately authorized native Windows environment or full Windows VM with .NET 10 and desktop access; architecture/provisioning options remain below. Run [W1](#w1--windows-read-only-native-integration-t36-nfr-1) read-only checks before hardware-dependent [W2](#w2--native-security-uac-and-launch-modes-t31t35-t51)/[W3](#w3--windows-discovery-roots-and-hardware-recognition-t51-ac-1ac-8). Verify dedicated development and published apphosts and real UAC; select/authorize disposable targets before startup. |
+| T52 — Windows removal/reconnection/session | T51, incomplete | Dependency, unavailable Windows and missing media | Complete T51 first, then execute W4 on selected devices with native busy-volume/veto, optical eject, changed-root reconnect, independent selections and restart evidence. Do not treat VM USB detachment as physical ejection evidence. |
+| T53 — All-model reconciliation/readiness | T50 and T52, incomplete | Mandatory native cases and model/storage presentations lack evidence | After both native branches are complete, reconcile every AC and every [model/storage row](./manual-validation.md#model-family-and-storage-presentation-matrix) with dated evidence and current [coverage](./coverage.md). Resolve gaps before requesting separate formal validation/code review; do not mark the specification implemented. |
+
+T49's approved individual plan remains valid for its scope, but it does not authorize arbitrary targets. Resume with T49 when its resources exist, or T51's own planning/authorization when Windows resources exist; do not bypass T50/T52 dependencies. Availability of only part of the hardware permits only explicitly authorized partial evidence, never closure of missing mandatory cases. The [T49 readiness record](./manual-validation.md#t49-readiness--2026-11-13) concerns the agent-visible environment only; it is not a diagnosis of the user's desktop.
+
+No VM, CI workflow, compatibility layer, native harness or service/policy change was installed or created for this consolidation. Existing architecture options below are future choices, not a claim that an environment exists or permission to provision it. Real-device checks remain open even if future read-only Windows CI succeeds. Before provisioning, separately review current prerequisites, architecture, permissions and access constraints.
 
 ## Architecture and tools
 
@@ -104,7 +121,7 @@ Record device/volume counts, native error operation/codes and acquired volume-wa
 
 ## Evidence reconciliation (T48, T53 and later validation)
 
-- [ ] Measure owning-suite line/branch coverage and explain significant native/hardware gaps.
+- [x] Measure owning-suite line/branch coverage and explain significant native/hardware gaps — completed in [T48](./coverage.md); this checkpoint is automated measurement only, not native acceptance or T53 completion.
 - [ ] Reconcile every acceptance criterion and every PSP matrix row with current evidence.
 - [ ] Request separate authorization for formal validation/code review; do not declare the feature implemented merely because CI is green.
 
