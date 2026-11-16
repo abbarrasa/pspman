@@ -110,6 +110,7 @@ public sealed class GameCopyRulesTests
         Assert.Equal(GameCopyState.AwaitingPassword, GameCopyRules.StateAfterArchiveError(GameCopyErrorCode.IncorrectPassword, true));
         Assert.Equal(GameCopyState.Failed, GameCopyRules.StateAfterArchiveError(GameCopyErrorCode.ReadError, true));
         Assert.Equal(GameCopyState.Failed, GameCopyRules.StateAfterArchiveError(GameCopyErrorCode.CorruptArchive, true));
+        Assert.Equal(GameCopyState.Cancelled, GameCopyRules.StateAfterArchiveError(GameCopyErrorCode.Cancelled, true));
     }
     [Fact]
     public async Task Cancel_and_completion_have_one_atomic_winner()

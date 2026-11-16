@@ -246,6 +246,14 @@ Rejected architecture: putting transfers inside DevicesViewModel/DeviceSessionSe
 
 ## Risks, approval and next step
 
+Execution update: T02 is complete; the user's subsequent “Continúa con la
+siguiente tarea” authorized T03 with the previously explicit Windows deferral.
+The [production adapter report](./archive-adapter.md) records Linux results and
+the still-open Windows gate. The source contract captures an opaque validation
+token distinct from the combined inspection fingerprint; cancellation is a
+typed callback outcome. These implementation refinements do not alter the
+approved product behavior or authorize T04.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.

@@ -4,6 +4,26 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T03 Windows production adapter and publication — open
+
+The user authorized T03 after T02 while keeping Windows tests deferred. Linux
+implementation and 48 production adapter tests, including published Linux x64
+assets, pass; this does not complete T03's required Windows gate.
+
+On the Windows environment described below, build the matched engine/bridge,
+then run package-windows.ps1 with the official pinned source archive and matching
+Platform. Require native tests with `PSPMAN_REQUIRE_NATIVE_TESTS=1`; run tests
+filtered by `FullyQualifiedName~GameArchiveReader`, then full solution build/tests.
+Exercise passwords, FR-19 reopen, solid replay, multipart, Unicode, cancellation,
+callback disposal and source/output handle closure using the production adapter.
+Publish Desktop with the matching win RID, verify the manifest's complete 17
+assets/source/notices, and rerun the adapter matrix with
+`PSPMAN_TEST_PUBLISH_ROOT` pointing to that publication. Confirm missing/mismatched
+assets fail without PATH fallback and missing packages fail publication.
+Record actual commands, OS/architecture, hashes and counts. Windows scripts have
+not been executed here. Other CPU/libc targets also have no native/publish proof;
+do not infer them from Linux x64. No PSP is needed for these archive-only tests.
+
 ## T01 native Windows archive gate — open
 
 - Blocker: this session provides Linux x64, with no accessible native Windows

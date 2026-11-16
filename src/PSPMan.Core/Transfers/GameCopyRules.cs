@@ -102,6 +102,7 @@ public static class GameCopyRules
         if (!outputsClosed) return GameCopyState.Stopping;
         return error switch
         {
+            GameCopyErrorCode.Cancelled => GameCopyState.Cancelled,
             GameCopyErrorCode.IndeterminateEncryptedError => GameCopyState.AwaitingPasswordDecision,
             GameCopyErrorCode.PasswordRequired or GameCopyErrorCode.IncorrectPassword => GameCopyState.AwaitingPassword,
             _ => GameCopyState.Failed
