@@ -28,4 +28,5 @@
     <ProjectReference Include="..\PSPMan.Core\PSPMan.Core.csproj" />
     <ProjectReference Include="..\PSPMan.Infraestructure\PSPMan.Infraestructure.csproj" />
   </ItemGroup>
+  <Import Project="../../native/PSPMan.ArchiveBridge/ArchiveRuntime.targets" />
 </Project>

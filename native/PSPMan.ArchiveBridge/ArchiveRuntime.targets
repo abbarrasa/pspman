@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <PspArchiveRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PspArchiveRid>
+    <PspArchiveRid Condition="'$(PspArchiveRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</PspArchiveRid>
+    <PspArchivePackageRoot>$(MSBuildThisFileDirectory)artifacts/runtimes/$(PspArchiveRid)/native</PspArchivePackageRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Condition="'$(RuntimeIdentifier)' != ''" Include="$(PspArchivePackageRoot)/**/*" Link="runtimes/$(PspArchiveRid)/native/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Condition="'$(RuntimeIdentifier)' == ''" Include="$(MSBuildThisFileDirectory)artifacts/runtimes/**/*" Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Builds without staged assets remain possible; the reader reports an initialization error.
+       Publishing a copy-capable application must never silently omit its selected native runtime. -->
+  <Target Name="ValidatePspArchivePublishPackage" BeforeTargets="ComputeFilesToPublish">
+    <PropertyGroup>
+      <_ArchiveEngine>7z.so</_ArchiveEngine>
+      <_ArchiveBridge>libpspman_archive_bridge.so</_ArchiveBridge>
+      <_ArchiveEngine Condition="$([System.String]::Copy('$(PspArchiveRid)').StartsWith('win-'))">7z.dll</_ArchiveEngine>
+      <_ArchiveBridge Condition="$([System.String]::Copy('$(PspArchiveRid)').StartsWith('win-'))">pspman_archive_bridge.dll</_ArchiveBridge>
+    </PropertyGroup>
+    <ItemGroup>
+      <_ArchiveRequired Include="$(PspArchivePackageRoot)/$(_ArchiveEngine);$(PspArchivePackageRoot)/$(_ArchiveBridge);$(PspArchivePackageRoot)/LICENSE.7zip.txt;$(PspArchivePackageRoot)/COPYING.LGPL.txt;$(PspArchivePackageRoot)/LICENSE.unRAR.txt;$(PspArchivePackageRoot)/LICENSE.PSPMan.txt;$(PspArchivePackageRoot)/bridge-source/bridge.cpp;$(PspArchivePackageRoot)/bridge-source/bridge.h;$(PspArchivePackageRoot)/bridge-source/bridge.def;$(PspArchivePackageRoot)/bridge-source/build-linux.sh;$(PspArchivePackageRoot)/bridge-source/build-windows.ps1;$(PspArchivePackageRoot)/bridge-source/README.md;$(PspArchivePackageRoot)/bridge-source/source.lock.json;$(PspArchivePackageRoot)/bridge-source/ArchiveRuntime.targets;$(PspArchivePackageRoot)/bridge-source/package-linux.sh;$(PspArchivePackageRoot)/bridge-source/package-windows.ps1" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(PspArchivePackageRoot)/runtime.json')"
+           Text="Build and package the matched 7-Zip/PSPMan archive runtime for $(PspArchiveRid) before publishing." />
+    <Error Condition="!Exists('$(PspArchivePackageRoot)/7z2606-src.tar.xz')"
+           Text="The pinned 7-Zip source archive must accompany the native runtime." />
+    <Error Condition="!Exists('%(_ArchiveRequired.Identity)')" Text="Missing required native runtime/source asset: %(_ArchiveRequired.Identity)" />
+  </Target>
+</Project>

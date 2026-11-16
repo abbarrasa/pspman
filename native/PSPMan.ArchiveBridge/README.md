@@ -1,9 +1,10 @@
-# PSPMan archive bridge — T01 compatibility gate
+# PSPMan archive bridge and native runtime package
 
-This is the minimal native API feasibility increment for approved Spec 005,
-plan/tasks 0.2. It is **not** the production archive adapter or a deployed copy
-feature. Core, Desktop and actual PSP volumes are untouched. T02/T03 define the
-production contracts, runtime resolver, source confinement and distribution.
+The C ABI originated in T01. T03 adds the managed adapter/runtime resolver under
+Infraestructure and the build/publish asset definitions in this directory.
+Core keeps native-neutral contracts; Desktop only imports packaging definitions.
+Actual filesystem confinement, copy orchestration and PSP/UI operation belong to
+later tasks. No game-copy feature or Windows/physical acceptance is claimed here.
 
 ## Pinned inputs and licences
 
@@ -121,6 +122,60 @@ to T03/T04/T05 and cannot be inferred from this fixture-only helper.
 
 See [native gate evidence](../../specs/005-copy-games/native-archive-compatibility.md)
 for actual results, regressions and pending Windows/physical checks.
+
+## T03 runtime packaging
+
+After building with the verified engine source, stage Linux assets with:
+
+```sh
+bash native/PSPMan.ArchiveBridge/package-linux.sh /path/to/7z2606-src.tar.xz
+dotnet publish src/PSPMan.Desktop/PSPMan.Desktop.csproj -c Release -r linux-x64 --self-contained false -o /path/to/local-publish
+```
+
+On Windows, after the matching native build:
+
+```powershell
+./native/PSPMan.ArchiveBridge/package-windows.ps1 -SourceArchive C:/build/7z2606-src.tar.xz -Platform x64
+$env:PSPMAN_REQUIRE_NATIVE_TESTS = '1'
+dotnet test PSPMan.slnx
+dotnet publish src/PSPMan.Desktop/PSPMan.Desktop.csproj -c Release -r win-x64 --self-contained false -o C:/build/local-publish
+```
+
+Staging creates ignored `artifacts/runtimes/<rid>/native/` outputs with binaries,
+the verified full upstream source archive, notices/GPL text, bridge sources/build
+definitions and `runtime.json` containing ABI, version, RID and per-file hashes.
+The resolver uses only `AppContext.BaseDirectory/runtimes/<process-rid>/native`
+by default; no installed-tool/PATH/managed fallback is used. It rejects links,
+incomplete assets, hash/source/version/architecture mismatches before native load,
+then verifies the bridge's actual ABI/source-version exports. The application
+directory constructor parameter is an integration/test seam, not a user setting.
+
+RID-specific publishes include that staged target. Builds/publishes without an
+explicit RID include all staged packages; they do not manufacture binaries for
+missing platforms. Publication validates the current/selected target's source,
+notices and binary inventory. Do not claim portable multi-platform coverage until
+all intended packages exist and each target has run its native checks. No target
+architecture was removed or silently substituted; absent assets produce an
+initialization error or publish failure. This session verifies Linux x64 only;
+Windows and other deployment architectures remain pending.
+
+`PSPMAN_TEST_PUBLISH_ROOT` can point the adapter tests at a local publication's
+asset tree. It is test-only; production resolution never reads that variable.
+Known legacy-part selections are normalized within the selected archive's source;
+the originally selected part must also exist. Missing parts fail rather than
+switching source devices. Formats are detected from their signatures, with ZIP
+handler selection for `.zip` because split ZIP's final part may start in data.
+
+Managed source callbacks capture/validate the source adapter's opaque token and
+hash source parts with bounded reads. Inspection exposes a combined archive
+fingerprint for comparing explicit reopens/retries, distinct from the source
+adapter token. Revalidation entails additional source reads, including during
+preparation; no constant latency or complete pre-copy corruption scan is promised.
+Metadata with missing sizes uses a bounded count-only pass without destination
+files or full-game buffering. Password retries require explicit new sessions;
+selected solid indices replay earlier codec work without output callbacks for
+completed files. Native calls run off the UI thread; caller-owned pending I/O or
+input must honor cancellation before native disposal can finish.
 
 ### Native contract harness
 

@@ -6,9 +6,12 @@ namespace PSPMan.Core.Transfers;
 public interface IGameArchiveSource : IAsyncDisposable
 {
     string ArchiveName { get; }
+    /// <summary>Capture the source adapter's opaque identity/change evidence without destination mutation.</summary>
+    ValueTask<string> CaptureEvidenceAsync(CancellationToken cancellationToken);
     /// <summary>Return a read-only seekable stream confined to the selected source. Ownership transfers
     /// to the requesting adapter, which disposes it after the engine releases its part handle.</summary>
     ValueTask<Stream> OpenPartAsync(string relativeName, CancellationToken cancellationToken);
+    /// <summary>Validate a token returned by CaptureEvidenceAsync; inspection fingerprints are separate.</summary>
     ValueTask ValidateAsync(string expectedEvidence, CancellationToken cancellationToken);
 }
 
@@ -19,7 +22,8 @@ public interface IGameArchiveReader
         CancellationToken cancellationToken);
 }
 
-/// <summary>Sessions are operation-local. Serialize calls and await native return before disposal.</summary>
+/// <summary>Sessions are operation-local. Serialize calls, do not reenter from their own callbacks,
+/// and await native return before disposal. External disposal cancels and awaits an active call.</summary>
 public interface IGameArchiveSession : IAsyncDisposable
 {
     ValueTask<GameArchiveInspection> InspectAsync(CancellationToken cancellationToken);
