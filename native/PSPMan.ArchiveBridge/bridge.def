@@ -1,0 +1,11 @@
+LIBRARY pspman_archive_bridge
+EXPORTS
+    psp_abi
+    psp_engine_version
+    psp_create
+    psp_open
+    psp_count
+    psp_metadata
+    psp_extract
+    psp_cancel
+    psp_destroy
