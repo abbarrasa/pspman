@@ -21,8 +21,9 @@ public interface IGameCopyDestination : IAsyncDisposable
     ValueTask<long?> GetAvailableBytesAsync(CancellationToken cancellationToken);
     /// <summary>Inspect without mutation using native case/name/containment semantics and pinned handles.</summary>
     ValueTask<CopyTargetSnapshot> InspectAsync(ImmutableArray<string> segments, CancellationToken cancellationToken);
-    /// <summary>Called only after actual-size/free-space checks; merges directories or fails on a file conflict.</summary>
-    ValueTask EnsureDirectoryAsync(ImmutableArray<string> segments, CancellationToken cancellationToken);
+    /// <summary>Called only after actual-size/free-space checks; merges directories or fails on a file conflict.
+    /// Returns a skip reason if unsafe/link traversal is detected at mutation time.</summary>
+    ValueTask<GameCopySkipReason?> EnsureDirectoryAsync(ImmutableArray<string> segments, CancellationToken cancellationToken);
     /// <summary>
     /// Null consent means exclusive create. Non-null consent authorizes only that exact observed file.
     /// Validate volume/parent/target evidence before truncation; return TargetChanged without mutation
