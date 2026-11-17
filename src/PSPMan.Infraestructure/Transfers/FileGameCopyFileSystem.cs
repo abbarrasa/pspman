@@ -17,18 +17,26 @@ public sealed class FileGameCopyFileSystem : IGameCopyFileSystem
     public ValueTask<IGameArchiveSource> OpenSourceAsync(CopyVolumeEvidence source, string location,
         CancellationToken cancellationToken) => OpenAsync(async () =>
         {
+            if (OperatingSystem.IsWindows())
+                return await WindowsCopyFileAccess.OpenSourceAsync(_getInventory, source, location, _hooks, cancellationToken).ConfigureAwait(false);
             return await LinuxCopyFileAccess.OpenSourceAsync(_getInventory, source, location, _hooks, cancellationToken).ConfigureAwait(false);
         }, GameCopyErrorCode.SourceUnavailable, cancellationToken);
     public ValueTask<IGameCopyDestination> OpenDestinationAsync(CopyVolumeEvidence destination,
         CancellationToken cancellationToken) => OpenAsync(async () =>
         {
+            if (OperatingSystem.IsWindows())
+                return await WindowsCopyFileAccess.OpenDestinationAsync(_getInventory, destination, _hooks, cancellationToken).ConfigureAwait(false);
             return await LinuxCopyFileAccess.OpenDestinationAsync(_getInventory, destination, _hooks, cancellationToken).ConfigureAwait(false);
         }, GameCopyErrorCode.DestinationUnavailable, cancellationToken);
 
     private static ValueTask<T> OpenAsync<T>(Func<ValueTask<T>> open, GameCopyErrorCode errorCode, CancellationToken token) =>
         new(Task.Run(async () =>
         {
-            try { LinuxCopyNative.RequirePlatform(); return await open().ConfigureAwait(false); }
+            try
+            {
+                if (!OperatingSystem.IsWindows()) LinuxCopyNative.RequirePlatform();
+                return await open().ConfigureAwait(false);
+            }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException
                 or PlatformNotSupportedException or EntryPointNotFoundException)
             { throw LinuxCopyFileAccess.Failure(errorCode, error.Message, error); }

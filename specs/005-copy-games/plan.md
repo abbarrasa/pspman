@@ -261,6 +261,14 @@ an optional unsafe/link skip reason discovered at mutation time. This preserves
 FR-12's existing outcome through the Core boundary; it adds no user behavior.
 T01/T03's deferred Windows gates remain open; T05 is not authorized by this step.
 
+The subsequent “Continúa con T05” authorizes only T05. Its Windows filesystem
+implementation, portable verification and exact unexecuted native procedures are
+recorded in [T05 evidence](./windows-copy-filesystem.md). Canonical observed volume
+GUIDs authorize root access, including validated folder mount points; relative
+no-follow opens confine entries below that root. No provider or Core contract
+change is proposed. The mandatory Windows completion gate remains open and this
+authorization does not start T06 or waive native/physical acceptance.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.
