@@ -94,6 +94,10 @@ internal static class LinuxCopyNative
     {
         if (Ftruncate(handle, 0) != 0) throw Error("ftruncate", Marshal.GetLastPInvokeError());
     }
+    internal static void Synchronize(SafeFileHandle root)
+    {
+        if (SyncFs(root) != 0) throw Error("syncfs", Marshal.GetLastPInvokeError());
+    }
     internal static IOException Error(string operation, int error) =>
         new($"{operation}: {new Win32Exception(error).Message} (errno {error}).", new Win32Exception(error));
 
@@ -110,4 +114,6 @@ internal static class LinuxCopyNative
     private static extern int MkdirAt(SafeFileHandle parent, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, uint mode);
     [DllImport("libc", EntryPoint = "ftruncate", SetLastError = true)]
     private static extern int Ftruncate(SafeFileHandle handle, long length);
+    [DllImport("libc", EntryPoint = "syncfs", SetLastError = true)]
+    private static extern int SyncFs(SafeFileHandle handle);
 }

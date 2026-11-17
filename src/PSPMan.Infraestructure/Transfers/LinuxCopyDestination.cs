@@ -8,6 +8,65 @@ namespace PSPMan.Infraestructure.Transfers;
 
 internal sealed class LinuxCopyDestination(BoundRoot root) : IGameCopyDestination
 {
+    internal string RootIdentity => root.Identity.Identity;
+    internal CopyVolumeEvidence VolumeEvidence => root.Evidence;
+    internal ValueTask<long?> SampleSettledCapacityAsync(CancellationToken token) => root.RunAsync(_ =>
+    {
+        LinuxCopyNative.Synchronize(root.Handle);
+        return ValueTask.FromResult(root.Hooks.AvailableBytes is { } sample ? sample() : LinuxCopyNative.AvailableBytes(root.Handle));
+    }, token);
+
+    internal sealed record Target(string Identity, bool Created, string? InitialChange);
+
+    // Called only under the resource owner's short namespace guard, after size admission.
+    // Exclusively create a missing leaf and register its inode before exposing an output.
+    // This also resolves case/short aliases on the mounted filesystem without a string comparer.
+    internal ValueTask<Target> ClaimTargetAsync(ImmutableArray<string> segments, bool directory, CancellationToken token) =>
+        root.RunAsync(ct =>
+        {
+            if (!IsSafe(segments, allowEmpty: directory))
+                return ValueTask.FromResult(new Target("unsafe:" + Guid.NewGuid(), false, null));
+            try
+            {
+                var full = Full(segments);
+                var (parent, _) = root.Parent(full, true, ct);
+                using (parent)
+                {
+                    var relative = string.Join('/', full);
+                    var handle = root.Open(relative, LinuxCopyNative.PathOnly, out var error);
+                    var created = false;
+                    if (handle is null && error == LinuxCopyNative.Missing)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        if (directory)
+                        {
+                            var (createdDirectory, _) = root.Parent(full.Append("unused-child").ToArray(), true, ct);
+                            createdDirectory?.Dispose();
+                        }
+                        else
+                        {
+                            root.Hooks.BeforeMutation?.Invoke("claim", relative);
+                            root.ValidateCoreAsync(ct).AsTask().GetAwaiter().GetResult();
+                            handle = root.Open(relative, LinuxCopyNative.ReadWrite | LinuxCopyNative.Create | LinuxCopyNative.Exclusive, out error);
+                            created = handle is not null;
+                            if (handle is null && error != LinuxCopyNative.Exists) root.ThrowOpen(error);
+                        }
+                        handle ??= root.Open(relative, LinuxCopyNative.PathOnly, out error);
+                    }
+                    if (handle is null) root.ThrowOpen(error);
+                    try
+                    {
+                        var stat = LinuxCopyNative.Describe(handle!);
+                        var result = new Target(stat.Identity, created, created ? stat.Change : null);
+                        root.Pin(handle!, stat.Identity); handle = null;
+                        return ValueTask.FromResult(result);
+                    }
+                    finally { handle?.Dispose(); }
+                }
+            }
+            catch (UnsafeTraversalException) { return ValueTask.FromResult(new Target("unsafe:" + Guid.NewGuid(), false, null)); }
+        }, token);
+
     public string DestinationPath => Path.Combine(root.RootPath, "ISO");
     public async ValueTask ValidateAsync(CancellationToken cancellationToken) =>
         _ = await root.RunAsync(_ => ValueTask.FromResult(true), cancellationToken).ConfigureAwait(false);

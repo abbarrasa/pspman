@@ -55,6 +55,7 @@ internal static class LinuxCopyFileAccess
         internal LinuxCopyNative.Stat Identity { get; }
         internal CopyFileAccessHooks Hooks { get; }
         internal string RootPath => _evidence.Root;
+        internal CopyVolumeEvidence Evidence => _evidence;
         internal GameCopyErrorCode Changed => _destination ? GameCopyErrorCode.DestinationChanged : GameCopyErrorCode.SourceChanged;
         internal GameCopyErrorCode IoError => _destination ? GameCopyErrorCode.WriteError : GameCopyErrorCode.ReadError;
 
