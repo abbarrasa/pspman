@@ -5,6 +5,32 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T14 Windows resources — implementation prepared, native gate open
+
+The user approved the presented T14 plan and explicit open-T05 dependency
+exception with “Apruebo el plan y autorizo inciar la tarea”. This authorizes
+available implementation/checks, not native completion or hardware provisioning.
+[T14 protocol and restart procedure](./windows-destination-resources.md) records
+the shared internal adapter, Windows GUID/file claims, exclusive creation,
+file-handle synchronization and required native matrix. Six portable checks and
+Linux resource regression are separate from Windows proof.
+
+Twenty actual Windows rows are prepared (ten skipped discovery entries on
+Linux). A designated Windows/.NET 10 host must run them with
+`PSPMAN_REQUIRE_WINDOWS_COPY_TESTS=1`, including an ordinary NTFS test location,
+permissions for per-directory case sensitivity and enabled 8.3 generation for
+the short-alias row. Missing those facilities leaves that row open; do not alter
+arbitrary volume settings. Recheck T05's native output access/share behavior and
+flush/identity lifetime with the updated write mask. Native alias/creation races,
+simultaneous writers/readers, free-space samples, buffer/partial/flush/close faults
+and actual exclusive reopen/root rename must pass without skips.
+
+T14 remains unchecked. No Windows endpoint is established; no native Windows
+allocation, ABI, syscall, case/short-alias or handle outcome is claimed. T10's
+designated PSP/FAT/device-loss matrix and earlier Windows gates stay mandatory.
+T15 still requires its own scoped plan/authorization and explicit handling of
+all open native dependencies.
+
 ## T13 Linux resources — physical filesystem follow-up remains in T10
 
 The user approved the presented T13 scope with “apruebo el plan”. T13 depends on

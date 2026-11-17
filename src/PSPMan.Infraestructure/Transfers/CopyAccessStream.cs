@@ -5,7 +5,7 @@ namespace PSPMan.Infraestructure.Transfers;
 
 /// <summary>Owns its descriptor, validates before I/O, serializes close and retains output on failure.</summary>
 internal sealed class CopyAccessStream(Stream inner, Func<CancellationToken, ValueTask> validate,
-    bool writing, Action<CopyAccessStream> released) : Stream
+    bool writing, Action<CopyAccessStream> released, Action? synchronize = null) : Stream
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly object _disposeGate = new();
@@ -70,6 +70,8 @@ internal sealed class CopyAccessStream(Stream inner, Func<CancellationToken, Val
             ObjectDisposedException.ThrowIf(_disposed, this);
             await validate(cancellationToken).ConfigureAwait(false);
             await inner.FlushAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            synchronize?.Invoke();
         }
         catch (IOException error) { throw Failure(writing ? GameCopyErrorCode.WriteError : GameCopyErrorCode.ReadError, error.Message, error); }
         finally { _gate.Release(); }
@@ -86,7 +88,7 @@ internal sealed class CopyAccessStream(Stream inner, Func<CancellationToken, Val
             _disposed = true;
             Exception? failure = null;
             if (writing)
-                try { await inner.FlushAsync().ConfigureAwait(false); } catch (Exception error) { failure = error; }
+                try { await inner.FlushAsync().ConfigureAwait(false); synchronize?.Invoke(); } catch (Exception error) { failure = error; }
             try { await inner.DisposeAsync().ConfigureAwait(false); } catch (Exception error) { failure ??= error; }
             if (failure is not null) throw Failure(GameCopyErrorCode.CloseError, failure.Message, failure);
         }

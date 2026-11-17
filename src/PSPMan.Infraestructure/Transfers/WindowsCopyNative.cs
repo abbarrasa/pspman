@@ -17,7 +17,7 @@ internal static class WindowsCopyNative
     internal readonly record struct OpenParameters(uint Access, uint Share, uint Disposition, uint Options);
     internal static OpenParameters Parameters(WindowsCopyOpenMode mode) => new(
         Synchronize | ReadAttributes | (mode switch
-        { WindowsCopyOpenMode.Read => 1u, WindowsCopyOpenMode.Write or WindowsCopyOpenMode.CreateFile => 3u,
+        { WindowsCopyOpenMode.Read => 1u, WindowsCopyOpenMode.Write or WindowsCopyOpenMode.CreateFile => 0x40000001u,
             WindowsCopyOpenMode.Directory or WindowsCopyOpenMode.CreateDirectory => 0x20u, _ => 0u }),
         mode is WindowsCopyOpenMode.Metadata or WindowsCopyOpenMode.Read ? 7u : 1u,
         mode is WindowsCopyOpenMode.CreateFile or WindowsCopyOpenMode.CreateDirectory ? 2u : 1u, // FILE_CREATE / FILE_OPEN only
@@ -184,6 +184,10 @@ internal static class WindowsCopyNative
         if (!SetFilePointer(handle, 0, out _, 0)) throw Win32Error("Position confirmed output", Marshal.GetLastPInvokeError());
     }
     internal static bool IsMissing(int status) => status is NameMissing or PathMissing or unchecked((int)0xc000000f);
+    internal static void FlushOutput(SafeFileHandle handle)
+    {
+        if (!FlushFileBuffers(handle)) throw Win32Error("Flush owned output allocation", Marshal.GetLastPInvokeError());
+    }
     internal static GameCopyErrorCode? ClassifiedError(int status) => status switch
     {
         unchecked((int)0xc0000033) or unchecked((int)0xc000003b) or unchecked((int)0xc0000106) => GameCopyErrorCode.InvalidName,
@@ -230,4 +234,6 @@ internal static class WindowsCopyNative
     [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetEndOfFile(SafeFileHandle handle, int infoClass, ref long length, uint size);
     [DllImport("kernel32.dll", EntryPoint = "SetFilePointerEx", ExactSpelling = true, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetFilePointer(SafeFileHandle handle, long offset, out long position, uint origin);
+    [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)] private static extern bool FlushFileBuffers(SafeFileHandle handle);
 }

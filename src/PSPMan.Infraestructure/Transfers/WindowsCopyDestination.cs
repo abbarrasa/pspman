@@ -5,8 +5,61 @@ using static PSPMan.Infraestructure.Transfers.WindowsCopyFileAccess;
 
 namespace PSPMan.Infraestructure.Transfers;
 
-internal sealed class WindowsCopyDestination(BoundRoot root) : IGameCopyDestination
+internal sealed class WindowsCopyDestination(BoundRoot root) : ICopyResourceDestination
 {
+    public string RootIdentity => root.Stat.Identity;
+    public CopyVolumeEvidence VolumeEvidence => root.Evidence;
+    // Every owned output has been drained/flushed before this query. No privileged volume flush.
+    public ValueTask<long?> SampleSettledCapacityAsync(CancellationToken token) => GetAvailableBytesAsync(token);
+    public ValueTask<CopyResourceTarget> ClaimTargetAsync(ImmutableArray<string> segments, bool directory, CancellationToken token) => root.RunAsync(ct =>
+    {
+        if (!SafeNames(segments, directory)) return ValueTask.FromResult(new CopyResourceTarget("unsafe:" + Guid.NewGuid(), false, null));
+        try
+        {
+            var path = Full(segments);
+            var (parent, parents) = root.Parent(path, true, ct);
+            if (parent is null) throw Failure(root.Changed, "The destination parent is unavailable.");
+            var handle = WindowsCopyNative.OpenLeaf(parent, path[^1], WindowsCopyOpenMode.Metadata, out var status);
+            bool created = false;
+            if (handle is null && WindowsCopyNative.IsMissing(status))
+            {
+                root.Hooks.BeforeMutation?.Invoke("claim", string.Join('/', path));
+                root.ValidateCoreAsync(ct).AsTask().GetAwaiter().GetResult();
+                _ = root.Describe(parent);
+                ct.ThrowIfCancellationRequested();
+                using (var creation = WindowsCopyNative.OpenLeaf(parent, path[^1], directory ? WindowsCopyOpenMode.CreateDirectory : WindowsCopyOpenMode.CreateFile, out status))
+                {
+                    if (creation is null && status != WindowsCopyNative.Collision) ThrowOpen(status);
+                    if (creation is not null)
+                    {
+                        var initial = root.Describe(creation);
+                        handle = WindowsCopyNative.OpenLeaf(parent, path[^1], WindowsCopyOpenMode.Metadata, out status);
+                        if (handle is null) ThrowOpen(status);
+                        try
+                        {
+                            if (root.Describe(handle!).Identity != initial.Identity)
+                                throw Failure(root.Changed, "The newly created target changed before pinning.");
+                        }
+                        catch { handle?.Dispose(); handle = null; throw; }
+                        created = !directory;
+                    }
+                }
+                // Retaining write access here would prevent the next owner's non-sharing writer.
+                handle ??= WindowsCopyNative.OpenLeaf(parent, path[^1], WindowsCopyOpenMode.Metadata, out status);
+            }
+            if (handle is null) ThrowOpen(status);
+            try
+            {
+                var stat = root.Describe(handle!);
+                root.PinFile(handle!, stat.Identity); handle = null;
+                return ValueTask.FromResult(new CopyResourceTarget(stat.Identity, created, created ? stat.Change : null,
+                    root.FileEvidence(stat, parents).Identity));
+            }
+            finally { handle?.Dispose(); }
+        }
+        catch (UnsafeTraversalException) { return ValueTask.FromResult(new CopyResourceTarget("unsafe:" + Guid.NewGuid(), false, null)); }
+    }, token);
+
     public string DestinationPath => Path.Combine(root.RootPath, "ISO");
     public async ValueTask ValidateAsync(CancellationToken cancellationToken) =>
         _ = await root.RunAsync(_ => ValueTask.FromResult(true), cancellationToken).ConfigureAwait(false);
@@ -111,12 +164,13 @@ internal sealed class WindowsCopyDestination(BoundRoot root) : IGameCopyDestinat
                 token.ThrowIfCancellationRequested();
                 WindowsCopyNative.Truncate(opened!);
             }
-            Stream stream = new FileStream(opened!, FileAccess.Write, 1, isAsync: false);
+            var outputHandle = opened!;
+            Stream stream = new FileStream(outputHandle, FileAccess.Write, 1, isAsync: false);
             opened = null;
             try
             {
                 if (root.Hooks.WrapOutput is { } wrap) stream = wrap(stream);
-                return new CopyOutputOpenResult(new OutputFile(root.Own(stream, path, stat, true)));
+                return new CopyOutputOpenResult(new OutputFile(root.Own(stream, path, stat, true, outputHandle)));
             }
             catch { await stream.DisposeAsync().ConfigureAwait(false); throw; }
         }

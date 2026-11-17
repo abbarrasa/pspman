@@ -6,26 +6,24 @@ using static PSPMan.Infraestructure.Transfers.LinuxCopyFileAccess;
 
 namespace PSPMan.Infraestructure.Transfers;
 
-internal sealed class LinuxCopyDestination(BoundRoot root) : IGameCopyDestination
+internal sealed class LinuxCopyDestination(BoundRoot root) : ICopyResourceDestination
 {
-    internal string RootIdentity => root.Identity.Identity;
-    internal CopyVolumeEvidence VolumeEvidence => root.Evidence;
-    internal ValueTask<long?> SampleSettledCapacityAsync(CancellationToken token) => root.RunAsync(_ =>
+    public string RootIdentity => root.Identity.Identity;
+    public CopyVolumeEvidence VolumeEvidence => root.Evidence;
+    public ValueTask<long?> SampleSettledCapacityAsync(CancellationToken token) => root.RunAsync(_ =>
     {
         LinuxCopyNative.Synchronize(root.Handle);
         return ValueTask.FromResult(root.Hooks.AvailableBytes is { } sample ? sample() : LinuxCopyNative.AvailableBytes(root.Handle));
     }, token);
 
-    internal sealed record Target(string Identity, bool Created, string? InitialChange);
-
     // Called only under the resource owner's short namespace guard, after size admission.
     // Exclusively create a missing leaf and register its inode before exposing an output.
     // This also resolves case/short aliases on the mounted filesystem without a string comparer.
-    internal ValueTask<Target> ClaimTargetAsync(ImmutableArray<string> segments, bool directory, CancellationToken token) =>
+    public ValueTask<CopyResourceTarget> ClaimTargetAsync(ImmutableArray<string> segments, bool directory, CancellationToken token) =>
         root.RunAsync(ct =>
         {
             if (!IsSafe(segments, allowEmpty: directory))
-                return ValueTask.FromResult(new Target("unsafe:" + Guid.NewGuid(), false, null));
+                return ValueTask.FromResult(new CopyResourceTarget("unsafe:" + Guid.NewGuid(), false, null));
             try
             {
                 var full = Full(segments);
@@ -57,14 +55,14 @@ internal sealed class LinuxCopyDestination(BoundRoot root) : IGameCopyDestinatio
                     try
                     {
                         var stat = LinuxCopyNative.Describe(handle!);
-                        var result = new Target(stat.Identity, created, created ? stat.Change : null);
+                        var result = new CopyResourceTarget(stat.Identity, created, created ? stat.Change : null);
                         root.Pin(handle!, stat.Identity); handle = null;
                         return ValueTask.FromResult(result);
                     }
                     finally { handle?.Dispose(); }
                 }
             }
-            catch (UnsafeTraversalException) { return ValueTask.FromResult(new Target("unsafe:" + Guid.NewGuid(), false, null)); }
+            catch (UnsafeTraversalException) { return ValueTask.FromResult(new CopyResourceTarget("unsafe:" + Guid.NewGuid(), false, null)); }
         }, token);
 
     public string DestinationPath => Path.Combine(root.RootPath, "ISO");
