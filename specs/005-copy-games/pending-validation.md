@@ -4,6 +4,20 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T06 Windows engine integration — open
+
+The user approved the scoped T06 plan and its explicit T03/T05 Windows
+dependency exception. Core implementation and Linux verification do not waive
+native or physical checks. Four native Windows service integration cases are
+prepared, with zero executions in this Linux session; their theory appears as
+one skipped discovery entry. Follow [T06 procedures](./copy-engine.md), staging
+the matching T03 Windows engine/bridge first and enabling both required-native
+environment guards. Execute all four archive rows, check output/source hashes
+and handle release, then full build/regression. Complete T03/T05's still-open
+checks as well. Record Windows OS/architecture/filesystem and actual results;
+no fake or Linux test substitutes for these executions. T06 remains unchecked
+and T07 has not started. Physical PSP/UI/removal/close flows remain T10/T07–T09.
+
 ## T05 Windows confined filesystem gate — open
 
 The user authorized T05 with “Continúa con T05”. Implementation and portable
@@ -38,7 +52,8 @@ mount the system volume under a fixture path and write ISO to that real root.
 Record the actual OS/architecture, filesystem, native API results, handles,
 hashes and failures. Physical PSP/device-provider/removal/UI evidence still
 belongs to T10 and Spec 004's native prerequisites. T05 remains unchecked until
-its native completion gate passes; T06 has not started.
+its native completion gate passes; T06 proceeded only under the separately
+approved dependency exception recorded above.
 
 ## T03 Windows production adapter and publication — open
 

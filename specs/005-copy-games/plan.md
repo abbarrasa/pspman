@@ -269,6 +269,13 @@ no-follow opens confine entries below that root. No provider or Core contract
 change is proposed. The mandatory Windows completion gate remains open and this
 authorization does not start T06 or waive native/physical acceptance.
 
+The user subsequently requested a scoped plan before each task. The presented
+T06 plan explicitly proposed proceeding with T03/T05 Windows checks deferred;
+“Apruebo el plan” approved that scope and dependency exception. T06 implements
+only the Core copy engine and its tests, as recorded in [T06 evidence](./copy-engine.md).
+Windows integration and all earlier mandatory gates remain open. This approval
+does not start T07; present its own scoped plan and await approval first.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.
