@@ -1,335 +1,472 @@
-# Plan 005 — Copy games to a PSP
+# Plan 005 — Concurrent game copying to PSPs
+
 Status: approved
-Revision: 0.2
-Specification: [spec.md](./spec.md), approved revision 0.5
+Revision: 0.3
+Specification: [spec.md](./spec.md), approved revision 0.6
 
-## Authorization and scope
+## Authorization, baseline and scope
 
-The user approved specification 0.4, plan/tasks 0.1 and T01 implementation. T01 exposed backend limitations; the user subsequently authorized reviewing the plan/evaluating another engine with “Autorizo el plan”, then approved specification 0.5 after accepting indeterminate encrypted-error handling. This revision completes that already authorized plan review and proposes a native backend; it is not authorization to implement a replacement. Plan 0.1's approval remains historical; unaffected architecture and product requirements are retained. No T02 work is authorized. See [the evaluation](./archive-backend-evaluation.md) for reference-engine evidence; its pending-behavior discussion is historical and is resolved by approved FR-19/AC-19.
+The user approved specification 0.6 with “Apruebo la revisión”, then authorized
+preparing this technical plan with “Autorizo preparar el plan técnico”. This
+revision replaces the single-operation planning of approved plan 0.2, preserving
+unaffected extraction, confinement, identity, retention and packaging decisions.
+Plan 0.2 and tasks 0.2 remain historical single-copy scope. The user explicitly
+approved this displayed plan with “apruebo el plan y autorizo preparar la revisión
+de tareas”. No technical scope changed after presentation. This approves plan
+0.3 and authorizes drafting [tasks 0.3](./tasks.md), not implementation.
+Existing local specification/memory edits are preserved. During plan preparation
+only this plan and MEMORY.md were edited; no build/tests or graphical runs occurred.
 
-Implement one cancellable copy at a time, full ZIP/RAR contents under the PSP root's `/ISO`, password input/retry, multipart handling, actual-size checks, per-file overwrite consent, skipped-entry outcomes and retained output on cancellation/failure. Coordinate selection changes, safe removal and normal close. Do not add persistence, a queue, concurrent execution, recovery or destination cleanup.
+Implement session-only submissions of one/many games, independent concurrent
+operations on one/many PSPs, captured choices, shared read-only sources, per-file
+conflict waits, coordinated actual-size capacity, operation-specific input and
+cancellation, device-dependent stop/removal and confirmed all-operation closure.
+Do not add persistent queues/history, recovery, global numeric concurrency
+limits, automatic failed-copy retries, destination cleanup or format conversion.
+One operation still extracts one game's complete ZIP/RAR tree under `/ISO`.
 
-No constitution or AGENTS.md amendments are proposed. Keep Core independent and native/filesystem work in Infraestructure; Desktop owns presentation and application lifetime. Update MEMORY.md at phase boundaries and after each authorized task.
+The [constitution](../../docs/constitution.md) and [AGENTS.md](../../AGENTS.md)
+apply unchanged: Core policy without platform/UI dependencies, Infraestructure
+native/filesystem adapters, Desktop typed presentation/composition, existing
+.NET/Avalonia/CommunityToolkit/xUnit stack. No new framework/package, database
+schema, constitution or AGENTS amendment is proposed.
 
-## Existing integration points
+## Confirmed implementation baseline
 
-Execution update: after native T01's Linux checks passed, the user explicitly
-deferred its unavailable Windows checks and authorized the next task, T02.
-Proceed with pure Core contracts/rules under that specific dependency exception;
-T01 remains open and all Windows/physical acceptance requirements remain mandatory.
-See the current [task authorization](./tasks.md). No additional task is authorized.
+- [GameCopyService](../../src/PSPMan.Core/Transfers/GameCopyService.cs) already
+  creates per-call Operation state, streams, terminal arbitration and retry data.
+  Reuse the ordered callback pipeline; add shared resource cooperation rather
+  than a second extraction engine. Its current free-space check is independent
+  per operation and is not safe admission accounting for concurrent copies.
+- [GameCopySessionCoordinator](../../src/PSPMan.Core/Transfers/GameCopySessionCoordinator.cs)
+  has one active slot/snapshot, rejects a second start and invalidates the active
+  game when selection changes. Replace those policies; preserve synchronous
+  capture before background execution, identity checks and removal reservations.
+- [copy contracts](../../src/PSPMan.Core/Transfers/IGameCopyFileSystem.cs) expose
+  held-volume capacity and conditional evidence-checked create/overwrite, but no
+  cross-operation destination claims. Path strings alone cannot authorize access
+  or establish native case/alias equality.
+- [SevenZipNativeSession](../../src/PSPMan.Infraestructure/Transfers/SevenZipNativeSession.cs)
+  owns a session semaphore, callbacks and source streams. Keep serialization
+  within an archive session, not across all sessions; prove independent sessions
+  actually overlap through the packaged native engine before relying on it.
+- [GameCopyViewModel](../../src/PSPMan.Desktop/ViewModels/GameCopyViewModel.cs),
+  [its shutdown partial](../../src/PSPMan.Desktop/ViewModels/GameCopyViewModel.Shutdown.cs)
+  and [GameCopyView](../../src/PSPMan.Desktop/Views/GameCopyView.axaml) have one
+  operation/input. [MainViewModel](../../src/PSPMan.Desktop/ViewModels/MainViewModel.cs)
+  forwards the focused catalogue row into the coordinator; detach that coupling.
+- Device source choices currently use a shared SourceGroup association and PSP
+  choices are per game. Submission-local optical choices must not be implemented
+  by temporarily changing the shared session association between submissions.
+  Existing device providers/removal authorization remain the authority.
 
-- `DeviceSessionService` owns observed inventories and associations and already serializes mounting/removal authorization. It exposes `Snapshot`, `SnapshotChanged` and `RemoveDeviceAsync`; removal currently starts without knowledge of copy handles.
-- `DeviceAssociationRules` and `MountedGamePathRules` already resolve source groups, source volumes, per-game PSP choices and paths. Reuse these rules rather than detecting a device from a label or directory.
-- `DevicesViewModel` currently calls the device session directly for removal and source/destination association changes. Its boundary tests prohibit direct file access. Keep the existing device-only namespace free of archive I/O.
-- `MainViewModel` forwards selected-game metadata to Devices and supports catalog-only construction. Preserve those optional consumers and existing import/export/CRUD behavior.
-- `ApplicationDeviceLifetime` currently owns Closing and controlled shutdown. It immediately starts disposal after an accepted shutdown request. Copy confirmation must happen before device detachment/cancellation, not in a second competing Closing handler.
-- `MainWindow` has compiled bindings and a bounded 900 x 450 minimum layout. Add a typed child copy view rather than business logic in view code-behind.
-- Existing Core, Infraestructure and Desktop xUnit projects cover rules, adapters, compiled UI and lifetime. Reuse awaited `HeadlessTestDispatcher` and nonparallel Avalonia fixtures.
+This is a scoped planning inspection, not formal SDD review or a claim that
+existing code implements revision 0.6. Historical results are linked below.
 
-## Components and proposed files
+## Proposed files and responsibilities
 
-Paths are relative to the repository root. Names below are planned, not existing APIs.
+Paths below are relative to the repository root; new names are proposed.
 
 | File or group | Responsibility |
 | --- | --- |
-| `src/PSPMan.Core/Transfers/GameCopyModels.cs` | Immutable request, captured game/device/volume evidence, entry descriptors, progress, prompt IDs, skip reasons and terminal result. Operation IDs distinguish late callbacks from current work. No passwords in published snapshots. |
-| `src/PSPMan.Core/Transfers/GameCopyRules.cs` | Pure path classification, checked byte totals, progress accounting, outcome and lifecycle transition rules. Filesystem-sensitive facts arrive from adapters. |
-| `src/PSPMan.Core/Transfers/IGameArchiveReader.cs` | Archive-session metadata and ordered extraction contracts. An extraction-target callback prepares each entry and accepts bounded decoded bytes into a caller-owned stream; a source callback supplies selected-volume parts. Expose only .NET types/typed results, never native interfaces, pointers or HRESULTs. |
-| `src/PSPMan.Core/Transfers/IGameCopyFileSystem.cs` | Source/volume evidence validation, available space and destination directory/file sessions; explicit create versus conditional overwrite; no deletion/restore contract. |
-| `src/PSPMan.Core/Transfers/IGameCopyInteraction.cs` | Awaited password and overwrite requests with operation/prompt IDs, cancellation and retry outcomes. Passwords are transient interaction values, not snapshot/history fields. |
-| `src/PSPMan.Core/Transfers/GameCopyService.cs` | One operation's preparation, ordered extraction/copy loop, cancellation, stop reasons, stream ownership and terminal publication. Inject adapters and interaction. No native calls or catalogue repository. |
-| `src/PSPMan.Core/Transfers/GameCopySessionCoordinator.cs` | Single active slot, capture/revalidation of session associations and selected game, fail-before-removal sequencing, session observation and disposal. Use one serialized transition gate; never hold it while awaiting UI/native I/O. |
-| `src/PSPMan.Infraestructure/Transfers/SevenZipGameArchiveReader.cs`, `SevenZipNativeMethods.cs`, `SevenZipNativeSession.cs` | Native-engine adaptation, source/output/password callbacks, entry indices, error translation, cancellation and native/managed lifetime ownership. |
-| `native/PSPMan.ArchiveBridge/` | Proposed small versioned C ABI over official 7-Zip archive interfaces, with native source/build instructions, licensing notices and platform build definitions. It shall not own catalogue/device rules or open PSP paths. |
-| `src/PSPMan.Infraestructure/Transfers/ArchiveRuntimeResolver.cs` | Resolve only bundled, pinned native bridge/engine assets by explicit application-local path and runtime architecture. No PATH/tool installation discovery or automatic managed fallback. |
-| `src/PSPMan.Infraestructure/Transfers/FileGameCopyFileSystem.cs` | Actual filesystem I/O, free bytes, source-part access, output stream ownership and filesystem error translation. Fixed-size buffers, no whole-game memory or temporary full extraction. |
-| `src/PSPMan.Infraestructure/Transfers/LinuxCopyFileAccess.cs`, `WindowsCopyFileAccess.cs` | Platform handle-based root/volume validation, confined traversal, no-follow entry opening and conditional destination mutation. Reuse device evidence; no new mount/eject provider. |
-| `src/PSPMan.Infraestructure/PSPMan.Infraestructure.csproj`, `src/PSPMan.Desktop/PSPMan.Desktop.csproj`, native build/publish definitions | After approval, replace SharpCompress with packaged bridge/engine runtime assets and licence/source notices; test publish output. No package/native reference in Core, and no platform loader logic in Desktop view models. Existing T01 characterization remains historical evidence. |
-| `src/PSPMan.Desktop/ViewModels/MainViewModel.Copy.cs` | Explicit Copy command, optional copy VM attachment, selected-game change forwarding and opening the copy screen. |
-| `src/PSPMan.Desktop/ViewModels/GameCopyViewModel.cs` | UI projection, copy row, current prompt, password retry, overwrite response, cancel and terminal messages. Marshal immutable updates onto UI; reject obsolete operation/prompt responses. |
-| `src/PSPMan.Desktop/Views/GameCopyView.axaml` and `.axaml.cs` | Compiled typed table, combined progress bar, input/confirmation states, result and warning text; code-behind initializes only. Use existing controls, not a new DataGrid dependency. |
-| `src/PSPMan.Desktop/CopyStartup.cs` | Compose archive/filesystem adapters, coordinator and copy VM using the caller-owned device session. No catalogue writes. |
-| `src/PSPMan.Desktop/ViewModels/MainViewModel.cs`, `MainViewModel.Devices.cs` | Preserve existing constructors while routing selected-game changes and attaching copy state independently of catalogue/device startup failures. |
-| `src/PSPMan.Desktop/ViewModels/DevicesViewModel.Operations.cs` | Optional awaited removal interceptor: stop/fail matching active copy before forwarding removal; retain normal behavior when absent. |
-| `src/PSPMan.Desktop/ApplicationDeviceLifetime.cs`, `App.axaml.cs` | Compose copy with initialized devices; coalesce close requests, confirm active-copy closure before disposal, await copy stop/file release, then existing device shutdown. Preserve provider initialization/disposal race handling and exit error reporting. |
-| `src/PSPMan.Desktop/Views/MainWindow.axaml` | Copy action and typed copy screen presentation while catalogue/device selections remain accessible. |
-| `tests/PSPMan.Core.Tests/GameCopyRulesTests.cs`, `GameCopyServiceTests.cs`, `GameCopySessionCoordinatorTests.cs` | Pure rules, fake adapters/prompts, interleaving/race tests and no-queue behavior. |
-| `tests/PSPMan.Infraestructure.Tests/GameArchiveReaderTests.cs`, native bridge contract tests, `GameCopyFileSystemTests.cs`, `GameCopyIntegrationTests.cs`, platform copy-access tests and `Fixtures/Transfers/` | Real ZIP/RAR/password/multipart fixtures, ABI/callback ownership, filesystem semantics, confinement, space and errors. Keep fixture provenance/hashes and old SharpCompress characterization evidence; revise package placement only through the approved task revision. |
-| `tests/PSPMan.Desktop.Tests/GameCopyViewModelTests.cs`, `GameCopyFlowTests.cs`, existing lifetime/selection/device-boundary tests | Awaited UI flows, typed binding/layout, stale prompt rejection, shutdown and removal ordering, catalogue/source non-mutation. Preserve existing architecture guards. |
-| `specs/005-copy-games/manual-validation.md`, `coverage.md`, `pending-validation.md` | Later implementation/validation evidence: procedures, actual results and mandatory blocked native tests; these are not claimed as executed by this plan. |
+| `src/PSPMan.Core/Transfers/GameCopyModels.cs` | Add waiting state/reason, immutable submission/admission results, operation sequence and captured source/destination display metadata; retain stable operation/prompt IDs and private passwords. |
+| `src/PSPMan.Core/Transfers/GameCopySubmissionRules.cs` (new), existing `Devices/DeviceAssociationRules.cs` if needed | Pure per-game choice resolution against one observed inventory and explicit submission choices; return captured requests or per-game incidents without I/O or association mutation. |
+| `src/PSPMan.Core/Transfers/IGameCopyResources.cs` (new) | Platform-neutral asynchronous budget/entry-lease contracts, operation-scoped progress/debit/settlement and cancellation; no native handles or delete/restore operation. |
+| `src/PSPMan.Core/Transfers/GameCopySpaceReservations.cs` (new) | Checked per-volume reservation ledger and pure admission/update rules, including retry and terminal unused-claim release. |
+| `src/PSPMan.Core/Transfers/GameCopySessionCoordinator.cs` | Multi-operation registry, batch partial admission, immutable requests, per-ID cancellation/snapshots, device dependency index, close admission gate and awaited drain. |
+| `src/PSPMan.Core/Transfers/GameCopyService.cs`, `GameCopyRules.cs` | Integrate actual-size reservation, cancellable entry acquisition before inspection, scoped waits, post-write accounting and release; preserve extraction order/retry/retention. |
+| `src/PSPMan.Core/Transfers/IGameCopyFileSystem.cs` | Add only the opaque volume/target coordination evidence needed by resource contracts; preserve conditional open and native confinement as final authority. |
+| `src/PSPMan.Infraestructure/Transfers/CopyDestinationResources.cs` (new), `FileGameCopyFileSystem.cs`, `CopyAccessStream.cs` | Shared destination-session resource owner, native target claims, namespace mutation coordination and allocation-aware stream settlement; validated roots remain per operation. |
+| `src/PSPMan.Infraestructure/Transfers/LinuxCopyDestination.cs`, `LinuxCopyFileAccess.cs`, `LinuxCopyNative.cs`; corresponding Windows files | Native alias/identity resolution for claims, compatible shared directories, no-follow opens, concurrent separate-file streams and native capacity evidence. Adjust source sharing only where tests require it. |
+| `src/PSPMan.Infraestructure/Transfers/SevenZipNativeSession.cs`, resolver/methods and `native/PSPMan.ArchiveBridge/` only if necessary | Prove and, within an authorized task, minimally correct independent-session ownership/parallelism; no speculative engine/version/ABI change. Any material ABI/package scope change needs plan/task reassessment. |
+| `src/PSPMan.Desktop/ViewModels/GameCopyViewModel.cs`, shutdown partial | Collection owner, admission incidents, per-operation interaction routing, aggregate nonterminal state and one close decision; no single global pending password/overwrite. |
+| `src/PSPMan.Desktop/ViewModels/CopyOperationViewModel.cs`, `CopySubmissionViewModel.cs` (new); existing input/close models | Typed row state/commands/input and not-yet-submitted per-game source/PSP choices; immutable rows after admission, transient identity-bound decisions. |
+| `src/PSPMan.Desktop/ViewModels/MainViewModel.Copy.cs`, `MainViewModel.cs`, existing DevicesViewModel partials only as needed | Multiple catalogue selection, focused-row CRUD compatibility, explicit prepared-game submission and current native choice projections; no file I/O in device/view models. |
+| `src/PSPMan.Desktop/Views/MainWindow.axaml`, `GameCopyView.axaml`, `CopyStartup.cs`, `ApplicationDeviceLifetime.cs` | Typed selection/submission/list templates and composition of one shared resource owner; aggregate confirmation, stop/drain then existing device shutdown. View code-behind remains initialization-only. |
+| Existing test projects, focused new concurrency/resource test classes | Deterministic rules/coordinator races, real native archive/filesystem overlap and awaited typed UI/lifetime behavior. Preserve CRUD/CSV/device regressions. |
+| Existing feature coverage/manual/pending reports and a concurrency evidence report, during authorized implementation | Distinguish new concurrency results from historical single-copy evidence and record every unavailable native/physical case. |
 
-Adjust file granularity only within these responsibilities. There is no schema migration or persistent association change.
+Names/signatures may be refined within approved responsibilities. No generic
+scheduler, DI framework, event bus, notification service or persistence is needed.
 
-## Revised dependency decision and feasibility gate
+## Components, data flow and ownership
 
-Propose pinned **official 7-Zip 26.06**, using its full native archive engine (RAR and ZIP handlers) through a small C++ bridge with a C ABI. Load it from Infraestructure; leave Core independent. This is a current need: the managed backend failed required encrypted-multipart input, while the independent native reference decoded the same unchanged sample and its payload hashes. A C++ build dependency and platform runtime assets replace the previously proposed managed dependency; no generic framework/container is added.
+`Catalogue selection -> submission drafts -> pure capture/admission -> operation
+registry -> independent GameCopyService calls -> shared volume budget/target
+claims -> existing native archive/filesystem adapters -> sequenced row snapshots`.
 
-The [backend evaluation](./archive-backend-evaluation.md) records downloads/hashes and executed Linux reference checks. Official 7-Zip CLI 26.06 validated 16 representative archive sets; both previously failing families extracted with all three original hashes matching. These are reference-engine observations only. They do not establish that the proposed bridge, managed adapter, callbacks, Windows packaging or cancellation already work.
+Desktop holds `SelectedGames` independently of the focused `SelectedGame` used
+by existing details/CRUD. Use Avalonia multiple selection through bound data or
+an initialization-only adapter if required; view models receive GameRecord
+values, not controls/event arguments. Existing edit/delete commands keep their
+single-focused-record behavior and are never expanded into batch mutations.
+Refreshing the catalogue reconciles draft selections by ID; captured requests
+retain their immutable record values regardless of later UI/catalogue changes.
 
-Use full source/engine handlers, not the reduced LZMA SDK or a reduced executable that lacks RAR. Build and pin the native engine/bridge for the runtime architectures the application publishes on Linux/Windows; verify that none of the application's supported publish targets loses archive support. Source/build configuration, exact inputs, hashes, notices and binary ABI/version checks belong in the package. Keep redistribution notices and required source/build information with delivered native assets; verify them against the release licence and [official developer FAQ](https://www.7-zip.org/faq.html). Do not treat NuGet advisory audit of the managed prototype as a security review of a new native engine.
+Each CopySubmissionViewModel has explicit source/volume and one PSP choice,
+seeded from valid existing Spec 004 preferences. Optical choices are local to
+that submission. Reuse pure association rules against the latest inventory with
+an immutable local choice overlay; do not rewrite shared session preferences to
+construct requests. Ambiguous choices remain incidents, never inferred from a
+path/label. A submitted batch captures one consistent observed inventory; each
+ready item gets a fresh operation ID and its own cancellation/completion owner.
+Missing choices produce individual incidents and require explicit resubmission
+once resolved. Later capacity/archive errors belong to accepted rows.
 
-Reference sources: [official release downloads](https://www.7-zip.org/download.html), [versioned archive interfaces](https://github.com/ip7z/7zip/blob/26.06/CPP/7zip/Archive/IArchive.h), [native client example](https://github.com/ip7z/7zip/blob/26.06/CPP/7zip/UI/Client7z/Client7z.cpp), and release source bundle documented in the evaluation.
-
-The revised T01 gate, after plan/tasks approval, must prove the **actual native API**, not merely rerun the CLI: metadata, index-based duplicate entries, known hashes, passwords and header encryption, multipart/solid decoding, callback-controlled skips/output, actual-size progress, cancellation during decode/input/output, handle release, ABI validation and native/managed error propagation. Include both known-good encrypted multipart/reference-verified samples and the existing failure fixtures. Native Windows and publish-architecture checks must be documented as pending if unavailable, never reported as inferred Linux passes. No native replacement is implemented in this plan-revision phase.
-
-Retain the old package/tests in the working tree until an approved task specifies their replacement or test-only historical retention. Do not mix automatic fallback engines in production. Replacing the package is an implementation action still awaiting authorization.
-
-Rejected alternatives: libarchive's inspected RAR5 handler explicitly rejects encrypted headers; built-in ZIP cannot handle RAR. Calling an installed or bundled 7zz CLI in production would complicate duplicate-entry selection, exact filename framing, password transport and controlled PSP writes. Use it as a reference oracle only, with fixed public fixture passwords, not as the product architecture. Full temporary extraction adds host storage demands and is unnecessary; do not create full temporary game copies during product operation.
-
-### Native bridge boundary
-
-- A versioned C ABI exposes create/open, metadata-by-entry-index, extract selected ordered indices, cancel and close. Use fixed-width fields and explicit lengths/ownership, Unicode conversion and structured native error codes. Do not expose platform-dependent wchar_t/COM layout to C#.
-- Only ZIP/RAR handlers are selected. The managed adapter supplies read/seek callbacks for verified read-only source handles and resolves subsequent-part requests through the selected-source filesystem adapter. Native engine code must not open arbitrary archive-supplied host paths.
-- Output callbacks request an entry by index. Core applies path/link/filename policy and per-file consent through its extraction target, then supplies a controlled output stream or skip. No native extraction-to-directory method writes directly to the PSP. Index identity preserves duplicate entries without filename-based wildcard selection.
-- Execute synchronous native decoding on an off-UI worker. Callback waits for managed password/overwrite input occur without holding the coordinator gate; UI requests use cancellable operation/prompt IDs. Catch managed exceptions inside callbacks, translate to an abort/error and retain the original managed cause. Never unwind exceptions across the ABI.
-- Retain delegates, handles and source/output sessions until the native call exits. Cancellation is signalled atomically and checked in progress/read/write callbacks, aborts the engine cooperatively and awaits its return before disposal/removal/close. Do not free state or unload a library while it can call back. Test concurrent progress callbacks; entry/output sequencing and callback thread restrictions come from the pinned interfaces.
-- Count decoded callback bytes and successful controlled output bytes for combined progress. Engine progress values may describe compressed or decompressed work depending on phase; do not blindly use them as actual copied bytes. No buffers proportional to the game size.
-- Resolve bridge and engine by full trusted application path, with matched ABI/version/runtime evidence. A missing/mismatched native runtime reports a copy-service initialization error; it does not silently select an installed 7z or the old backend.
-- Build requirements (C++ compiler, build files and target system libraries) must be explicit. Toolchain availability, actual bridge construction and Windows execution have not been proved by downloading/running the Linux reference executable.
-
-### Approved encrypted-error handling — FR-19
-
-For older encrypted RAR, the native decoder returns data/CRC errors for both wrong passwords and damaged ciphertext. The same ambiguity was reproduced with correct versus incorrect input, and is visible in the handler's operation-result logic. A new engine therefore cannot promise absolute wrong-password/corruption classification.
-
-Approved specification 0.5 now defines this case in FR-19/AC-19. On an encrypted data/header failure whose cause cannot be determined, stop decoding/writes, close current outputs, retain all written content and show “Incorrect password or damaged archive” with explicit password retry or cancellation. Do not publish confirmed corruption, confirmed wrong password, successful completion or an automatic retry. Definitive corruption still fails under FR-10/FR-15; definitive wrong-password results follow FR-13. Native/managed source, destination, selection and I/O failures retain priority as their actual causes and are not converted into password prompts.
-
-The adapter maps native results plus entry/header encryption evidence into a typed IndeterminateEncryptedError result only when the failure belongs to that undecidable class. Complete the native invocation and release its output streams before awaiting the user's new password decision. Retain the coordinator's active-operation slot while awaiting input so another copy cannot start; close/removal/selection-change requests can still stop/fail the operation normally. Associate every prompt with its operation ID and a fresh prompt ID, cancel it on stop/disposal and ignore stale responses.
-
-On explicit retry, revalidate game/source/PSP evidence and reopen the native session with the new transient password. Preserve completed-entry indices and original metadata/evidence; replay preceding solid work to a discard sink without writing completed files again. Reprocess the failed entry only after normal FR-6 destination inspection/overwrite consent, including renewed consent if its retained partial file or another destination changed. Re-evaluate free space for remaining decoded work without treating retained partial content as automatically reclaimable. If the source/archive evidence changed, fail rather than reusing stale entry indices. Keep actual-size/progress accounting consistent without claiming replayed bytes as newly copied. Cancel follows FR-9 and retains output. No automatic retry limit or automatic password guess is introduced.
-
-## Contracts, identity and data flow
-
-1. The explicit Copy command opens the copy screen and captures the selected immutable GameRecord. No PSP means an immediate message, not a disabled action with no explanation. Device-initializing, mounting and selection-required states point to the existing device choices; no unapproved fallback or hidden polling loop starts a copy.
-2. Once source and PSP are resolved, capture DeviceKey, VolumeKey, identities, media generations, roots and game ID/metadata. Require exactly one usable PSP volume. Missing/unready evidence is a preparation error. A new explicit action starts again after the user resolves an unavailable source/destination.
-3. Reserve the coordinator's single active slot atomically before archive work. The service receives operation-local evidence, cancellation, progress and interaction. It never reads mutable SelectedGame during extraction.
-4. Observe device/session changes and selected-game changes. Relevant source/device/volume/root/media changes invalidate the active request; unrelated inventory revisions, labels or provider activity do not fail it merely because a global revision increments. Selection change explicitly fails it under FR-16. Current I/O must stop, not redirect to the new selection.
-5. Infraestructure opens source parts read-only and pins their handles/evidence. Inspect archive headers to obtain the actual decompressed total with checked arithmetic, prompting for encrypted headers if needed. This does not require a full payload integrity pass. If metadata is incomplete, a cancellable counting read may be necessary before PSP writes; this fallback uses bounded buffers and no stored full extraction. Unknown/overflowing actual totals fail preparation with a reason, never substitute SizeBytes as authoritative.
-6. Compare free bytes on the captured destination volume with that actual total before creating `/ISO` or opening output files. Use the full archive's decompressed byte total as the conservative requirement, without assuming overwrite credit. Capacity may still change after validation; later write failures retain output. Recheck evidence/availability and free-space conditions after lengthy user waits before mutation.
-7. Iterate archive entries in their defined order. Classify unsafe paths/links first and omit them. Validate remaining names against actual destination constraints. Inspect each destination via confined handles; directories can merge, but a file/directory conflict fails the operation.
-8. For an existing file obtain an evidence token (native identity plus relevant size/change evidence). Await individual consent; inspect again after the response. If it changed, ask again. For an absent file use exclusive creation; if a file appears meanwhile, treat it as a new overwrite requiring consent. Open without truncating first, verify the handle/evidence against the accepted version, and only then truncate/write. Never use a blind overwrite convenience API.
-9. Run ordered native extraction through the managed extraction target. Its entry-preparation callback performs steps 7–8 and returns a controlled output stream or skip. Accept bounded decoded chunks, check cancellation/evidence and write with byte accounting; the native engine owns no destination path. Advance skipped entries as required for a solid archive. Close each entry/output before its terminal publication and preserve duplicate indices rather than collapsing paths.
-10. On success publish Completed or CompletedWithSkippedFiles. On cancel/failure stop, release files/archive sessions and publish the appropriate reason and destination warning. Never delete PSP output or restore overwritten bytes. All terminal transitions occur after stream release; close errors produce failure. A single atomic terminal gate decides a completion/cancel race; later callbacks cannot reverse the result.
-
-### Safe filesystem access
-
-Lexical prefix checks alone cannot enforce FR-12. Core performs portable classification (absolute paths, traversal, drive/UNC/device syntax, unsafe separators and links); Infraestructure enforces actual filesystem containment at use time. Walk/open entries relative to verified root/directory handles, reject unsafe reparse/symlink traversal, and retain verified parent handles across inspection and mutation. Bind output access to the captured volume identity, not just the mount path. Use Linux handle-relative no-follow operations and Windows handle/reparse-aware opens; validate actual volume evidence before mutations. Use the destination's native name resolution for equality, not `OperatingSystem.IsWindows` as a case-sensitivity shortcut.
-
-Implement tests that swap a parent for a link, replace a target between consent/open/truncation, remount another device at the same path, and use sibling-prefix paths. If portable APIs alone cannot close a race, implement the bounded platform helper here; do not weaken FR-12 or assert filesystem confinement based solely on tests. Source parts must also stay on the chosen source and be opened without following an archive-supplied path outside that source.
-
-### Pure rules and pseudocode
-
-`ClassifyEntry(path, isLink)` returns safe relative segments, SkipUnsafe, or a structural validation result. Platform-invalid names and file/directory facts arrive separately from the filesystem adapter. Unsafe-path skipping takes priority over name rejection for an entry that is itself outside `/ISO`.
-
-`SumActualBytes(entries)` returns a checked nonnegative total or a typed preparation error. Use 64-bit byte counts and decimal/widened ratio arithmetic to avoid multiplying long totals into overflow.
-
-`ReduceOutcome(stopReason, skippedCount, allStreamsClosed)` returns Completed, CompletedWithSkippedFiles, Cancelled or Failed. Refused overwrite and unsafe entries increment skip count; they are never reported as successfully copied.
-
-`AdvanceProgress(total, processedEntries, currentEntryWork)` yields monotonic combined progress. Each file contributes decompression and output processing work to the same bar; stream reads and successful writes update the corresponding counters. For skipped files, resolve their output work without claiming written bytes; decoded bytes required to advance solid archives still count as decompression work. Counting-only preparation remains identified as preparation. With zero eligible bytes use preparation/terminal states rather than divide by zero. Hold displayed progress below 100% until processing and closing have successfully completed; 100% with a skipped-files result means processing completed, not that skipped bytes were copied.
+The coordinator owns a dictionary keyed by operation ID and publishes immutable
+collection snapshots with an increasing revision per row. Synchronous admission
+captures requests and records them before scheduling engine work; no UI selection
+is reread by the runner. UI commands submit and return admission results promptly,
+not await the lifetime of every transfer under the default single-running-command
+guard. Removing the old IsBusy gate alone is insufficient. Reject submissions
+only for actual admission/identity/removal/close conditions, not another copy.
 
 ```text
-reserve single active operation
-try:
-    capture and validate chosen game/source/PSP evidence
-    open source archive session; obtain password with retry as necessary
-    inspect actual total; reject empty archive; check free space before writes
-    for entry in archive order:
-        check stop reason and relevant device/selection evidence
-        if unsafe path or link: record skip; advance reader safely; continue
-        inspect destination; fail on incompatible name or file/directory conflict
-        while destination requires unconfirmed overwrite:
-            await per-file consent
-            if declined: record skip; break
-            revalidate device and target evidence; repeat if changed
-        if skipped: advance reader safely; continue
-        open verified destination; decode and write bounded chunks
-        close entry/output; update combined progress
-    release archive and file sessions
-    publish completion, including skipped-files outcome
-on indeterminate encrypted decoding failure:
-    stop native invocation; close outputs; retain written content
-    await explicit password retry or cancellation while retaining active slot
-    on retry: revalidate evidence; reopen/replay; apply normal overwrite consent
-    on cancellation: publish Cancelled after file release
-catch accepted cancellation or other operation failure:
-    stop reads/writes; release all sessions; retain output
-    publish cancellation/failure, reason and user-handled-output warning
-finally:
-    reject pending prompt responses; release active slot after stop/close
+Submit(drafts, observedInventory):
+  under coordinator gate:
+    reject if closing/disposed
+    for each draft:
+      resolve captured request or record incident
+      reject that item if a captured device is reserved for removal
+      add accepted operation with immutable choices and completion owner
+  outside gate: schedule each accepted runner; publish results outside locks
+
+Cancel(operationId): mark only that owner; signal and await its completion
+OnInventoryChanged(snapshot): fail/cancel every affected captured owner
+  using device/volume identity, generation and availability; ignore UI choices
 ```
 
-Password retry may need a reopened session at its previous archive position; replay earlier solid entries into a discard stream, never recopy completed entries or repeat their confirmations. The failed/current entry is subject to normal FR-6 overwrite consent. Restart counters for retried work without regressing displayed progress or claiming duplicate written bytes. Indeterminate encrypted errors follow FR-19 as described above; never silently classify them as confirmed wrong passwords. Transport product passwords exclusively through in-memory callbacks, never process arguments/environment/logs. Release transient managed/native credential storage when no longer needed; do not promise erasure of immutable strings or library-internal copies.
+Never hold the registry lock while calling observers, cancelling tokens,
+awaiting I/O or native authorization. Reserve shared initialization/disposal and
+completion tasks before callbacks to preserve T09's reentrancy guarantees.
+A registry entry remains nonterminal until native return and all owned files,
+leases and reservations have settled; queued late UI snapshots cannot revive it.
 
-## Removal and application lifetime
+## Per-volume capacity and output accounting
 
-Use a narrow optional removal interception contract in DevicesViewModel, composed by the application owner. A request for an operation's source or PSP calls coordinator FailAndStopAsync, awaits the same operation completion/file release, then calls existing RemoveDeviceAsync with a fresh observation for the same device identity. Ignore unrelated global-revision changes; reject a replacement generation instead of removing it. The copy fails even if removal subsequently fails. Removal of an unrelated device retains existing behavior. Cover removal racing with copy start using the same coordinator gate and a temporary device-removal reservation; no copy may acquire a device pending removal.
+Budget keys use captured device/volume identity plus media generation, not mount
+paths or drive letters. Different PSPs have independent ledgers. Inspect actual
+size before any destination mutation; preserve checked arithmetic, invalid/
+unknown totals and zero-byte-file handling. Unknown/insufficient unreserved
+space is a per-operation failure, not a wait-for-space queue. Existing byte
+checks give no speculative credit for overwrites, compression, future deletion
+or likely skips; decline/unsafe skip releases that entry's pending claim.
 
-The existing lifetime owner remains the single shutdown entry point. Before setting `_stopping`, cancelling providers or detaching UI, await a copy-close confirmation exposed by the copy VM. Duplicate window/OS close requests share one decision. Decline resets the pending-close request and does not dispose devices or the active copy. Accept requests cancellation, awaits file release, detaches copy subscriptions, then performs existing provider disposal and controlled shutdown. Programmatic disposal still releases owned operations; no destination cleanup occurs. Pending password/overwrite prompts are cancelled on accepted close/stop and stale responses are ignored. Preserve native UAC/Polkit limitations from Spec 004; do not promise immediate dismissal of native prompts.
+Pure rule inputs: known available bytes, outstanding pending bytes by operation,
+requested remaining output and current identity/generation. Return a reservation
+or the existing typed capacity/overflow error. For an initial stable sample:
 
-Copy startup and disposal share the same owner as device startup: a late provider result cannot attach a new copy VM after shutdown, and a copy cannot outlive the session it observes. Retain catalogue-only consumers and independent device/catalogue error messages.
+```text
+TryReserve(operation, volume, actualPending, sampledFree):
+  check volume evidence and nonnegative/known checked totals
+  otherPending = checked sum of the volume's other outstanding claims
+  if actualPending > sampledFree - otherPending: fail this operation
+  replace this operation's remaining claim atomically (do not add it twice)
+```
 
-## UI states and accessibility
+The sample and replacement must form one consistent admission transaction with
+write accounting. A simple query-free-then-update-progress race is not sufficient:
+a concurrent write can already reduce OS free bytes while its reservation is
+still pending, or be removed from pending before its allocation becomes visible.
+Implement a per-volume accounting boundary with in-flight write epochs and a
+brief admission fence: stop new output chunks from entering settlement, await
+already-started chunks, reconcile held-volume free bytes plus committed/unsettled
+charges, then reserve and resume chunks. Do not hold this fence across source
+reads, native decoding, UI input, file-conflict waits or whole-file transfers.
+Unsettled writes keep a conservative charge until represented in a consistent
+native free-space sample; never count the same free bytes twice. External actors
+and filesystem overhead can still cause ordinary reported write failure.
 
-- Idle/no game: copy screen absent, Copy requires a selected record. A selected game with no usable PSP still allows the explicit action to explain the problem.
-- Preparation/error: show the selected game and chosen device/root, or the existing selection action when unresolved; no output writes. A password prompt masks input, permits retry and provides a keyboard-accessible Cancel.
-- Transferring: one table row with title, destination, status and combined bar; cancelling changes state to Stopping until handles are released. No fake timer-driven percentage or UI-thread decompression.
-- Awaiting overwrite: display the exact destination file and Yes/Skip/Cancel controls plus retained-output warning. A renewed prompt reflects the changed target. There is no Apply to all control.
-- Awaiting password decision after an indeterminate encrypted error: display “Incorrect password or damaged archive”, the destination and retained-output warning. Offer masked password retry and Cancel; close current outputs before the prompt, suspend writes, retain the single active slot and preserve access to normal close/device actions. No success/failure cause is fabricated.
-- Terminal: Completed, Completed with skipped files, Cancelled or Failed; cancellation/failure show reason/destination and explicitly warn that partial/incorrect output remains for the user. Completed with skips applies even to all-skipped archives. The table is operation/session UI, not persistent history.
-- Close confirmation: Accept stops and closes; Decline preserves the active operation. Safe removal stops/fails the copy then proceeds through existing device UI.
+For every successful output chunk, update actual attempted/written settlement
+for the current extraction attempt; progress's monotonic maximum is not capacity
+accounting. On retry a failed entry may be truncated and written again: reserve
+its full remaining replay output before reopening, preserving the retained
+file's real consumption and excluding completed entries. Release skipped bytes,
+unused reservations and per-operation accounting only after the appropriate
+file/attempt release; never report retained output as reclaimed. Final-release
+failure remains failure. No rollback/deletion or space-wait admission is added.
 
-Use x:DataType and compiled bindings on view and row templates, AutomationProperties names, keyboard focus order, visible text in addition to color and responsive scrolling/wrapping at 900 x 450. Bind an explicit GameCopyView instance to avoid relying on reflection navigation; if ViewLocator is used, verify the namespace mapping with a headless test. Notifications live in bound UI; no new notification service/framework.
+Test the accounting protocol with controlled free-space samples before/after
+allocation, buffered/partial/failed writes, sampling/write races, retries and
+checked overflow; fake progress totals cannot substitute for native settlement.
+The implementation must demonstrate no overcommit and no transient double-count
+rejection from its own sample/update ordering before the resource layer is done.
 
-## Test and evidence strategy
+## Destination file conflicts and confinement
 
-Write meaningful behavior tests before each authorized implementation increment and confirm a missing-behavior failure. No build/tests or graphical/native copy runs are performed merely to prepare this plan.
+Share CopyDestinationResources across all copies in a device session. Opaque
+native target keys and leases must represent volume identity, canonical parent
+identity and native leaf lookup; an OS-wide OrdinalIgnoreCase comparer, raw path
+string or per-operation lock cannot establish equality. Cover case-sensitive
+Windows directories, FAT case/short aliases and Linux mounted filesystem behavior.
+Existing hard links/unsafe paths remain skips under the single-copy rules.
 
-### Automated
+Acquire a target claim before hashing/inspecting an existing file for consent.
+A conflicting caller publishes WaitingForResource with a destination-file reason,
+awaits cancellably, then revalidates volume/parents and inspects the *current*
+file. It must not present stale consent from before waiting. Keep the entry lease
+through its overwrite decision, conditional open, writes, flush and file release;
+release it on skip, terminal fault or cancelled input. Holding one file for input
+does not block different files or another PSP. Never hold two output-file leases
+for one archive operation; archive order remains unchanged, avoiding cross-file
+hold-and-wait deadlocks. FR-19 closes/releases the failed output before asking
+for retry; retry reacquires and reconfirms under current evidence.
 
-- Core rules: source-root retention, unsafe paths, skip outcomes, actual-size mismatch/overflow/zero, combined progress boundaries and duplicate/case semantics supplied by fake filesystem facts.
-- Service/coordinator: deterministic pending reads/writes/prompts; single slot; password retry/cancel; empty/corrupt late entries; missing multipart input; per-file refuse/accept/reconfirm; all-skipped completion; byte totals and fake insufficient/unknown space; every failure preserves output; no delete/restore calls exist in the adapter contract.
-- FR-19 integration: exercise wrong-password and damaged encrypted input that produce indeterminate results; both must stop I/O, close outputs, retain bytes and show the same non-definitive message with retry/cancel. Test explicit retry after revalidation, failed-entry overwrite consent, completed-entry replay without recopy, no automatic continuation, no second active copy, stale prompt rejection and close/removal/selection invalidation. Confirm ordinary I/O and definite-corruption faults retain their distinct failure paths.
-- Identity/races: relevant selection change versus unrelated inventory update, source/destination generation/root loss, replacement device at same path, stop/completion ordering, removal/start reservation, late prompts/progress after disposal. Assert closed handles before removal and before terminal completion.
-- Archive integration: small licensed/self-created binary fixtures for plain/encrypted ZIP, ZIP64, split ZIP, RAR4/RAR5, solid RAR, encrypted headers/data, modern/legacy multipart RAR, wrong passwords, bad CRC, truncation and missing parts. Compare decompressed bytes with a fixture manifest. RAR generation is not supported by the proposed library; commit test fixtures with lawful provenance, no proprietary game files and no runtime WinRAR requirement.
-- Native bridge integration: prove the same matrix through the proposed ABI on Linux/Windows, with managed source/output callbacks and entry indices. Inject callback errors/cancellation/reentrancy, stale ABI/assets and attempted part paths outside the chosen source. Compare engine-reference results against actual adapter results. Test package publish outputs/architectures and licence/source notices. Characterization of the old backend remains historical and cannot satisfy this gate.
-- Filesystem integration: temp roots, nested and empty directories, repeated entries, destination-native case behavior, target replacement during consent, exclusive-create collision, invalid names/file-directory conflicts, symlinks/reparse points and open/truncate races. Native Windows helper tests run on Windows; Linux helper tests run on Linux. Unsupported native environments are explicitly skipped/pending, not simulated passes. Use fault injection for deterministic disk-full/close errors, then demonstrate real-device behavior in manual checks.
-- Desktop headless: compiled copy table, responsive pending archive read/write, prompt keyboard states, one bar, actual bytes, cancellation/retention warnings, per-file skips, stale interactions, selected-game failure, safe removal ordering, decline/accept/duplicate close and late startup. Use awaited UI projection, not just Core revision changes.
-- Regressions: catalog CRUD/CSV/device-session suites, architecture assembly/direct-IL guards, source/archive hashes and sealed repository spies proving the transfer does not mutate catalogue records. Extend guards for Transfers without excluding existing Devices coverage.
+Use short native namespace guards for parent traversal/creation and missing-leaf
+resolve/create/register transitions. Existing targets use native file identity;
+missing aliases cannot both bypass claims: resolve and conditionally create
+under the parent namespace guard, register the resulting identity before exposing
+its stream, and re-resolve contenders after the first creation. Release namespace
+guards before long hashing, user input or data transfer. Directory entries merge
+only compatible directories; structural conflicts fail the encountering operation
+without deleting/replacing the other operation's parent tree. Traverse guard
+hierarchies in a consistent root-to-leaf order. Per-file leases, native conditional
+opens and retained parent pins all remain necessary; none substitutes for another.
 
-### Commands during authorized implementation/validation
+Keep Linux openat2/statx and Windows relative no-follow handles, conditional
+truncation and current-path/evidence checks as final authority. Native sharing
+barriers must permit independent reads and different-file outputs while blocking
+replacement of pinned objects; do not weaken confinement just to make concurrency
+pass. Real platform integration must verify this protocol, including creation
+races, aliases, cancellation while waiting and release after close errors.
 
-From the repository root: `dotnet build PSPMan.slnx`, then `dotnet test PSPMan.slnx`. Focused tests may run first; final regression uses the full solution. The existing projects use xUnit/VSTest with coverlet.collector; gather coverage sequentially with `dotnet test PSPMan.slnx --collect:"XPlat Code Coverage"` and report owning Core/Infraestructure/Desktop line/branch results and justified gaps. Read the run-tests skill before executing tests. Do not invent a numeric acceptance threshold. Do not instrument while another test/app holds the same binaries.
+## Archive/source parallelism and operation-specific input
 
-When a controlled graphical environment exists, run `dotnet run --project src/PSPMan.Desktop/PSPMan.Desktop.csproj` with dedicated test media. Ordinary startup automatically mounts supported devices, so no smoke launch against arbitrary attached hardware.
+Each engine call owns its archive session, source streams, password, callback
+registrations and cancellation token. Independent streams are required even
+when the same archive/part is selected, avoiding shared stream positions.
+A reader may inspect/extract serially *within* its own session, but no singleton
+runtime/extraction lock may serialize all operations. Use asynchronous file I/O
+and off-UI native/CPU work, not a dedicated OS thread requirement per game.
 
-### Mandatory native/manual matrix
+Before broad UI integration, run actual packaged bridge/reader tests with two
+independent sessions overlapping in callbacks, including the same source archive
+and different passwords/parts. Cancel/fail one and prove the other continues;
+await native return before releasing its delegates, stream handles or runtime.
+T01's earlier concurrent-progress harness is not proof of concurrent independent
+native sessions. No SharpCompress/CLI fallback is permitted. If the pinned native
+runtime cannot meet parallelism, report the gate and obtain authorization for
+any material ABI/engine/plan correction rather than silently serializing copies.
 
-On Linux and Windows with a real USB PSP and dedicated source media, demonstrate: already-connected and hot-plug mounting, no PSP message, multiple PSP choice when hardware is available, source path missing, actual-size capacity mismatch, ZIP/RAR passwords/retry, multipart success/missing part, nested output, overwrite per-file skip/reconfirm, progress responsiveness, cancellation retaining partial output, corrupt/write/disconnect failure, selection-change failure, requested removal after handle release, close-confirm decline/accept and absence of catalogue/source modifications. Compare known fixture hashes after successful copying. Use disposable fixtures to exercise destructive overwrites; all tests operate only on explicitly designated media.
+Keep IGameCopyInteraction's operation/prompt identity. The collection owner routes
+to each CopyOperationViewModel's own transient CopyInputViewModel and completion
+source. Multiple password/overwrite/FR-19 decisions may coexist; masked password
+text is cleared on answer, cancellation and disposal, never copied into snapshots,
+results or logs. Request versions reject old buttons and late callbacks for that
+row without discarding another row's state. Resolved entries, skipped entries,
+combined progress and terminal output warnings remain per operation.
 
-Record platform/device/source filesystem, prerequisites, exact steps, expected/actual result and evidence for each case. Mandatory cases without hardware/OS/media access go into pending-validation.md with their blocker and a future environment/procedure. Keep the Spec 004 pending hardware/authorization/all-model record separate and cross-reference dependencies. No unavailable case counts as passed and no fully verified verdict is possible until required physical tests pass. No provisioning or destructive native test is authorized by this plan alone.
+## Device removal, failure and aggregate shutdown
 
-## Requirement traceability
+Maintain dependencies by captured source and destination device/volume. Device
+loss/replacement fails all dependent nonterminal operations including waiters;
+unrelated operations and their reservations remain valid. Changing selection,
+preferences or a draft source/PSP never invalidates admitted requests. Native
+root/generation changes still do; never retarget to a replacement at the same path.
 
-| Requirement | Planned work | Verification / acceptance |
+Reserve removal under the coordinator admission gate before taking the affected
+operation set; no new dependant can enter afterward. Signal failure outside the
+gate, cancel resource/input waits and await all affected completions, including
+callbacks/flush/handle settlement. Forward the *same* freshly revalidated removal
+request through existing Spec 004 authorization/native policy. Rejection/veto
+stays visible; do not resume failed operations or force removal. Repeated removal,
+shutdown and completion interleavings must not release a reservation too early.
+
+Reuse ApplicationDeviceLifetime's single close owner with an aggregate collection
+view model. One confirmation covers every nonterminal row; opening it atomically
+closes submissions without stopping current work. Decline reopens submissions
+and preserves rows/decisions; accept keeps admission closed, cancels all owners
+and awaits all rows/native calls/resources before detaching copy or disposing
+the device session. Late startup/attachment, repeated close, a row finishing
+while confirmation is open, and removal failures retain T09's controlled exit
+and cleanup-error behavior. No active-row completion can reopen admissions.
+No confirmation is needed when every row is terminal. Programmatic disposal
+closes admission and drains unconditionally through the same ownership boundary.
+
+## UI states and interactions
+
+- Catalogue supports one/many selected games; Send for copying opens/uses per-game
+  not-yet-submitted choices. Native device/source availability is visible.
+  Prepared entries can be submitted together; unresolved games get individual
+  incidents without reverting accepted rows. Retrying an incident is explicit.
+- Submission choices show source reader/volume and one PSP. Multiple mounted
+  optical sources are selectable per game; different drafts can use different
+  readers. Existing preference projections may seed choices, but admitted rows
+  have read-only captured choices and expose no retarget/edit command.
+- The table uses a typed row template showing game, source, PSP/root, state,
+  actual-byte combined progress and individual Cancel. Preparing is indeterminate;
+  Waiting for destination file shows its reason, retains known progress and
+  remains cancellable. Capacity rejection appears as its own failed row.
+- Password, overwrite and FR-19 controls are bound within their owning row/detail
+  area, never a global blocking modal. All may be answered independently. English
+  text includes destination and retained-output warning, with Overwrite/Skip/
+  Cancel per file and masked Retry/Cancel for password decisions.
+- Completed/Completed with skipped files/Cancelled/Failed remain session rows;
+  all-skipped completion still qualifies. Cancellation/failure warns about
+  incomplete/incorrect output; completion requires release. No persistent history.
+- One bounded aggregate close panel uses Keep application open / Stop copies and
+  close. It explains all nonterminal copies stop and files remain. Buttons remain
+  reachable at minimum size, including long paths and many simultaneous prompts.
+
+Keep compiled bindings/x:DataType on every row/input template, AutomationProperties
+names including game/operation context, visible state text in addition to color,
+keyboard selection and focus order, and scrolling/wrapping at 900 × 450. Use the
+explicit GameCopyView composition; if ViewLocator resolves a new model, cover its
+actual namespace mapping. View code-behind has no queue, device or file policy.
+
+## Test strategy and implementation gates
+
+Write behavior tests first for each subsequently authorized increment and show
+missing-behavior failures; reuse passing evidence only for its recorded scope.
+Revise tests asserting global single-slot rejection/selection-change failure to
+revision 0.6 expectations while retaining identity-change/no-fallback tests.
+No test or production code changes occur during this planning phase.
+
+1. Pure rules/contracts: partial submission/captured immutable values, actual
+   pending reservations/overflow, ledger settlement/retry/skip/retained bytes,
+   operation/request revisions and terminal outcomes. All FR/NFR mappings below
+   require concrete evidence, not just model construction tests.
+2. Deterministic coordinator/service integration: controlled pending reads/writes
+   proving overlap on same/different PSPs, shared sources, second submissions,
+   independent cancel/fail/input and no stale callbacks; synchronized capacity
+   races; conflict wait then fresh consent; first writer failing/cancelling;
+   directory conflicts and progress/terminal release boundaries.
+3. Native archive and Linux/Windows filesystem: independent simultaneous native
+   sessions, same-source independent offsets/parts/passwords, cancellation without
+   cross-session damage, root/alias/short-name/case behavior and actual handle
+   release. New-file namespace races, simultaneous directory creation, budget
+   sampling/allocation ordering and Windows sharing barriers need actual native
+   evidence; fakes do not prove them. Keep ABI/version/hash/source/licence checks.
+4. Awaited Avalonia headless functional tests: catalogue multi-selection without
+   batch CRUD, distinct optical choices, mixed-ready batch incidents, multiple
+   typed rows/prompts, keyboard focus, minimum layout, responsive pending work,
+   row-local stale responses and aggregate removal/close/startup races. Assert
+   actual visible projection, not merely a Core revision.
+5. Repository regressions: CRUD/CSV/SQLite/device ownership/authorization and
+   architecture boundaries; source-part SHA-256 before/after concurrent success,
+   cancellation/failure and repository guards proving no catalogue mutations.
+   Injected I/O faults complement rather than replace physical evidence.
+
+During authorized implementation run from the repository root:
+`dotnet build PSPMan.slnx`, then `dotnet test PSPMan.slnx`. Read the run-tests skill
+before testing. Measure owning Core/Infraestructure/Desktop line/branch coverage
+sequentially with existing coverlet.collector; never instrument while another
+process uses the same binaries, and rebuild afterward. Report significant gaps
+without inventing a numerical threshold. Required-native environment guards must
+make absent assets fail rather than turn mandatory execution into a silent skip.
+
+On designated Linux/Windows hosts and disposable media, extend the existing
+[manual matrix](./manual-validation.md) with concurrent same/different PSPs,
+multiple actual optical readers/discs, same archive shared reads, simultaneous
+admissions near capacity, same-file/case/alias conflict waits and per-file consent,
+multiple input prompts, independent cancel/error and shared-device removal, and
+all-operation close decline/accept/completion/startup races. Record OS/CPU/RID,
+PSP model, volume/filesystem identity, package versions/hashes, exact procedures,
+expected/actual payload/source hashes and logical catalogue state. Verify release
+before removal/exit and that prior unrelated output remains unchanged.
+
+All earlier Linux/Windows physical/native cases remain mandatory; add concurrency
+cases rather than replacing them. Missing Windows/PSP/source/reader environments
+stay unexecuted and blocked in pending-validation.md. Do not provision Windows,
+format media or launch ordinary automatic device mounting against arbitrary
+hardware. Graphical smoke uses explicitly designated media or a verified isolated
+private bus/temporary catalogue, with scope disclosed. Forced process termination
+is not graceful OS-session-shutdown evidence. Current deployment architectures
+must be inventoried rather than silently limiting support to linux-x64.
+
+## Requirement and acceptance traceability
+
+| Requirement | Planned component/change | Verification / acceptance |
 | --- | --- | --- |
-| FR-1 | MainViewModel.Copy and typed screen | Explicit-action/no-selection-write UI flow; AC-1 |
-| FR-2 | Session capture, existing PSP selection, composition | No PSP/unready/multiple PSP flows and native mounts; AC-1 |
-| FR-3 | Existing path rules, source/archive adapter | Mounted-path and missing/unreadable integration; AC-2 |
-| FR-4 | Actual total inspection and volume free bytes | Mismatch, unknown/low/exact space, no preflight writes; AC-3 |
-| FR-5 | Ordered entry copy, confined filesystem adapter | ZIP/RAR full nested structure/hash tests; AC-4 |
-| FR-6 | Interaction and conditional overwrite evidence | Each file, refusal, duplicate and changed-target prompts; AC-5 |
-| FR-7 | Byte accounting and typed combined bar | Pending preparation, actual size, monotonic byte progress; AC-6 |
-| FR-8 | Outcome reducer and terminal notification | Complete, some skipped, all skipped, closed streams; AC-4/10/18 |
-| FR-9 | Stop gate and handle release, retained-output warning | Cancel preparation/input/transfer, no deletion/restore; AC-7/18 |
-| FR-10 | Typed errors, identity-bound I/O and retention | Source/destination/error/close faults and output bytes retained; AC-8 |
-| FR-11 | Coordinator active slot and removal reservation | Concurrent start rejection and stop/disposal races; AC-9/18 |
-| FR-12 | Pure path policy plus native confined handles | Unsafe/link skip and race containment; AC-10 |
-| FR-13 | Password interaction and archive reopen/retry | Encrypted headers/data, wrong password, retry/cancel; AC-12 |
-| FR-14 | Format-specific multipart discovery/readers | Both ZIP/RAR split families, correct order/missing part; AC-13 |
-| FR-15 | Empty/CRC/format error translation | Empty no output; early/late corruption retains prior writes; AC-14 |
-| FR-16 | Selection invalidation, awaited removal interception | Relevant changes fail; stop/release precedes safe removal; AC-15 |
-| FR-17 | Existing lifetime owner plus close decision | Decline/accept/duplicate close/startup races, no PSP cleanup; AC-16 |
-| FR-18 | Ordered duplicates and destination-native name lookup | Duplicate overwrite, case semantics, structural/name failures; AC-17 |
-| FR-19 | Typed indeterminate encrypted errors, stopped native invocation, input state and explicit replay/retry | Wrong-password/damaged-input ambiguity, retained output, no automatic writes, per-file consent, retry/cancel/lifetime races; AC-19 |
-| NFR-1 | Shared orchestration and two native adapters | Linux/Windows automated and mandatory physical matrix; AC-11 |
-| NFR-2 | Off-UI worker, cancellable streams and UI projection | Pending-I/O responsive UI, cancellation and catalogue viewing; AC-6 |
-| NFR-3 | English UI and existing path syntax rules | Typed view/text review and platform-root tests; AC-11 |
-| NFR-4 | Read-only sources; no catalogue repository in transfer | Before/after hashes, repository spies and boundary tests; AC-2/7 |
+| FR-1 | Catalogue multiple selection and explicit submission | Selection adds/writes nothing; individual/batch Send; AC-1 |
+| FR-2 | Pure capture and submission-local PSP choices using Spec 004 | Missing/unready/multiple PSP, captured root and no fallback; AC-1 |
+| FR-3 | Captured source evidence and existing confined archive access | Full Location, missing/unreadable and stable source across UI changes; AC-2 |
+| FR-4 | Shared volume ledger, native accounting fence and retry settlement | Simultaneous capacity admission, actual-size mismatch, no double-count, per-volume release; AC-3 |
+| FR-5 | Existing per-operation ordered engine/native adapters | Nested ZIP/RAR tree/hash under ISO while independent operations overlap; AC-4 |
+| FR-6 | Target lease before current inspection and row-local consent | Per-file refuse/accept/reconfirm after wait, no stale overwrite; AC-5, AC-22 |
+| FR-7 | Typed collection/row snapshots and combined actual-byte bar | Independent visible source/PSP/state/cancel and wait reasons; AC-6 |
+| FR-8 | Per-operation terminal reducer and notifications | Completion after release, some/all skipped, unaffected other rows; AC-4, AC-10, AC-18 |
+| FR-9 | Per-ID cancel and resource/file release | Wait/input/preparation/write cancellation retains bytes, only one row stops; AC-7, AC-18 |
+| FR-10 | Operation failure and captured device dependency index | Extraction/write isolation, all loss dependants fail, no replacement writes; AC-8 |
+| FR-11 | Multi-operation registry and admission/close gates | Overlap, ongoing additions, local waits, no numeric global limit; AC-9 |
+| FR-12 | Existing unsafe/link classifier and pinned native roots | Skips/no outside writes during concurrent namespace races; AC-10 |
+| FR-13 | Separate archive sessions and per-row password leases | Concurrent masked retry/cancel, no password reuse/leak between operations; AC-12, AC-24 |
+| FR-14 | Per-session ordered multipart sources | Parallel same/different part sets, missing-part isolation and correct hashes; AC-13, AC-21 |
+| FR-15 | Existing empty/definite-corruption classification per operation | Early no output/late retained output, other operation continues; AC-14 |
+| FR-16 | Captured requests, dependent stop and removal admission reservation | UI choices do not stop copies; await all dependent releases before same removal; AC-15 |
+| FR-17 | Aggregate close decision, closed admission and lifetime drain | Decline/accept/repeated/racing close covers all rows and native return; AC-16 |
+| FR-18 | Native-equality claims and existing structural/name checks | Duplicates/case aliases, no simultaneous same-file writes, structural failure isolation; AC-17, AC-22 |
+| FR-19 | Per-operation stopped invocation, retry/input and retained output | Wrong-password/damaged ambiguity, reacquire/reconfirm retry, no completed recopy; AC-19, AC-24 |
+| FR-20 | Immutable per-submission requests | Same game to another PSP concurrently, waiting rows cannot retarget; AC-20 |
+| FR-21 | Source-choice overlays and independent native/read handles | Shared archive/disc, multiple readers selected per game, no shared offsets/cancel; AC-21 |
+| FR-22 | Native target claims plus short namespace guards | Conflict wait/reinspect/consent, cancel wait, parallel disjoint files and native aliases; AC-22 |
+| FR-23 | Batch capture result with accepted IDs and per-game incidents | Mixed readiness admits ready games only, explicit incident resubmission; AC-23 |
+| FR-24 | Per-row input owners and operation/prompt identity routing | Multiple prompts advance independently, stale/cross-row answers rejected; AC-24 |
+| NFR-1 | Shared policy, platform adapters and Spec 004 boundaries | Linux/Windows native/physical evidence, paths and per-submission choices; AC-11, AC-15, AC-21 |
+| NFR-2 | Off-UI independent runners and asynchronous leases/input | Responsive pending parallel work, catalogue selection/new Send/Cancel; AC-6, AC-7, AC-9, AC-24 |
+| NFR-3 | English typed templates/documents and host path rendering | Compiled bindings, text, keyboard/minimum-size/platform roots; AC-11 |
+| NFR-4 | Read-only sources and no catalogue writes from copy | Before/after source hashes and sealed repository guards for concurrent outcomes; AC-2, AC-7 |
 
-Completion is demonstrated by current traceability, automated results, measured coverage, physical matrix, scoped SDD review and final user acceptance. Plan approval does not replace any of those.
+Every completion criterion needs current tests/coverage, this traceability and
+mandatory physical evidence, followed by separately authorized SDD code review
+and final acceptance. No current single-copy result proves these new behaviors.
 
-## Future concurrency and decisions
+## Decisions, alternatives and risks
 
-Each operation owns its streams, token, progress, prompt identifiers and immutable evidence; the coordinator alone enforces one active operation. This makes future independent operations possible without shared mutable archive readers or a dedicated OS thread per copy. Do not implement that scheduler or remove the single-slot guard now. Streaming work uses asynchronous I/O and an off-UI worker for CPU/synchronous codec work; a thread per game is not a product requirement.
+- Reuse the existing engine and evolve its coordinator, rather than putting
+  scheduling into DevicesViewModel/DeviceSessionService. This preserves Core/
+  adapter/UI boundaries and Spec 004 native policy; no generic scheduler needed.
+- Per-operation immutable capture and local choice overlays replace a global
+  selected-game/source pointer. Rejected: temporarily swapping session choices
+  between starts; callbacks could then act on another submission's identity.
+- Choose shared per-volume reservations and native file claims. Rejected: only
+  checking free space independently or using raw-path keyed locks; both admit
+  overcommit/alias races. Rejected: holding a volume lock for an entire transfer;
+  it would serialize independent files contrary to the approved concurrency.
+- Use one entry lease at a time and short namespace/accounting transactions,
+  rather than reserving every archive filename upfront. This limits claim memory
+  and avoids cross-archive lock cycles while preserving ordered extraction.
+- No global numeric limit is introduced. Native worker/resource pressure may
+  still cause ordinary per-operation errors; tests must demonstrate responsiveness
+  and no head-of-line blocking from UI input. Do not promise throughput scaling.
+- Filesystem aliases, buffered allocation visibility, cross-session engine safety
+  and Windows directory sharing are implementation proof gates. No fake test,
+  OS-derived comparer or progress-only ledger can substitute for those proofs.
+- Do not share immutable progress maxima with attempt-level allocation counters;
+  truncation/retry and already-written retained files have different accounting.
+- Do not widen ABI/platform support or add dependencies silently if a proof gate
+  fails. Propose a correction/revision with its exact behavioral impact instead.
 
-Rejected architecture: putting transfers inside DevicesViewModel/DeviceSessionService would blur device observation with game-file work and violate existing boundary expectations. Keep a separate Transfers coordinator observing the same caller-owned session. No generic event bus, background service framework, dependency-injection container or task scheduler is needed.
+## Historical evidence, downstream tasks and next approval
 
-## Risks, approval and next step
+Previous implementation/verification remains linked for its single-copy scope:
+[contracts](./core-transfer-contracts.md), [native compatibility](./native-archive-compatibility.md),
+[archive adapter/package](./archive-adapter.md), [Linux filesystem](./linux-copy-filesystem.md),
+[Windows filesystem](./windows-copy-filesystem.md), [engine](./copy-engine.md),
+[coordination](./copy-session-coordination.md), [UI](./copy-screen-interactions.md),
+[shutdown](./confirmed-shutdown.md), [coverage](./coverage.md),
+[manual matrix](./manual-validation.md) and [pending native gates](./pending-validation.md).
+T01/T03/T05/T06 Windows and T10 physical conditions remain open; Spec 004's
+[pending device tests](../004-device-mounting/pending-validation.md) remain open.
+Existing approvals and passing unaffected tests are not erased, but changed
+single-slot/selection-stop expectations do not validate revision 0.6.
 
-Execution update: T02 is complete; the user's subsequent “Continúa con la
-siguiente tarea” authorized T03 with the previously explicit Windows deferral.
-The [production adapter report](./archive-adapter.md) records Linux results and
-the still-open Windows gate. The source contract captures an opaque validation
-token distinct from the combined inspection fingerprint; cancellation is a
-typed callback outcome. These implementation refinements do not alter the
-approved product behavior or authorize T04.
+| Artifact | Required downstream follow-up after plan approval |
+| --- | --- |
+| Tasks 0.2 | Preserve identifiers/history and open native gates. Propose coherent concurrency increments for capture/registry, resources, native proofs, UI and aggregate lifetime; reassess T02/T04/T05/T06/T07/T08/T09 responsibilities without silently marking historical completion as new completion. Expand T10/evidence dependencies. Obtain task approval before implementation. |
+| Test suites | Update only superseded single-slot/selection-change expectations; add deterministic cross-operation tests and actual native concurrency. Preserve archive/identity/confinement/retention and catalogue/device regression checks. |
+| Coverage/manual/pending reports | Keep historical counts scoped; extend matrices and record current owning coverage, native version/package integrity and every missing environment. No report edit or execution is authorized by planning alone. |
+| Spec 004 integration | Reuse discovery/authorization and one awaited removal interception boundary. Local submission choices do not change its global preference semantics or claim its native acceptance. Any actual required requirement change follows SDD change approval. |
 
-The subsequent “Continúa con T04” authorizes only T04, which depends on the
-completed T02. Its Linux filesystem implementation and current verification are
-recorded in [T04 evidence](./linux-copy-filesystem.md). Directory creation returns
-an optional unsafe/link skip reason discovered at mutation time. This preserves
-FR-12's existing outcome through the Core boundary; it adds no user behavior.
-T01/T03's deferred Windows gates remain open; T05 is not authorized by this step.
+This plan leaves tasks, tests, implementation, configuration and dependencies
+unchanged. There is no commit/push or new implementation branch in this phase.
+Future authorized implementation branches start from current local dev as
+`feature/005_TNN_<description>`, preserving local changes without stash/reset.
 
-The subsequent “Continúa con T05” authorizes only T05. Its Windows filesystem
-implementation, portable verification and exact unexecuted native procedures are
-recorded in [T05 evidence](./windows-copy-filesystem.md). Canonical observed volume
-GUIDs authorize root access, including validated folder mount points; relative
-no-follow opens confine entries below that root. No provider or Core contract
-change is proposed. The mandatory Windows completion gate remains open and this
-authorization does not start T06 or waive native/physical acceptance.
-
-The user subsequently requested a scoped plan before each task. The presented
-T06 plan explicitly proposed proceeding with T03/T05 Windows checks deferred;
-“Apruebo el plan” approved that scope and dependency exception. T06 implements
-only the Core copy engine and its tests, as recorded in [T06 evidence](./copy-engine.md).
-Windows integration and all earlier mandatory gates remain open. This approval
-does not start T07; present its own scoped plan and await approval first.
-
-The user then requested T07 and approved its presented task-specific plan,
-including proceeding with T06 and earlier Windows dependencies still open.
-The coordinator and optional awaited removal interception are recorded in
-[T07 evidence](./copy-session-coordination.md). This implements the already
-planned active slot, relevant-evidence invalidation and pre-removal reservation;
-no provider policy or UI composition change is proposed. T08 still requires its
-own scoped plan and explicit approval before implementation.
-
-The user subsequently requested the next task and approved the presented T08
-plan with “Apruebo el plan”. Its typed copy view, transient interaction bridge,
-optional main-model attachment, adapter/coordinator composition and minimal
-lifetime draining are documented in [T08 evidence](./copy-screen-interactions.md).
-Integration moves only the coordinator's engine runner onto Task.Run, preserving
-synchronous selection capture/reservation at action acceptance; queuing the entire
-start allowed a later UI selection to substitute for the accepted game. Existing
-device policy/contracts remain unchanged. T09's confirmed shutdown is separate
-and requires its own scoped plan/approval. All native Windows and physical gates
-remain mandatory.
-
-The user then approved the presented T09 scoped plan with “Apruebo el plan”.
-[T09 evidence](./confirmed-shutdown.md) records the shared close decision,
-decline/accept behavior, draining before device detachment, reentrant lifetime
-barriers and typed bounded confirmation UI. App's existing ShutdownRequested
-route is reused without a competing handler. An optional copy-composition factory
-supports controlled-I/O functional tests; production adapters and Core/native
-policy are unchanged. Earlier Windows and physical gates are neither completed
-nor waived by T09's automated/UI proof.
-
-The user subsequently approved the presented T10 consolidation plan with
-“apruebo el plan”, including available regression/coverage/package checks while
-the T01/T03/T05/T06 Windows dependencies remain deferred. Current evidence is in
-[coverage](./coverage.md) and [manual traceability/procedures](./manual-validation.md).
-Only documentation is changed; unavailable Windows and real PSP/source-media
-checks leave T10 open. There is no new numerical coverage target, provisioning,
-implicit hardware authorization, production repair or SDD review/acceptance.
-The exact remaining gates and restart order are retained in
-[pending validation](./pending-validation.md).
-
-- Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
-- Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
-- Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.
-- Native Windows execution and real PSP/media access were unavailable in the latest recorded project evidence. Reassess availability at implementation time; preserve blocked cases honestly.
-- This plan leaves all source code, dependencies, tests, devices and pre-existing local deletions untouched. Implementation branches must later start at local dev with `feature/005_TNN_<description>` after a status check, preserving existing changes. No commit/push is authorized.
-
-## Downstream impact and approval state
-
-| Artifact | Impact | Approval/evidence retained or required |
-| --- | --- | --- |
-| Spec 0.5 | FR-19/AC-19 resolve the encrypted-error ambiguity and qualify FR-10/FR-15 while preserving other copy/device/output rules. | Revision 0.5 is explicitly approved; no further requirement change is proposed by this plan. |
-| Plan 0.1 → 0.2 | Replace managed archive adapter with the native engine/bridge, callback-based extraction contracts and runtime packaging; implement approved FR-19 handling. | Revision 0.1 approval is historical. The user explicitly approved revision 0.2 with “apruebo el plan”. Unaffected architecture remains unchanged. |
-| Tasks 0.1 | Revise T01's native gate, T02 contracts/rules, T03 adapter/runtime build work, T06 callback/retry integration, T08 password-decision UI, T09 lifetime races and T10 native/package/FR-19 evidence. T04/T05 filesystem responsibilities remain, with runtime interoperability checks where needed. | The list is not rewritten in this phase. Previously approved unaffected scope is retained; changed dependent scope requires an approved task revision. No T02 implementation is authorized. |
-| Old T01 tests/package | Keep reproduced SharpCompress limitations, fixture hashes, build/regression and audit as historical evidence. Remove or retain the old package as test-only only through a subsequently authorized implementation task. | 42 characterization tests and 1475 regression passes do not approve a native adapter. No dependency/test code was changed during this revision. |
-| Validation | Add actual callback/ABI, runtime publish and licence/source checks on Linux/Windows while keeping mandatory real-PSP tests. | No Windows/native bridge/PSP result is inferred from Linux CLI checks. |
-
-Review result: specification 0.5's FR-1–FR-19 and NFR-1–NFR-4 are mapped to implementation and verification; no blocking product decision or constitution conflict remains. Native ABI/toolchain, publish-architecture and Windows/hardware checks are implementation/validation gates, not claimed completed work. No AGENTS.md/constitution change is proposed.
-
-Plan revision 0.2 is explicitly approved by the user's “apruebo el plan”. Next: revise and seek approval of affected tasks and authorization to resume T01 under the native-backend scope. Plan approval alone does not authorize implementing the bridge. If coherent task decomposition needs more than about ten increments, propose a split before issuing an oversized list.
+Review outcome: approved specification 0.6's FR-1–FR-24, NFR-1–NFR-4 and
+AC-1–AC-24 are mapped; no unresolved product decision or constitution conflict
+was identified. Native/resource proof gates and historical unavailable hardware
+remain explicitly unverified. Plan 0.3 is explicitly approved with “apruebo el
+plan y autorizo preparar la revisión de tareas”. **Next: prepare tasks 0.3,
+then obtain task-list approval and explicit authorization for the first task.**
+No implementation or SDD validation is authorized by this approval.

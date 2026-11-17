@@ -1,22 +1,43 @@
 # Tasks 005 — Copy games to a PSP
 Status: approved
-Revision: 0.2
-Specification: [spec.md](./spec.md), approved revision 0.5
-Plan: [plan.md](./plan.md), approved revision 0.2
+Revision: 0.3
+Specification: [spec.md](./spec.md), approved revision 0.6
+Plan: [plan.md](./plan.md), approved revision 0.3
 
 ## Execution rules and evidence
 
-The user approved tasks 0.1 and authorized its managed-backend T01, then approved specification 0.5 and plan 0.2. The user now explicitly approved tasks 0.2 and authorized resuming native T01. This revision preserves task identifiers and historical evidence while revising the native-backend and FR-19 scope. Execute only one explicitly authorized task, report its evidence and stop. Approval of the list does not authorize every task. Dependencies must pass before dependent work begins. No task is complete merely because its implementation compiles.
+The user approved specification 0.6 and plan 0.3, then authorized this task revision with “apruebo el plan y autorizo preparar la revisión de tareas”. In response to the presented tasks 0.3 and explicit request for T11 authorization, the user replied “Apruebo el plan y autorizo iniciar T11”, approving that decomposition and authorizing only T11's presented pure-contract/rule scope. T01–T09 identifiers, scoped statuses and revision-0.2 evidence below remain historical single-copy work. T10 remains the open final evidence gate, now expanded for concurrency. New T11–T19 cover the changed behavior without recycling identifiers. Execute only one explicitly authorized task, report evidence and stop. Dependencies must pass before dependent work begins; a passing compilation is not completion.
 
-The ten increments below separate archive compatibility, pure rules, adapters, orchestration and UI integration. The SDD 20–30 minute target is a decomposition guide, not a promised duration: native confinement, archive variants and lifecycle races may take longer. If an increment requires materially broader work, stop and propose a revised decomposition rather than silently expanding its scope or reducing the approved requirements.
+There are ten current increments: T11–T19 followed by final T10. Historical T01–T09 are retained rather than counted as new concurrency increments; their unfinished native prerequisites still require execution. The SDD 20–30 minute target is a guide, not a promised duration. Native confinement, accounting and lifecycle proof can take longer; if scope needs a materially larger decomposition, propose it for approval rather than silently enlarging tasks or reducing requirements.
 
-Before implementation, run `git status --short --branch`. Start each feature task at local dev on `feature/005_TNN_<brief-kebab-case-description>`; preserve pre-existing changes. Do not stash, restore, commit, merge or push. Stop if switching is unsafe. The existing local deletions are outside these tasks.
+Before implementation, run `git status --short --branch`. Start each feature task at local dev on `feature/005_TNN_<brief-kebab-case-description>`; preserve pre-existing changes. Do not stash, restore, commit, merge or push. Stop if switching is unsafe. Do not attribute pre-existing edits to the new task.
 
 For each task: write meaningful behavior tests first, confirm failure due to the absent behavior, implement the smallest approved change, run relevant checks plus required repository build/regression, inspect the diff, and record commands, counts, platform skips and limitations here and in MEMORY.md. Existing passing evidence may satisfy a behavior only when its scope is explicitly documented. Read the run-tests skill before executing .NET tests. Do not launch ordinary device discovery against arbitrary hardware.
 
 Native/hardware checks unavailable in the current environment remain mandatory and unexecuted; record their exact blockers and procedures in pending-validation.md. A task whose explicit completion conditions require those checks remains open until they pass. Completing automated enabling tasks does not establish physical acceptance. Formal SDD validation/code review is a separate phase requiring authorization after implementation.
 
-## Tasks
+## Dependency and rollout rules for revision 0.3
+
+T11 starts from the completed scoped T02 contract/rule baseline and has no native
+execution prerequisite. Proposed sequence: T11; T12/T13/T14 where dependencies
+permit; T15; T16; T17; T18; T19; final T10. This is a dependency graph, not
+authorization for parallel agents or for any implementation task.
+
+Earlier Windows deferrals are historical task-specific exceptions, not a blanket
+waiver for new tasks. T12/T14 and native-dependent successors cannot be marked
+complete without their required execution. If the user later wants available
+work to proceed while dependencies remain open, present the exact task-specific
+exception and obtain authorization; preserve every native/physical gate.
+
+Keep production coherent between increments: additive contracts/resources first,
+then test the new registry/rows/submission flow through controlled entry points.
+Do not enable production concurrent submission until T19 integrates aggregate
+close/drain/removal ownership. Existing single-copy composition must continue
+to build and pass its unaffected checks until the complete flow is connected;
+temporary compatibility code is removed when no longer needed, not a permanent
+resource-accounting bypass. No persistent feature flag/framework is introduced.
+
+## Historical single-copy tasks T01–T09 and final gate T10
 
 Execution exception explicitly authorized by the user: “tendría que preparar un entorno Windows. Deja pendiente estas pruebas y pasa a la siguiente tarea”. Windows T01 checks remain mandatory, unexecuted and open; the user authorizes T02's pure contracts/rules to proceed using the passing Linux evidence. This does not complete T01, waive Windows/physical acceptance or authorize T03. Record this exception rather than treating pending Windows results as passes.
 
@@ -81,42 +102,113 @@ Execution exception explicitly authorized by the user: “tendría que preparar 
   - Revision 0.2 scope and verification: Include close/removal/completion races during FR-19 input or native callbacks. Await native return before disposing delegates, source/output handles or the runtime; stale callbacks and accepted shutdown cannot restart extraction. Add awaited lifetime evidence for these cases.
   - Evidence: complete in the scoped shutdown/lifetime task on feature/005_T09_confirmed-copy-shutdown, from clean local dev c2cc385 after explicit approval of its presented plan. Added a typed bounded close confirmation, transient decision leases and copy admission guards. The existing single owner coalesces window/desktop requests: decline preserves copy/input/devices, accept drains copy before detachment/disposal/exit, retaining all current/prior output. Startup/disposal reserve shared tasks before reentrant observers and guard late attachment/discovery. Test-first absent APIs, off-screen long-path buttons and duplicate reentrant cleanup tasks were reproduced and corrected. All 28 new shutdown cases and 46 focused lifetime/input cases pass. Build passed with zero warnings/errors; full regression passed 1850 with 26 existing Windows skips (734/739/377). Scoped coverage: shutdown VM 100% lines/88.46% branches, confirmation VM 100% lines, lifetime owner 98.46%/90.38%. Real Avalonia/X11 at 900 × 450 with the controlled-I/O fixture demonstrated Alt+F4 confirmation, decline preserving the active row, a fresh second decision and accepted drained exit 0. See [T09 evidence and native limits](./confirmed-shutdown.md). T01/T03/T05/T06 Windows and T10 physical/OS-shutdown gates remain open. No new package, provider policy, Core/native change, catalogue mutation, destination cleanup, commit or push. T10 is not started/authorized.
 
-- [ ] **T10. Consolidate regression, coverage and mandatory native copy evidence.** FR-1–FR-19, NFR-1–NFR-4; all acceptance and completion criteria
-  - Depends on: T01–T09.
+- [ ] **T10. Consolidate regression, coverage and mandatory native copy evidence.** FR-1–FR-24, NFR-1–NFR-4; AC-1–AC-24 and all completion criteria
+  - Depends on: T01–T09 and T11–T19. Final execution follows T19; historical partial documentary consolidation does not satisfy the expanded gate.
   - Work: Run final build/full regression and sequential coverage with the planned owning-component report; justify gaps without inventing a numeric target. Prepare and execute the plan's Linux/Windows graphical and real-PSP/source-media matrix, including multiple PSP choice, capacity, real filesystem semantics, password/multipart, overwrite/reconfirmation, retained output, removal and confirmed closure. Record procedures/results in manual-validation.md and coverage.md, cross-reference Spec 004's outstanding native dependencies, and maintain pending-validation.md for unavailable cases with future setup/restart steps. Compare source/catalogue state and expected output hashes. Do not claim that documentation repairs an unavailable test.
   - Done when: Build/regression and coverage evidence are current; each FR/NFR/AC maps to actual automated/manual evidence; mandatory physical/native cases pass on both platforms with controlled test media. If any required environment/hardware/check is unavailable or failing, keep T10 open with exact blockers/procedures and report incomplete validation. No ordinary startup runs against arbitrary media and no unapproved provisioning/destructive native operation occurs. Completion of T10 permits requesting authorization for SDD validation/code review; it does not itself mark the specification implemented or grant acceptance.
   - Revision 0.2 scope and verification: Include FR-19 retry/cancel and definite corruption in automated and physical matrices. Verify packaged native engine/bridge version, ABI, assets and licence/source provenance for supported publish targets; distinguish actual native/publish results from reference CLI and historical managed tests.
+  - Revision 0.3 additional work and completion gate: Extend the manual/native matrix and requirement index for same/different PSP overlap, shared archive and multiple optical readers/discs, partial batches/immutable choices, space-admission/settlement races, native-equivalent file conflicts and fresh consent, independent input/cancel/failure, shared-device removal and aggregate close/completion/startup. Reassess historical selection-change and single-slot expectations against 0.6. Capture source/output hashes and logical catalogue records for concurrent outcomes. Record current build/full regression, sequential owning coverage and all runtime/package architectures actually executed. Every required Linux/Windows physical/native case must pass before T10 is checked; unavailable cases remain blocked with exact setup/restart steps. No formal SDD review/acceptance is implied.
   - Evidence: available consolidation performed on feature/005_T10_regression-coverage-native-evidence from clean local dev eb28eb6, after the user approved the presented plan with “apruebo el plan”. This explicitly continues the Windows dependency deferral; it does not waive T01/T03/T05/T06 or physical gates. Build passed before/after coverage with zero warnings/errors; full regression passed 1850 with 26 existing Windows skips (734/739/377). Sequential owning line/branch coverage: Core 96.45%/89.31%, Infraestructure 70.09%/59.28%, Desktop 93.98%/89.50%. Linux-x64 local publish and all 17 native/source/notice asset hashes passed; published-reader/service checks passed 66 with one Windows theory skipped; absent runtime correctly rejects publication. Isolated X11 startup observed 1200 × 650 and 900 × 450, expected private-bus device error and normal Alt+F4 exit 0. See [current checks/coverage](./coverage.md) and [FR/NFR/AC evidence and physical procedures P01–P18](./manual-validation.md). No Windows runner or designated real PSP/source media was established; mandatory rows remain unexecuted and T10 stays unchecked. No production/test code, package dependency, requirement change, physical operation, commit or push; no SDD validation/code-review authorization.
+
+## Concurrency increments — proposed, not authorized
+
+- [x] **T11. Define concurrent submission/resource contracts and pure rules.** FR-1, FR-2, FR-3, FR-4, FR-7, FR-9, FR-11, FR-20, FR-21, FR-22, FR-23, FR-24, NFR-1, NFR-3, NFR-4; AC-1, AC-2, AC-3, AC-6, AC-7, AC-9, AC-20–AC-24
+  - Depends on: completed scoped T02; approved specification 0.6, plan 0.3 and this task revision/individual authorization. No Windows or physical prerequisite for these pure contracts/rules.
+  - Work: Add immutable submission/admission/incident models, resource-wait state/reason and per-row revision while retaining operation/prompt identities. Define platform-neutral budget/target-lease and settlement contracts, without handles or delete/restore APIs. Implement pure capture rules using Spec 004 resolution and explicit per-submission choice overlays, plus checked pending-space ledger transitions. Do not alter shared associations or enable concurrent production submission. Preserve existing engine/UI compilation through additive contracts.
+  - Done when: Test-first Core cases prove mixed-ready batch resolution, one captured source/PSP, same-game separate destination, unchanged admitted values after new selections, no ambiguity fallback, independent volume budgets, no double reservation, invalid/unknown/overflow/exact capacity, skip/retry/release accounting without reclaiming retained bytes, and opaque lease/prompt identity. Core remains independent of Desktop/native/persistence. Required build/full regression pass; no behavior is declared natively proved by fake resource facts.
+  - Evidence: complete in pure/additive scope on feature/005_T11_concurrent-copy-contracts from local dev 17f6f00, preserving pre-existing spec/plan/tasks/memory edits. The user responded to the presented task list and T11 scope with “Apruebo el plan y autorizo iniciar T11”. Added immutable per-submission capture/incidents, local source/PSP overlays, wait/revision models, asynchronous opaque resource contracts and checked immutable pending/unsettled reservations. Initial missing-API compilation and two unready-device admission failures were reproduced before correction. All 27 new cases pass. Build before/after sequential coverage passed with zero warnings/errors; full regression passed 1877 with 26 existing Windows skips (761/739/377). Focused source coverage: submission rules 100% lines/90.00% branches; reservation rules 100%/94.74%. See [T11 evidence, protocol obligations and limits](./concurrent-copy-contracts.md). No engine/coordinator/UI activation, native adapter, dependency/schema change, device/source/PSP I/O, commit or push. Native allocation/alias/parallel-session proof remains later work; earlier Windows/physical gates stay open. T12 requires its own presented plan/authorization and explicit handling of open dependencies.
+
+- [ ] **T12. Prove independent packaged native archive sessions overlap safely.** FR-5, FR-9, FR-10, FR-13, FR-14, FR-15, FR-19, FR-21, FR-24, NFR-1, NFR-2, NFR-4; AC-4, AC-7, AC-8, AC-12–AC-14, AC-19, AC-21, AC-24
+  - Depends on: T11 and T01/T03 native archive/runtime prerequisites. A still-open prerequisite requires an explicit task-specific execution exception before dependent work proceeds; Linux success does not establish Windows completion.
+  - Work: Exercise the production packaged reader/bridge with two independent sessions blocked at controlled native callbacks, including the same source archive, independent stream offsets/parts and distinct password decisions. Prove overlap instead of merely running sequential tasks or concurrent progress calls in one session. Cancel/fail one while the other continues; await native return before delegate/source/output/runtime release. Make only authorized minimal ownership/synchronization corrections if needed; a material engine/ABI/package change requires reassessment, not fallback or global serialization.
+  - Done when: Actual Linux and Windows native tests demonstrate overlapping callbacks/extraction, correct independent fixture hashes, wrong-password/damaged-input FR-19 isolation, multipart/solid behavior, cancellation/fault isolation, unchanged sources and released handles. Required-native guards reject missing assets; build/full regression and package ABI/version/hash/source/notices checks pass for executed targets. Unavailable mandatory native execution leaves T12 open with procedures. No physical PSP proof is claimed.
+  - Evidence: not started; historical T01 progress harness is not this independent-session gate.
+
+- [ ] **T13. Coordinate Linux destination budgets, native targets and write settlement.** FR-4, FR-5, FR-6, FR-9, FR-10, FR-12, FR-18, FR-22, NFR-1, NFR-2, NFR-4; AC-3–AC-5, AC-7, AC-8, AC-10, AC-17, AC-22
+  - Depends on: T11 and completed scoped T04. Archive-session parallelism is proved separately by T12; these resource/filesystem tests do not depend on native archive decoding.
+  - Work: Implement the shared destination-resource owner with Core ledger rules and Linux held-volume/target evidence. Add cancellable entry claims before consent inspection, short namespace creation guards and stable alias/identity registration. Integrate in-flight chunk accounting and a brief admission fence with native free-space reconciliation; no volume lock over an entire transfer or user input. Preserve openat2/statx confinement, conditional create/truncate, shared valid directories and no cleanup. Keep new wiring controlled until aggregate ownership is ready.
+  - Done when: Actual Linux temporary-root tests prove separate files can overlap, same-file contenders wait and re-inspect after release, creation/alias/case facts use native semantics, concurrent directories merge and structural/link conflicts retain existing outcomes. Deterministic/native stream tests cover free-space sampling before/after allocation, buffered/partial/failed writes, retry settlement, wait cancellation and close-error release without overcommit or transient self-double-count rejection. Root replacement never redirects. Build/full regression pass; unsupported kernel/filesystem or physical FAT checks stay explicitly pending in T10 rather than simulated passes.
+  - Evidence: not started; T04's single-copy confinement is retained, not treated as cross-operation evidence.
+
+- [ ] **T14. Prove Windows shared destination resources and confinement.** FR-3, FR-4, FR-5, FR-6, FR-9, FR-10, FR-12, FR-18, FR-21, FR-22, NFR-1, NFR-2, NFR-4; AC-2–AC-5, AC-7, AC-8, AC-10, AC-17, AC-21, AC-22
+  - Depends on: T11, T13's shared resource protocol and T05 native Windows prerequisite. An open T05 gate requires an explicitly approved task-specific exception before dependent work proceeds.
+  - Work: Bind the resource contracts to Windows GUID-volume evidence, relative no-follow target identity/lookup and native directory case behavior. Coordinate native-equivalent names/short aliases and missing-leaf creation, preserve parent/output sharing barriers, and verify simultaneous independent read handles and different-file writes. Apply the same capacity-settlement protocol without weakening confinement or using an OS-derived string comparer. No new provider/mount/authorization policy.
+  - Done when: Actual Windows tests exercise overlapping separate-file output, same-file waiting then current consent, case-sensitive and case-insensitive lookup, new-entry alias races, structural/reparse/hard-link cases, read sharing, capacity-sample races and release after cancel/flush/close failures. Pinned paths/identities cannot be replaced or redirected. Required-native/Windows guards, build/full regression pass. T14 stays open for any unavailable native cases; real PSP/FAT/short-alias/device-loss cases are additionally mandatory in T10 with designated media.
+  - Evidence: not started; portable Windows name tests and Linux execution cannot complete this gate.
+
+- [ ] **T15. Integrate per-operation resource leases into the copy engine.** FR-3–FR-10, FR-12–FR-15, FR-18, FR-19, FR-21, FR-22, FR-24, NFR-2, NFR-4; AC-2–AC-8, AC-10, AC-12–AC-14, AC-17–AC-19, AC-21, AC-22, AC-24
+  - Depends on: T11–T14 and the existing T06 engine/native integration prerequisite. Any continued unavailable-Windows exception must be explicit for this task; it does not complete a dependency.
+  - Work: Inject one session-shared resource owner into existing GameCopyService operations. Reserve actual pending output before writes; acquire one entry lease before inspecting/asking consent, publish cancellable wait reason, revalidate after waiting and retain it through output release. Track per-attempt write settlement separately from monotonic progress. Skip releases pending claims; FR-19 releases failed output before independent input, and explicit retry reacquires capacity/target consent without recopying completed entries. Wire existing single-copy composition to the same mandatory resources; do not introduce a production bypass.
+  - Done when: Test-first controlled service cases plus real Linux/Windows reader/filesystem integration prove overlapping operations, insufficient-space failure without new writes, same-file wait then fresh/repeated consent, retained output from failed predecessor, all-skipped handling, source hashes, cancellation and all leases closed before terminal results. Wrong-password/damaged ambiguity stays distinct from definite corruption/I/O faults. Build/full regression pass; unavailable required native rows keep T15 open, with no fake-based native acceptance.
+  - Evidence: not started; historical T06 behavior is reused only where unchanged.
+
+- [ ] **T16. Replace the single-slot coordinator with captured multi-operation ownership.** FR-1, FR-2, FR-3, FR-7, FR-9, FR-10, FR-11, FR-16, FR-17, FR-20, FR-21, FR-23, FR-24, NFR-1, NFR-2, NFR-4; AC-1, AC-2, AC-6–AC-9, AC-15, AC-16, AC-20, AC-21, AC-23, AC-24
+  - Depends on: T15 and completed scoped T07. Production multi-admission remains unexposed until T19.
+  - Work: Replace the active slot/snapshot with per-ID owners and immutable sequenced snapshots. Capture ready batch requests synchronously against one observation, return accepted IDs/per-game incidents and schedule runners outside locks. New selections do not invalidate captured requests; actual volume/identity/generation loss does. Add per-ID cancel, aggregate close-admission/drain APIs and a dependency index. Reserve device removal before taking all dependent operations, await their files/resources and forward the same revalidated native removal; unrelated operations continue. Preserve reentrant completion/disposal reservations.
+  - Done when: Deterministic tests prove true overlap, additions during preparation/input/stopping, partial admission, same game sent to another PSP, immutable choices and no silent fallback. Cancellation/failure affects only its owner; shared-device loss/removal stops all dependants including waiters, blocks new dependants and waits for native return before removal. Cover stale progress, close/removal/start/completion races and callback reentrancy without registry locks across awaits/observers. Build/full regression pass; revise only superseded global-slot/selection-stop expectations and preserve identity tests.
+  - Evidence: not started; does not mark Spec 004 physical removal/authorization gates passed.
+
+- [ ] **T17. Present typed concurrent rows with independent interaction owners.** FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-13, FR-19, FR-20, FR-24, NFR-2, NFR-3, NFR-4; AC-5–AC-9, AC-12, AC-18–AC-20, AC-24
+  - Depends on: T16 and completed scoped T08. Use controlled concurrent entry points for tests; production activation awaits T19.
+  - Work: Evolve GameCopyViewModel into the collection owner and add typed CopyOperationViewModel rows. Route password/overwrite/FR-19 input by operation/current prompt, retain distinct completion owners and clear password text on answer/cancel/disposal. Render captured game/source/PSP, actual combined progress, resource-wait reason, individual Cancel and terminal warning/outcome. Bind request controls within their owning row; preserve explicit composition and initialization-only view code-behind.
+  - Done when: Awaited headless tests demonstrate simultaneous rows and mixed input states, one row's answer/cancel/failure not affecting another, retired/cross-row button rejection, independent completion and all-skipped messages, responsive pending work and sequenced UI updates. Compiled row/input bindings, accessible names, keyboard focus and 900 × 450 scrolling/wrapping work with long paths/multiple prompts; no password leaks into snapshots/logs. Required build/regression pass; controlled UI results are not physical PSP proof.
+  - Evidence: not started; current one-row/one-input tests need scoped reassessment, not deletion of unrelated coverage.
+
+- [ ] **T18. Add multi-selection and submission-local source/PSP choices.** FR-1, FR-2, FR-3, FR-11, FR-16, FR-20, FR-21, FR-23, NFR-1, NFR-2, NFR-3, NFR-4; AC-1, AC-2, AC-6, AC-9, AC-15, AC-20, AC-21, AC-23
+  - Depends on: T17. Production concurrent submission stays unwired until T19 connects aggregate shutdown.
+  - Work: Bind SelectedGames separately from the focused SelectedGame used for details/CRUD; add typed CopySubmissionViewModel choices seeded from valid device preferences. Allow optical reader/volume and one PSP per submission using immutable local choice overlays rather than temporarily swapping shared session associations. Send ready games explicitly, show per-game incidents, and require explicit resubmission after correction. Catalogue refresh reconciles draft IDs without changing admitted requests. Keep sending commands prompt: do not await full transfers under an async-command single-running guard.
+  - Done when: Awaited functional tests cover one/many selected games, two drafts using different mounted optical readers, several games from one DVD, same source/archive shared and same game submitted separately to another PSP. Mixed-ready selection admits only ready games; later selection/choice changes leave rows immutable. Existing edit/delete remain single-focused actions, no batch catalogue writes occur, and CRUD/CSV/device regressions plus build/full tests pass. Native multiple-reader/media confirmation remains T10.
+  - Evidence: not started; no source/PSP association persistence or new device provider is proposed.
+
+- [ ] **T19. Activate concurrent composition with aggregate confirmed closure.** FR-9, FR-10, FR-11, FR-16, FR-17, FR-19, FR-24, NFR-1, NFR-2, NFR-3, NFR-4; AC-7–AC-9, AC-15, AC-16, AC-19, AC-24
+  - Depends on: T18 and completed scoped T09; T16 supplies aggregate ownership and removal boundaries.
+  - Work: Connect production explicit submissions to the multi-operation coordinator and one shared resource owner. Reuse ApplicationDeviceLifetime's single close flow with one aggregate confirmation. Opening it closes admission; decline preserves all rows/input and reopens admission; accept cancels/drains every nonterminal owner before copy detachment/device disposal. Completion while deciding must not reopen admission. Preserve unconditional programmatic disposal, repeated-close coalescing, late startup guards, native callback lifetime and cleanup-error exit behavior. Remove obsolete single-slot compatibility wiring.
+  - Done when: Awaited functional/integration tests cover simultaneous resource waits, password/overwrite/FR-19 input and real native callbacks during close; decline/accept/repeated/stale decisions; one row finishing while others run; startup/removal/completion/reentrant disposal races. All files/native sessions/resources release before exit; prior output and overwritten/partial bytes remain without cleanup/restoration. Required build/full regression and controlled graphical startup/active-copy close pass where available. Record unavailable GUI/native/OS-shutdown cases for T10 without claiming physical acceptance. Production cannot admit a late operation after accepted closure.
+  - Evidence: not started; completing this scoped integration does not complete T10 or authorize formal SDD review.
 
 ## Requirement coverage index
 
+Historical tasks retain their original mappings above. The index below identifies
+the current concurrency follow-up; T10 verifies every requirement and acceptance
+criterion with current evidence, including unchanged single-copy behavior.
+
 | Requirement | Tasks |
 | --- | --- |
-| FR-1 | T08, T10 |
-| FR-2 | T07, T08, T10 |
-| FR-3 | T02–T07, T10 |
-| FR-4 | T02–T06, T10 |
-| FR-5 | T01, T03–T06, T10 |
-| FR-6 | T04–T06, T08, T10 |
-| FR-7 | T02, T06, T08, T10 |
-| FR-8 | T02, T06, T08, T10 |
-| FR-9 | T02, T06–T09, T10 |
-| FR-10 | T02, T04–T09, T10 |
-| FR-11 | T02, T07–T09, T10 |
-| FR-12 | T02, T04–T06, T10 |
-| FR-13 | T01, T03, T06, T08, T10 |
-| FR-14 | T01, T03, T06, T10 |
-| FR-15 | T01, T03, T06, T10 |
-| FR-16 | T07–T10 |
-| FR-17 | T09, T10 |
-| FR-18 | T02, T04–T06, T10 |
-| FR-19 | T01–T03, T06–T10 |
-| NFR-1 | T01, T03–T05, T07, T10 |
-| NFR-2 | T03, T06, T08–T10 |
-| NFR-3 | T02, T08–T10 |
-| NFR-4 | T01–T10 |
+| FR-1 | T11, T16, T18, T10 |
+| FR-2 | T11, T16, T18, T10 |
+| FR-3 | T11, T14, T15, T16, T18, T10 |
+| FR-4 | T11, T13, T14, T15, T10 |
+| FR-5 | T12–T15, T10 |
+| FR-6 | T13–T15, T17, T10 |
+| FR-7 | T11, T15–T17, T10 |
+| FR-8 | T15, T17, T10 |
+| FR-9 | T11–T17, T19, T10 |
+| FR-10 | T12–T17, T19, T10 |
+| FR-11 | T11, T16–T19, T10 |
+| FR-12 | T13–T15, T10 |
+| FR-13 | T12, T15, T17, T10 |
+| FR-14 | T12, T15, T10 |
+| FR-15 | T12, T15, T10 |
+| FR-16 | T16, T18, T19, T10 |
+| FR-17 | T16, T19, T10 |
+| FR-18 | T13–T15, T10 |
+| FR-19 | T12, T15, T17, T19, T10 |
+| FR-20 | T11, T16–T18, T10 |
+| FR-21 | T11, T12, T14–T16, T18, T10 |
+| FR-22 | T11, T13–T15, T10 |
+| FR-23 | T11, T16, T18, T10 |
+| FR-24 | T11, T12, T15–T17, T19, T10 |
+| NFR-1 | T11–T14, T16, T18, T19, T10 |
+| NFR-2 | T12–T19, T10 |
+| NFR-3 | T11, T17–T19, T10 |
+| NFR-4 | T11–T19, T10 |
 
 ## Approval record and next step
+
+The following revision-0.2 entries are historical. Their “next”/authorization
+statements describe that point in the workflow; the final revision-0.3 entry
+below is authoritative for the current next step. No historical native gate
+has been cleared by this documentary revision.
 
 - Specification 0.5 and plan 0.2 are explicitly approved. The latest “apruebo el plan” authorizes this revised decomposition, not implementation.
 - Tasks 0.1 and its managed-backend T01 were explicitly authorized; their historical evidence and unaffected responsibilities are retained. The user approved tasks 0.2 and native T01 resumption, then explicitly deferred unavailable Windows checks and authorized T02.
@@ -129,3 +221,5 @@ Execution exception explicitly authorized by the user: “tendría que preparar 
 - The user subsequently requested the next task and approved its presented T08 plan with “Apruebo el plan”. The implementation and scoped verification are recorded above and in [T08 evidence](./copy-screen-interactions.md). T08 depends on completed T07; prior Windows/physical gates remain mandatory. Next: report T08 and stop. T09 requires its own presented plan and explicit approval before implementation; SDD validation is not authorized.
 - The user then requested the next task and approved its presented T09 plan with “Apruebo el plan”. T09 depends on completed T08; its completion and remaining native/physical limits are recorded above and in [T09 evidence](./confirmed-shutdown.md). Next: report T09 and stop. T10 needs its own scoped plan/approval, acknowledging still-open mandatory Windows/physical dependencies; consolidation or SDD validation is not automatically authorized.
 - The user subsequently requested the next task and approved the displayed T10 plan with “apruebo el plan”. Available regression, sequential coverage, native package checks and documentary consolidation are authorized while earlier Windows dependencies remain open. Mandatory physical/native rows must pass before T10 can be checked. Next: report the scoped evidence and exact remaining prerequisites, then stop; do not start formal SDD validation/code review or mark the feature implemented.
+- Current revision 0.3: the user approved specification 0.6 with “Apruebo la revisión”, then approved plan 0.3 and authorized task drafting with “apruebo el plan y autorizo preparar la revisión de tareas”. No task/implementation authorization follows from that statement. This draft preserves T01–T09 history, expands final T10 and proposes T11–T19. Next: present tasks 0.3 and obtain explicit task-list approval plus authorization for T11's pure contracts/rules increment. T11 needs no unavailable Windows prerequisite; later native dependencies and any proposed execution exception must be handled explicitly. No new tests/build/native runs, source changes, branch, commit or push occurred in task preparation.
+- The user then replied to the displayed tasks 0.3/T11 authorization request with “Apruebo el plan y autorizo iniciar T11”, approving the presented decomposition and authorizing only T11's scoped implementation. T11 is now complete with the evidence above; no native/physical gate is waived. Next: report T11 and stop. A request to continue begins T12 planning, not implementation; present its own scope and any required native dependency exception before seeking authorization. Formal SDD validation/acceptance remains unauthorized.
