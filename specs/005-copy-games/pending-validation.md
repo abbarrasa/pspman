@@ -5,6 +5,29 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T13 Linux resources — physical filesystem follow-up remains in T10
+
+The user approved the presented T13 scope with “apruebo el plan”. T13 depends on
+completed scoped T11/T04; this is not a waiver of T12's Windows gate. The
+[Linux resource report](./linux-destination-resources.md) separates actual native
+temporary-root I/O from controlled capacity/fault observations and future engine
+integration. Tests ran on Linux x64 tmpfs, not a PSP/FAT device or physical disk.
+
+On designated disposable Linux PSP/FAT media, record kernel/filesystem/mount
+options and actual free-space/allocation behavior before and after concurrent
+buffered/partial/failed writes, retries, flush and close. Exercise exact-capacity
+admission, unknown capacity, case/short-alias and new-name races, compatible
+directory creation, unsafe/link/structural changes, wait cancellation and device
+loss/removal with retained output and real handle release. Unsupported or
+unexecuted filesystem/kernel/architecture cases stay pending; temporary-root
+tests do not certify them. Do not create mounts, loop devices or operate arbitrary
+hardware without the designated environment. These remain mandatory T10 gates.
+
+T14 still needs its scoped plan/authorization and explicit handling of open T05
+Windows execution before dependent work. T15 will integrate budget/entry leases
+and owning-budget fault reporting into the engine; no concurrent production
+submission or aggregate close/removal behavior is enabled by T13.
+
 ## T12 independent native sessions — mandatory Windows gate open
 
 The user approved T12's presented plan and explicit T01/T03 Windows dependency
@@ -23,7 +46,7 @@ source/stream/module release, GC and noncooperative callback outcomes. Finish
 earlier T01/T03 Windows prerequisites separately; Linux success is no substitute.
 The host remains Linux x86_64 with only linux-x64 runtime assets staged and no
 established Windows endpoint/toolchain. No Windows or physical PSP result is
-claimed. Subsequent T13 work still needs its own scoped plan and authorization.
+claimed. Subsequent T13 authorization is recorded above; it does not complete T12.
 
 ## T10 consolidation — authorized; mandatory gates still open
 
