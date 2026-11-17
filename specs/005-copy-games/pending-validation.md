@@ -1,8 +1,29 @@
 # Spec 005 — Pending native validation
 
-Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never count
+Current specification 0.6, plan/tasks 0.3. Earlier sections/reports retain their
+historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
+
+## T12 independent native sessions — mandatory Windows gate open
+
+The user approved T12's presented plan and explicit T01/T03 Windows dependency
+exception with “Apruebo el plan con la excepción”. Linux available checks may
+proceed; T12 remains unchecked until mandatory Windows execution passes. No
+provisioning, native device operation or waiver follows from this exception.
+
+[T12 evidence and restart procedure](./parallel-native-archive-sessions.md)
+records actual production-reader/native overlap, shared source/parts, separate
+password/error/cancel ownership and native-return-before-disposal tests. These
+use real fixture FileStreams and controlled memory outputs, not PSP writes.
+The serial control must distinguish peak 1 from two entered native callbacks.
+Run every case on the matching Windows engine/bridge with required-native guards,
+then against its local published runtime; record hashes, ABI/version, native
+source/stream/module release, GC and noncooperative callback outcomes. Finish
+earlier T01/T03 Windows prerequisites separately; Linux success is no substitute.
+The host remains Linux x86_64 with only linux-x64 runtime assets staged and no
+established Windows endpoint/toolchain. No Windows or physical PSP result is
+claimed. Subsequent T13 work still needs its own scoped plan and authorization.
 
 ## T10 consolidation — authorized; mandatory gates still open
 
