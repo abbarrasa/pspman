@@ -170,6 +170,7 @@ public sealed class ApplicationDeviceLifetimeTests
             Assert.Equal(1, provider.Disposals);
             Assert.Equal(0, provider.Reads);
             Assert.Null(main.Devices);
+            Assert.Null(main.Copy);
             Assert.Equal(1, desktop.Shutdowns);
             Assert.Equal(0, desktop.ExitCode);
         });

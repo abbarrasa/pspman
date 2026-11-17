@@ -8,7 +8,7 @@ public partial class MainViewModel
 {
     public GameCopyViewModel? Copy { get; private set; }
     public bool HasCopy => Copy is not null;
-    public bool CanCopySelectedGame => Copy is { IsBusy: false };
+    public bool CanCopySelectedGame => Copy is { CanStart: true };
 
     internal void AttachCopy(GameCopyViewModel? copy)
     {
@@ -24,7 +24,7 @@ public partial class MainViewModel
     }
 
     private void OnCopyChanged(object? sender, PropertyChangedEventArgs args)
-    { if (args.PropertyName == nameof(GameCopyViewModel.IsBusy)) UpdateCopyCommand(); }
+    { if (args.PropertyName == nameof(GameCopyViewModel.CanStart)) UpdateCopyCommand(); }
     private void UpdateCopyCommand()
     { OnPropertyChanged(nameof(CanCopySelectedGame)); CopySelectedGameCommand.NotifyCanExecuteChanged(); }
 

@@ -31,7 +31,8 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
     internal void AttachCoordinator(GameCopySessionCoordinator coordinator) => _coordinator = coordinator;
     public void SetSelectedGame(GameRecord? game) { if (!_disposed) _coordinator?.SetSelectedGame(game); }
     [ObservableProperty] private bool _isOpen;
-    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(CancelCommand))] private bool _isBusy;
+    [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
+    [NotifyPropertyChangedFor(nameof(CanStart))] private bool _isBusy;
     [ObservableProperty] private string _title = "";
     [ObservableProperty] private string _destination = "";
     [ObservableProperty] private string _status = "";
@@ -49,7 +50,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
         CancellationTokenSource cancellation;
         lock (_gate)
         {
-            if (_disposed || IsBusy) return;
+            if (!CanStart) return;
             version = ++_version; _terminal = false;
             cancellation = _operationCancellation = new();
         }
@@ -164,6 +165,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            if (IsClosing) throw new OperationCanceledException("The application is closing.");
             token.ThrowIfCancellationRequested();
             if (_pendingInput is not null) throw new InvalidOperationException("A copy input is already pending.");
             input = new(password, message, path, warning, Respond);
@@ -181,7 +183,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
     {
         lock (_gate)
         {
-            if (_disposed || !ReferenceEquals(_pendingInput, input)) return;
+            if (_disposed || IsClosing || !ReferenceEquals(_pendingInput, input)) return;
             var secret = input.Password;
             input.Password = "";
             _respond?.Invoke(decision, secret);
@@ -212,6 +214,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
         {
             if (_disposeTask is not null) return new(_disposeTask);
             _disposed = true; ++_version;
+            RetireCloseConfirmation();
             if (_pendingInput is { } input) ReleaseInput(input, cancel: true);
             cancellation = _operationCancellation;
             completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
