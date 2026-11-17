@@ -4,6 +4,25 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T10 consolidation — authorized; mandatory gates still open
+
+The user approved the presented T10 plan with “apruebo el plan”, explicitly
+allowing available checks/documentation while earlier Windows dependencies stay
+deferred. [Current regression/coverage and package evidence](./coverage.md) and
+[requirement traceability, physical matrix and restart steps](./manual-validation.md)
+record this work. T10 remains unchecked; documentation is not a replacement for
+unexecuted Windows/PSP tests. No requirement, task completion condition or Spec
+004 native gate is waived. Formal SDD validation/code review is not authorized.
+
+The host is Linux x86_64; no Windows execution endpoint or designated disposable
+PSP/source media has been established. Current PATH has no cmd.exe,
+powershell.exe, pwsh, qemu-system-x86_64, VBoxManage or virsh. This is an
+availability observation, not proof that the user cannot supply an environment.
+The user was asked about available Windows/test media; no arbitrary connected
+hardware may be inferred as authorized. No provisioning or physical operation
+was performed. Only linux-x64 native assets are staged; other deployment targets
+still need explicit inventory and matching native verification.
+
 ## T09 physical/native shutdown follow-up — mandatory for T10
 
 T09's [confirmed-shutdown evidence](./confirmed-shutdown.md) covers awaited
@@ -17,7 +36,7 @@ removal veto/privilege delays, unplugging and completion/close races; record OS,
 architecture, packaged engine/bridge version and filesystem. Verify the normal
 desktop shutdown request route separately from forced process termination;
 graceful cleanup cannot be inferred for a killed process. Earlier Windows and
-physical gates remain mandatory, and T10 is not started by T09 completion.
+physical gates remain mandatory. T10's subsequent authorization is recorded above.
 
 ## T08 native copy-screen follow-up — mandatory for T10
 
@@ -192,12 +211,14 @@ version export is not an engine-binary authentication mechanism.
 
 ## Physical copy and UI matrix — T10 pending
 
-No copy service/UI exists at this point, and T01 performs no PSP I/O. All physical
-copy tests remain unexecuted: Linux/Windows mounting and identity, PSP absence and
+The copy service, UI and confirmed shutdown are now implemented through T09;
+T01's archive-only evidence remains historical. All physical copy tests remain
+unexecuted: Linux/Windows mounting and identity, PSP absence and
 multiple choice, source media, actual capacity, nested output, passwords/parts,
 overwrite/renewed consent/skips, progress, retention on cancellation/corruption/I/O
 failure, selection changes, removal after handle release and confirmed closure.
 Prepare explicitly designated disposable media and known payload hashes before
 those tests. Cross-reference outstanding device authorization/hardware cases in
-Spec 004; do not infer their completion from archive tests. Graphical startup that
-would discover/mount arbitrary hardware is not part of this T01 gate.
+Spec 004; do not infer their completion from archive tests. Graphical startup
+must not discover/mount arbitrary hardware. Follow P01–P18 in
+[the manual matrix](./manual-validation.md) on explicitly designated media.

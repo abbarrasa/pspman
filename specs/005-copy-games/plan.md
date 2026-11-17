@@ -301,8 +301,18 @@ decline/accept behavior, draining before device detachment, reentrant lifetime
 barriers and typed bounded confirmation UI. App's existing ShutdownRequested
 route is reused without a competing handler. An optional copy-composition factory
 supports controlled-I/O functional tests; production adapters and Core/native
-policy are unchanged. T10 requires its own scoped plan/approval; earlier Windows
-and physical gates are neither completed nor waived by T09's automated/UI proof.
+policy are unchanged. Earlier Windows and physical gates are neither completed
+nor waived by T09's automated/UI proof.
+
+The user subsequently approved the presented T10 consolidation plan with
+“apruebo el plan”, including available regression/coverage/package checks while
+the T01/T03/T05/T06 Windows dependencies remain deferred. Current evidence is in
+[coverage](./coverage.md) and [manual traceability/procedures](./manual-validation.md).
+Only documentation is changed; unavailable Windows and real PSP/source-media
+checks leave T10 open. There is no new numerical coverage target, provisioning,
+implicit hardware authorization, production repair or SDD review/acceptance.
+The exact remaining gates and restart order are retained in
+[pending validation](./pending-validation.md).
 
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
