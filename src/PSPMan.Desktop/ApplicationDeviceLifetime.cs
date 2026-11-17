@@ -18,6 +18,7 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
     private readonly Func<CancellationToken, ValueTask<DeviceProviderFactoryResult>> _createProviders;
     private readonly CancellationTokenSource _cancellation = new();
     private DeviceStartup? _startup;
+    private CopyStartup? _copy;
     private DevicesViewModel _devices;
     private Task? _disposeTask;
     private bool _started, _stopping, _shutdownRequested;
@@ -54,7 +55,9 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
             _startup = await Task.Run(async () => await DeviceStartup.CreateAsync(
                 createProviders: _createProviders, cancellationToken: _cancellation.Token).ConfigureAwait(false));
             if (_stopping) return;
-            ReplaceDevices(new(_startup.Session, startupError: _startup.Error));
+            _copy = new(_startup.Session, _startup.Error?.Message);
+            _main.AttachCopy(_copy.ViewModel);
+            ReplaceDevices(new(_startup.Session, startupError: _startup.Error, removalInterceptor: _copy.Coordinator));
             await _startup.StartAsync(_cancellation.Token);
         }
         catch (OperationCanceledException) when (_cancellation.IsCancellationRequested) { }
@@ -110,6 +113,7 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
             _stopping = true;
             _devices.Dispose();
             _main.AttachDevices(null);
+            _main.AttachCopy(null);
             _cancellation.Cancel();
             _disposeTask = DisposeCoreAsync();
         }
@@ -122,8 +126,15 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
         {
             // A late factory result is still owned and must be released before exit.
             await Initialization;
-            if (_startup is not null)
-                await Task.Run(async () => await _startup.DisposeAsync().ConfigureAwait(false));
+            try
+            {
+                if (_copy is not null) await _copy.DisposeAsync();
+            }
+            finally
+            {
+                if (_startup is not null)
+                    await Task.Run(async () => await _startup.DisposeAsync().ConfigureAwait(false));
+            }
         }
         finally
         {

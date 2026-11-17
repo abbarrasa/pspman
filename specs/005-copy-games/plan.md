@@ -284,6 +284,17 @@ planned active slot, relevant-evidence invalidation and pre-removal reservation;
 no provider policy or UI composition change is proposed. T08 still requires its
 own scoped plan and explicit approval before implementation.
 
+The user subsequently requested the next task and approved the presented T08
+plan with “Apruebo el plan”. Its typed copy view, transient interaction bridge,
+optional main-model attachment, adapter/coordinator composition and minimal
+lifetime draining are documented in [T08 evidence](./copy-screen-interactions.md).
+Integration moves only the coordinator's engine runner onto Task.Run, preserving
+synchronous selection capture/reservation at action acceptance; queuing the entire
+start allowed a later UI selection to substitute for the accepted game. Existing
+device policy/contracts remain unchanged. T09's confirmed shutdown is separate
+and requires its own scoped plan/approval. All native Windows and physical gates
+remain mandatory.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.
