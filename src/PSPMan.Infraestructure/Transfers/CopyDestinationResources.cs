@@ -17,8 +17,8 @@ public sealed class CopyDestinationResources : IGameCopyResources
     public IGameCopyDestination BindDestination(Guid operationId, CopyVolumeEvidence evidence, IGameCopyDestination destination)
     {
         if (operationId == Guid.Empty) throw new ArgumentException("An operation identity is required.", nameof(operationId));
-        if (destination is not LinuxCopyDestination native || native.VolumeEvidence != evidence)
-            throw new ArgumentException("A matching confined Linux destination is required.", nameof(destination));
+        if (destination is not ICopyResourceDestination native || native.VolumeEvidence != evidence)
+            throw new ArgumentException("A matching confined native destination is required.", nameof(destination));
         lock (gate)
         {
             var key = CopyVolumeKey.From(evidence);
@@ -328,7 +328,7 @@ public sealed class CopyDestinationResources : IGameCopyResources
         internal readonly bool Directory = directory;
         internal readonly IProgress<GameCopyResourceWait>? Waiting = waiting;
         internal readonly SemaphoreSlim Gate = new(1, 1);
-        internal LinuxCopyDestination.Target? Target;
+        internal CopyResourceTarget? Target;
         internal bool Closed;
         public Guid OperationId => Binding.Id;
         public CopyVolumeKey Volume => CopyVolumeKey.From(Binding.Evidence);
@@ -355,13 +355,13 @@ public sealed class CopyDestinationResources : IGameCopyResources
     }
 
     private sealed class Destination(CopyDestinationResources owner, Volume state, Guid id,
-        CopyVolumeEvidence evidence, LinuxCopyDestination native) : IGameCopyDestination
+        CopyVolumeEvidence evidence, ICopyResourceDestination native) : IGameCopyDestination
     {
         internal readonly CopyDestinationResources Owner = owner;
         internal readonly Volume State = state;
         internal readonly Guid Id = id;
         internal readonly CopyVolumeEvidence Evidence = evidence;
-        internal readonly LinuxCopyDestination Native = native;
+        internal readonly ICopyResourceDestination Native = native;
         internal Budget? Budget;
         internal Entry? Entry;
         internal bool EntryPending;
@@ -386,7 +386,8 @@ public sealed class CopyDestinationResources : IGameCopyResources
         public ValueTask ValidateAsync(CancellationToken token) => Native.ValidateAsync(token);
         public ValueTask<long?> GetAvailableBytesAsync(CancellationToken token) => Native.GetAvailableBytesAsync(token);
         private static bool IsOwnEmpty(Entry entry, CopyTargetSnapshot snapshot) => entry.Target is { Created: true } target
-            && snapshot.Evidence is { Length: 0 } file && file.Identity.EndsWith("/" + target.Identity, StringComparison.Ordinal)
+            && snapshot.Evidence is { Length: 0 } file
+            && (target.EvidenceIdentity is { } identity ? file.Identity == identity : file.Identity.EndsWith("/" + target.Identity, StringComparison.Ordinal))
             && file.ChangeEvidence.StartsWith(target.InitialChange + ":", StringComparison.Ordinal);
         public async ValueTask<CopyTargetSnapshot> InspectAsync(ImmutableArray<string> segments, CancellationToken token)
         {

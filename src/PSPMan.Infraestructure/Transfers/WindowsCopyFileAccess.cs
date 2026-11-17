@@ -101,6 +101,7 @@ internal static class WindowsCopyFileAccess
         private bool _disposed;
         internal CopyFileAccessHooks Hooks { get; }
         internal string RootPath => _evidence.Root;
+        internal CopyVolumeEvidence Evidence => _evidence;
         internal SafeFileHandle Handle => _root.Root;
         internal WindowsCopyNative.FileStat Stat => _root.Stat;
         internal GameCopyErrorCode Changed => _destination ? GameCopyErrorCode.DestinationChanged : GameCopyErrorCode.SourceChanged;
@@ -273,7 +274,8 @@ internal static class WindowsCopyFileAccess
             return Convert.ToHexStringLower(hash.GetHashAndReset());
         }
 
-        internal CopyAccessStream Own(Stream stream, string[] path, WindowsCopyNative.FileStat expected, bool writing)
+        internal CopyAccessStream Own(Stream stream, string[] path, WindowsCopyNative.FileStat expected, bool writing,
+            SafeFileHandle? outputHandle = null)
         {
             var owned = new CopyAccessStream(stream, async token =>
             {
@@ -292,7 +294,8 @@ internal static class WindowsCopyFileAccess
                     catch (UnsafeTraversalException) { throw Failure(Changed, "The open file path now traverses a reparse point."); }
                     return ValueTask.FromResult(true);
                 }, token).ConfigureAwait(false);
-            }, writing, released => { lock (_streamGate) _streams.Remove(released); });
+            }, writing, released => { lock (_streamGate) _streams.Remove(released); },
+                outputHandle is null ? null : () => WindowsCopyNative.FlushOutput(outputHandle));
             lock (_streamGate) _streams.Add(owned);
             return owned;
         }

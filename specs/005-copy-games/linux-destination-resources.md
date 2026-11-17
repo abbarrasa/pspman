@@ -164,8 +164,9 @@ package/ABI/publish change or UI startup was needed in this resource-only scope.
 | FR-9/FR-10/FR-12; AC-7/AC-8/AC-10 | Cancellable waits/chunks, drain-before-release, isolated peer faults, exact retained bytes, no deletion/restore. Aggregate application close is later work. |
 | NFR-1/NFR-2/NFR-4 | Actual Linux openat2/statx/syncfs and disjoint I/O overlap; no UI/Windows/physical responsiveness claim, source/catalogue path absent and sibling bytes preserved. |
 
-T14 must implement/prove the corresponding Windows native binding and resource
-protocol; this Linux owner currently rejects non-Linux destination bindings.
+At the T13 baseline, the owner rejects non-Linux destination bindings. The later
+[T14 adaptation](./windows-destination-resources.md) prepares the corresponding
+Windows binding/protocol; its mandatory native execution remains open.
 Earlier Windows gates remain open. T10 must execute on designated disposable
 PSP/FAT media: actual allocation granularity, native case/short aliases and
 missing-name races, concurrent free-space near capacity, shared directories,
