@@ -59,7 +59,8 @@ public sealed class GameCopySessionCoordinator : IDeviceRemovalInterceptor, IAsy
             operation = new(request, observation.Associations, progress, cancellationToken);
             active = operation;
         }
-        _ = RunAsync(operation);
+        // Capture/reserve synchronously, then run potentially synchronous adapter work off the caller.
+        _ = Task.Run(() => RunAsync(operation));
         return operation.Completion.Task;
     }
 

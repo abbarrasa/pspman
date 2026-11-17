@@ -4,6 +4,21 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T08 native copy-screen follow-up — mandatory for T10
+
+The approved T08 presentation uses the existing native adapters in application
+composition, but its 34 automated cases use controlled file/archive contracts and
+synthetic providers. Follow [T08 evidence](./copy-screen-interactions.md) on
+designated Linux/Windows media: select a real game/source/PSP, verify actual-byte
+progress and responsiveness, masked password retry/cancel, definite corruption
+versus “Incorrect password or damaged archive”, renewed per-file overwrite consent,
+partial/all-skipped results and retained-output warnings. Confirm real hashes and
+native release before removal, including selection changes during input/I/O.
+Record OS, architecture, filesystem, native package version, device identities,
+expected/actual hashes and actual outcomes. No graphical or fake-provider check
+substitutes for these physical tests. Confirmed application closure still belongs
+to unstarted T09; earlier Windows and T10 physical gates remain open.
+
 ## T07 native coordination follow-up — mandatory for T10
 
 T07 proceeded under an explicitly approved task-specific dependency exception;

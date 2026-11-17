@@ -20,7 +20,7 @@
         <views:DeviceWorkspaceWidthConverter x:Key="DeviceColumnWidth" WithDevices="270" WithoutDevices="0" />
     </Window.Resources>
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" Margin="20">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto" Margin="20">
         <Grid ColumnDefinitions="*,Auto">
             <TextBlock Text="Game catalog" FontSize="24" FontWeight="SemiBold" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
@@ -145,7 +145,8 @@
                 <ColumnDefinition Width="{Binding #WindowRoot.((vm:MainViewModel)DataContext).HasDevices, Converter={StaticResource DeviceColumnWidth}}" />
             </Grid.ColumnDefinitions>
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
-                <TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
+                <StackPanel Spacing="6"><TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
+                    <Button x:Name="CopySelectedGameButton" Content="Copy to PSP" Command="{Binding CopySelectedGameCommand}" IsVisible="{Binding HasCopy}" /></StackPanel>
                 <StackPanel Grid.Row="1">
                     <TextBlock x:Name="EmptyStateText" Text="No games in the catalog."
                                IsVisible="{Binding IsEmpty}" />
@@ -351,5 +352,7 @@
                 <views:DevicesView x:Name="DevicePanel" DataContext="{Binding Devices}" />
             </Border>
         </Grid>
+        <views:GameCopyView x:Name="CopyPanel" Grid.Row="6" MaxHeight="220"
+                            DataContext="{Binding Copy}" IsVisible="{Binding IsOpen, FallbackValue=False}" />
     </Grid>
 </Window>
