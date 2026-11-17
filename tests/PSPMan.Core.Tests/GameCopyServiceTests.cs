@@ -184,12 +184,14 @@ public sealed class GameCopyServiceTests
         public GameCopyErrorCode? ValidationError;
         public Action? AfterPassword, BeforeWrite, OnDispose, OnOutputClose;
         public Func<CancellationToken, ValueTask>? OnInspect, BeforePrompt, BeforePassword, OnWrite;
+        public Func<ValueTask>? BeforeOutputRelease;
         public int ErrorEntry;
         public bool FailSessionClose, StalePasswordOnce;
         public bool ChangeOnce, CancelDuringWrite, FailClose, RetryOnce, PasswordCancel, StaleOnce;
         public bool OutputOpen, Closed, TerminalObservedClosed, PasswordObservedOutputClosed;
         public int Mutations, OverwritePrompts, PasswordPrompts, SourceOpens;
         public string? LastPassword;
+        public CopyVolumeEvidence? OpenedSource, OpenedDestination;
         public string ArchiveName => "game.zip";
         public string DestinationPath => "/psp/ISO";
         public static GameCopyRequest Request()
@@ -202,8 +204,9 @@ public sealed class GameCopyServiceTests
         public Task<GameCopyResult> Run() => new GameCopyService(this, this, this).CopyAsync(Request(), this, Cancel.Token);
         public void Report(GameCopySnapshot value) { Snapshots.Add(value); if (GameCopyRules.IsTerminal(value.State)) TerminalObservedClosed = Closed && !OutputOpen; }
         public ValueTask<IGameArchiveSource> OpenSourceAsync(CopyVolumeEvidence source, string location, CancellationToken token)
-        { token.ThrowIfCancellationRequested(); SourceOpens++; return ValueTask.FromResult<IGameArchiveSource>(this); }
-        public ValueTask<IGameCopyDestination> OpenDestinationAsync(CopyVolumeEvidence destination, CancellationToken token) => ValueTask.FromResult<IGameCopyDestination>(this);
+        { token.ThrowIfCancellationRequested(); OpenedSource = source; SourceOpens++; return ValueTask.FromResult<IGameArchiveSource>(this); }
+        public ValueTask<IGameCopyDestination> OpenDestinationAsync(CopyVolumeEvidence destination, CancellationToken token)
+        { OpenedDestination = destination; return ValueTask.FromResult<IGameCopyDestination>(this); }
         public ValueTask<string> CaptureEvidenceAsync(CancellationToken token) => ValueTask.FromResult("opaque");
         public ValueTask<Stream> OpenPartAsync(string name, CancellationToken token) => throw new NotSupportedException();
         public ValueTask ValidateAsync(string expectedEvidence, CancellationToken token) { Assert.Equal("opaque", expectedEvidence); token.ThrowIfCancellationRequested(); if (ValidationError is { } error) throw new GameCopyException(new(error, "Identity changed")); return ValueTask.CompletedTask; }
@@ -251,7 +254,7 @@ public sealed class GameCopyServiceTests
         private sealed class OutputFile(Fixture f, MemoryStream stream) : IGameCopyOutputFile
         {
             public Stream Output => stream;
-            public ValueTask DisposeAsync() { f.OnOutputClose?.Invoke(); f.OutputOpen = false; if (f.FailClose) throw new IOException("Close failed"); return ValueTask.CompletedTask; }
+            public async ValueTask DisposeAsync() { f.OnOutputClose?.Invoke(); if (f.BeforeOutputRelease is not null) await f.BeforeOutputRelease(); f.OutputOpen = false; if (f.FailClose) throw new IOException("Close failed"); }
         }
         private sealed class Session(Fixture f) : IGameArchiveSession
         {

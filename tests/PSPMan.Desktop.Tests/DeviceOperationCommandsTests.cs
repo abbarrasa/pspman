@@ -166,13 +166,71 @@ public sealed class DeviceOperationCommandsTests
         public void Delete(Guid id) => throw new NotSupportedException();
     }
 
+    [Fact]
+    public async Task CopyRemovalInterceptionIsAwaitedBeforeSubmittingTheSameDevice()
+    {
+        var interception = new RemovalInterception();
+        await using var test = await Fixture.Create(interception: interception);
+        interception.Forward = (key, observation, token) => test.Session.RemoveDeviceAsync(key, token, observation);
+        var command = test.Row.RemoveCommand.ExecuteAsync(null);
+        await interception.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(0, test.Provider.Removals);
+        Assert.False(command.IsCompleted);
+        interception.Release.TrySetResult();
+        await command;
+        await test.Wait(() => test.Provider.Removals == 1);
+        Assert.Equal(new DeviceKey("test", "source"), interception.Device);
+        Assert.Equal(1, interception.Calls);
+    }
+
+    [Fact]
+    public async Task CopyRemovalRejectionIsVisibleWithoutForwardingToProvider()
+    {
+        var interception = new RemovalInterception { Fail = true };
+        await using var test = await Fixture.Create(interception: interception);
+        interception.Release.TrySetResult();
+        await test.Row.RemoveCommand.ExecuteAsync(null);
+        Assert.Contains("Device changed", test.Model.DeviceActionError);
+        Assert.Equal(0, test.Provider.Removals);
+    }
+
+    [Fact]
+    public async Task DisposingWhileCopyRemovalIsPendingCancelsItsForwarding()
+    {
+        var interception = new RemovalInterception();
+        await using var test = await Fixture.Create(interception: interception);
+        interception.Forward = (key, observation, token) => test.Session.RemoveDeviceAsync(key, token, observation);
+        var command = test.Row.RemoveCommand.ExecuteAsync(null);
+        await interception.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        test.Model.Dispose();
+        await command.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(0, test.Provider.Removals);
+    }
+
+    private sealed class RemovalInterception : IDeviceRemovalInterceptor
+    {
+        internal readonly TaskCompletionSource Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal Func<DeviceKey, DeviceInventorySnapshot, CancellationToken, ValueTask>? Forward;
+        internal DeviceKey Device;
+        internal int Calls;
+        internal bool Fail;
+        public async ValueTask RemoveDeviceAsync(DeviceKey device, DeviceInventorySnapshot observation, CancellationToken cancellationToken = default)
+        {
+            Device = device; Calls++; Entered.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            if (Fail) throw new InvalidOperationException("Device changed");
+            if (Forward is not null) await Forward(device, observation, cancellationToken);
+        }
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         public Provider Provider { get; } = new();
         public DeviceSessionService Session { get; }
         public DevicesViewModel Model { get; }
         public DeviceItemViewModel Row => Model.Devices.First(item => item.Key.DeviceId == "source");
-        private Fixture(bool unmounted, DeviceOperationStatus failure)
+        private Fixture(bool unmounted, DeviceOperationStatus failure, IDeviceRemovalInterceptor? interception)
         {
             DeviceSnapshot Device(string id)
             {
@@ -186,10 +244,11 @@ public sealed class DeviceOperationCommandsTests
             }
             Provider.Inventory = new(1, [Device("source"), Device("other")]);
             Provider.Failure = failure;
-            Session = new([Provider]); Model = new(Session, action => action());
+            Session = new([Provider]); Model = new(Session, action => action(), removalInterceptor: interception);
         }
-        public static async Task<Fixture> Create(bool unmounted = false, DeviceOperationStatus failure = DeviceOperationStatus.Failed)
-        { var test = new Fixture(unmounted, failure); await test.Session.StartAsync(); return test; }
+        public static async Task<Fixture> Create(bool unmounted = false, DeviceOperationStatus failure = DeviceOperationStatus.Failed,
+            IDeviceRemovalInterceptor? interception = null)
+        { var test = new Fixture(unmounted, failure, interception); await test.Session.StartAsync(); return test; }
         public async Task Wait(Func<bool> predicate)
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));

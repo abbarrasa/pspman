@@ -15,7 +15,8 @@ public enum GameCopyErrorCode
     MissingArchive, MissingPart, EmptyArchive, CorruptArchive, UnsupportedArchive,
     PasswordRequired, IncorrectPassword, IndeterminateEncryptedError,
     UnknownActualSize, InvalidActualSize, SizeOverflow, UnknownFreeSpace,
-    InsufficientSpace, InvalidName, FileDirectoryConflict, ReadError, WriteError, CloseError, Cancelled
+    InsufficientSpace, InvalidName, FileDirectoryConflict, ReadError, WriteError, CloseError, Cancelled,
+    CopyInProgress, NoGameSelected
 }
 public enum GameCopyStopReason { None, Cancelled, Failed }
 public enum GameCopySkipReason { UnsafePath, Link, OverwriteDeclined }
