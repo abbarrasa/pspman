@@ -4,6 +4,42 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T05 Windows confined filesystem gate — open
+
+The user authorized T05 with “Continúa con T05”. Implementation and portable
+checks are prepared; native Windows execution remains mandatory. Reassessment
+on 2026-11-17 still finds Linux x64 and no accessible Windows interpreter,
+PowerShell or VM runner. No Windows host/credentials were supplied; no
+provisioning or native/physical operation was performed.
+
+Use a Windows 10/11 NTFS runner with .NET 10, allowed per-directory case-sensitive
+flags and Developer Mode or suitable symlink privilege. Build/package the matched
+T03 engine/bridge first. Run the [T05 commands and cases](./windows-copy-filesystem.md)
+with both PSPMAN_REQUIRE_WINDOWS_COPY_TESTS=1 and PSPMAN_REQUIRE_NATIVE_TESTS=1.
+The focused WindowsCopy group must execute all 31 portable and 24 native cases
+without T05 native skips. Linux reports 21 skipped discovery entries for these
+native tests because the four-row archive theory collapses to one skipped entry.
+Portable marshalling/open-plan/name tests do not prove Windows API behavior.
+
+Required native follow-up includes NtCreateFile directory-relative/no-follow
+opens, parent/file sharing barriers, target replacement/consent, Unicode and
+native case-sensitive lookup, hard links/junctions/symlinks, source confinement,
+actual capacity, retained output on I/O/cancel/close faults and released handles.
+Run actual ZIP/RAR/solid/encrypted multipart/split-ZIP integrations, verify source
+and output hashes, then full build/regression and owning-file coverage. Repeat
+ABI/API checks on supported Windows process architectures; Linux x64 layout
+checks cannot certify Windows x86/arm64.
+
+Use only designated disposable volumes for further mounted-folder/GUID alias,
+FAT identifier reuse/coarse-time overwrite, changed drive mapping/media and
+native read-only/full-volume/flush/removal checks. A scratch VHD or real test PSP
+and dedicated source media must be explicitly prepared before mutation. Never
+mount the system volume under a fixture path and write ISO to that real root.
+Record the actual OS/architecture, filesystem, native API results, handles,
+hashes and failures. Physical PSP/device-provider/removal/UI evidence still
+belongs to T10 and Spec 004's native prerequisites. T05 remains unchecked until
+its native completion gate passes; T06 has not started.
+
 ## T03 Windows production adapter and publication — open
 
 The user authorized T03 after T02 while keeping Windows tests deferred. Linux
