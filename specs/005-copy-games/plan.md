@@ -295,6 +295,15 @@ device policy/contracts remain unchanged. T09's confirmed shutdown is separate
 and requires its own scoped plan/approval. All native Windows and physical gates
 remain mandatory.
 
+The user then approved the presented T09 scoped plan with “Apruebo el plan”.
+[T09 evidence](./confirmed-shutdown.md) records the shared close decision,
+decline/accept behavior, draining before device detachment, reentrant lifetime
+barriers and typed bounded confirmation UI. App's existing ShutdownRequested
+route is reused without a competing handler. An optional copy-composition factory
+supports controlled-I/O functional tests; production adapters and Core/native
+policy are unchanged. T10 requires its own scoped plan/approval; earlier Windows
+and physical gates are neither completed nor waived by T09's automated/UI proof.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.

@@ -63,15 +63,20 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
 
     internal sealed class Provider : IDeviceProvider
     {
+        internal int Disposals, Reads;
+        internal Func<ValueTask>? OnDispose;
+        internal Func<CancellationToken, ValueTask<DeviceOperationResult>>? OnRemove;
+        internal int Removals;
         internal DeviceInventorySnapshot Inventory = new(0, []);
         private readonly Channel<DeviceInventorySnapshot> _changes = Channel.CreateUnbounded<DeviceInventorySnapshot>();
         public string ProviderId => "copy-ui";
-        public ValueTask<DeviceInventorySnapshot> GetSnapshotAsync(CancellationToken token = default) => new(Inventory);
+        public ValueTask<DeviceInventorySnapshot> GetSnapshotAsync(CancellationToken token = default) { ++Reads; return new(Inventory); }
         public async IAsyncEnumerable<DeviceInventorySnapshot> WatchChangesAsync([EnumeratorCancellation] CancellationToken token = default)
         { await foreach (var value in _changes.Reader.ReadAllAsync(token)) yield return value; }
         public ValueTask<DeviceOperationResult> MountAsync(DeviceMountRequest request, CancellationToken token = default) => throw new NotSupportedException();
-        public ValueTask<DeviceOperationResult> RemoveAsync(DeviceRemovalRequest request, CancellationToken token = default) => throw new NotSupportedException();
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask<DeviceOperationResult> RemoveAsync(DeviceRemovalRequest request, CancellationToken token = default)
+        { ++Removals; return OnRemove?.Invoke(token) ?? ValueTask.FromResult(new DeviceOperationResult(DeviceOperationStatus.Failed, new("Veto", "Native removal veto"))); }
+        public async ValueTask DisposeAsync() { ++Disposals; if (OnDispose is not null) await OnDispose(); }
     }
 
     internal sealed class CopyIo : IGameCopyFileSystem, IGameArchiveSource, IGameCopyDestination, IGameArchiveReader

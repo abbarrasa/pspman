@@ -4,6 +4,21 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T09 physical/native shutdown follow-up — mandatory for T10
+
+T09's [confirmed-shutdown evidence](./confirmed-shutdown.md) covers awaited
+headless lifetime tests and real Avalonia/X11 interaction with controlled I/O.
+These are not real PSP, native archive cancellation or OS logout tests. On
+designated Linux/Windows media, test decline/accept/repeated closure during
+actual preparation, decode/write, password, overwrite and FR-19 decisions.
+Confirm retained output hashes, prior-copy preservation and actual file/runtime
+release before device disposal/removal and process exit. Exercise native
+removal veto/privilege delays, unplugging and completion/close races; record OS,
+architecture, packaged engine/bridge version and filesystem. Verify the normal
+desktop shutdown request route separately from forced process termination;
+graceful cleanup cannot be inferred for a killed process. Earlier Windows and
+physical gates remain mandatory, and T10 is not started by T09 completion.
+
 ## T08 native copy-screen follow-up — mandatory for T10
 
 The approved T08 presentation uses the existing native adapters in application
@@ -17,7 +32,8 @@ native release before removal, including selection changes during input/I/O.
 Record OS, architecture, filesystem, native package version, device identities,
 expected/actual hashes and actual outcomes. No graphical or fake-provider check
 substitutes for these physical tests. Confirmed application closure still belongs
-to unstarted T09; earlier Windows and T10 physical gates remain open.
+to T09, whose scoped implementation is now recorded above; earlier Windows and
+T10 physical gates remain open.
 
 ## T07 native coordination follow-up — mandatory for T10
 
