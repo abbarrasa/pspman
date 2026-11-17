@@ -51,6 +51,8 @@ public sealed partial class DevicesViewModel
         {
             if (retry is { } volume)
                 await _session!.RetryMountAsync(volume, _sourceLifetime.Token, observation.Inventory).ConfigureAwait(false);
+            else if (_removalInterceptor is not null)
+                await _removalInterceptor.RemoveDeviceAsync(device.Key, observation.Inventory, _sourceLifetime.Token).ConfigureAwait(false);
             else
                 await _session!.RemoveDeviceAsync(device.Key, _sourceLifetime.Token, observation.Inventory).ConfigureAwait(false);
             // Acceptance is not native completion. Only session observations supply operation state.

@@ -15,6 +15,7 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
     private readonly Action<Action> _postToUi;
     private readonly DeviceOperationError? _startupError;
     private readonly bool _initializing;
+    private readonly IDeviceRemovalInterceptor? _removalInterceptor;
     private readonly object _gate = new();
     private bool _disposed;
     private long _requestedRevision = -1;
@@ -22,12 +23,13 @@ public sealed partial class DevicesViewModel : ViewModelBase, IDisposable
     private Presentation _presentation = new([], [], [], [], false);
 
     public DevicesViewModel(DeviceSessionService? session = null, Action<Action>? postToUi = null,
-        DeviceOperationError? startupError = null, bool initializing = false)
+        DeviceOperationError? startupError = null, bool initializing = false, IDeviceRemovalInterceptor? removalInterceptor = null)
     {
         _session = session;
         _postToUi = postToUi ?? (action => Dispatcher.UIThread.Post(action));
         _startupError = startupError;
         _initializing = initializing;
+        _removalInterceptor = removalInterceptor;
         InitializeSourceCommands();
         InitializeDestinationCommands();
         if (session is not null) session.SnapshotChanged += OnSnapshotChanged;

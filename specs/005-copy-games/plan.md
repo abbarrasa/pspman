@@ -276,6 +276,14 @@ only the Core copy engine and its tests, as recorded in [T06 evidence](./copy-en
 Windows integration and all earlier mandatory gates remain open. This approval
 does not start T07; present its own scoped plan and await approval first.
 
+The user then requested T07 and approved its presented task-specific plan,
+including proceeding with T06 and earlier Windows dependencies still open.
+The coordinator and optional awaited removal interception are recorded in
+[T07 evidence](./copy-session-coordination.md). This implements the already
+planned active slot, relevant-evidence invalidation and pre-removal reservation;
+no provider policy or UI composition change is proposed. T08 still requires its
+own scoped plan and explicit approval before implementation.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.

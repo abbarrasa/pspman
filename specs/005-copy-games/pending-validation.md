@@ -4,6 +4,19 @@ Specification 0.5, plan/tasks 0.2. Unexecuted checks are mandatory and never cou
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T07 native coordination follow-up — mandatory for T10
+
+T07 proceeded under an explicitly approved task-specific dependency exception;
+T06 and earlier Windows gates remain open. Its coordinator/device-command tests
+use synthetic providers and controlled file contracts, not real PSP/native
+removal evidence. Follow [T07 scope and procedures](./copy-session-coordination.md)
+on designated Linux/Windows source media and a USB PSP after T08/T09 composition:
+selection changes/loss during reads and password input, retained bytes,
+replacement devices at the same mount path, copy-file release before the same
+native removal request, visible native veto/privilege errors and cancellation.
+Record actual identities, filesystem/architecture, hashes and file-release/removal
+ordering. The earlier Windows and physical gates are neither completed nor waived.
+
 ## T06 Windows engine integration — open
 
 The user approved the scoped T06 plan and its explicit T03/T05 Windows
@@ -16,7 +29,8 @@ environment guards. Execute all four archive rows, check output/source hashes
 and handle release, then full build/regression. Complete T03/T05's still-open
 checks as well. Record Windows OS/architecture/filesystem and actual results;
 no fake or Linux test substitutes for these executions. T06 remains unchecked
-and T07 has not started. Physical PSP/UI/removal/close flows remain T10/T07–T09.
+and T07 proceeded only under its separately approved exception. Physical PSP/UI/
+removal/close flows remain T10/T08–T09 with the T07 native follow-up above.
 
 ## T05 Windows confined filesystem gate — open
 
