@@ -24,6 +24,31 @@ Record actual commands, OS/architecture, hashes and counts. Windows scripts have
 not been executed here. Other CPU/libc targets also have no native/publish proof;
 do not infer them from Linux x64. No PSP is needed for these archive-only tests.
 
+## T04 Linux filesystem hardware follow-up — mandatory for T10
+
+T04 executes native Linux filesystem calls with unique temporary roots and
+synthetic device observations. Its proc mount-crossing check is an actual
+read-only kernel boundary check; it is not PSP/mount-provider evidence.
+The following remain unexecuted without a real PSP and dedicated media:
+
+- Mount a designated single-volume PSP/FAT filesystem through the normal device
+  provider. Capture actual device/volume identities, root and media generation;
+  compare reported free bytes to the volume's observed available space.
+- Use disposable source archives and destination files. Verify nested/empty
+  directories, Unicode, names rejected by that actual filesystem, case-only
+  collisions, per-file overwrite consent and coarse-time same-size modifications.
+- Exercise insufficient capacity, actual disk-full/read-only/write/flush failures,
+  disconnect and actual volume replacement at the same mount path. Confirm no
+  redirection, source hashes unchanged, all handles closed and output retained.
+- Run safe-removal and close/cancel flows after T06–T09 implement orchestration
+  and UI. Confirm stream release before removal/exit and no destination cleanup.
+
+These physical results must be recorded per the existing T10 matrix. Synthetic
+root replacement and injected I/O failures do not pass them. Linux arm64 and
+older-kernel/filesystem rejection paths also lack execution evidence; only Linux
+x64 with openat2/statx mount-ID support was exercised in T04. No hardware or VM
+provisioning is implied by this record. See [T04 evidence](./linux-copy-filesystem.md).
+
 ## T01 native Windows archive gate — open
 
 - Blocker: this session provides Linux x64, with no accessible native Windows

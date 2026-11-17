@@ -254,6 +254,13 @@ token distinct from the combined inspection fingerprint; cancellation is a
 typed callback outcome. These implementation refinements do not alter the
 approved product behavior or authorize T04.
 
+The subsequent “Continúa con T04” authorizes only T04, which depends on the
+completed T02. Its Linux filesystem implementation and current verification are
+recorded in [T04 evidence](./linux-copy-filesystem.md). Directory creation returns
+an optional unsafe/link skip reason discovered at mutation time. This preserves
+FR-12's existing outcome through the Core boundary; it adds no user behavior.
+T01/T03's deferred Windows gates remain open; T05 is not authorized by this step.
+
 - Native bridge support, runtime packaging, ambiguous encrypted errors, actual metadata completeness and confined handles must be proved early. CLI success is reference-engine evidence, not an implemented adapter. Compatibility gaps stop affected implementation for an approved correction.
 - Actual byte totals come from archive metadata or a bounded count pass, not SizeBytes. Source mutation/corruption between inspection and copy remains a failure with retained output, not a guaranteed prevalidated transfer.
 - Storage allocation/limits and external actors can invalidate a free-space check or target token; conditional open/identity checks narrow races, and failures remain visible. Do not promise atomic whole-game replacement or power-loss durability.
