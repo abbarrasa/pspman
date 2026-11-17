@@ -178,11 +178,12 @@ public sealed class GameCopyServiceTests
         public readonly List<GameCopySnapshot> Snapshots = [];
         public readonly List<ImmutableArray<int>> Batches = [];
         public readonly CancellationTokenSource Cancel = new();
+        internal readonly RecordingCopyResources Resources = new();
         public long? Available = 1000;
         public CopyOverwriteDecision Overwrite = CopyOverwriteDecision.Overwrite;
         public GameCopyErrorCode? TargetError, ExtractError, OpenErrorOnce;
         public GameCopyErrorCode? ValidationError;
-        public Action? AfterPassword, BeforeWrite, OnDispose, OnOutputClose;
+        public Action? AfterPassword, BeforeWrite, BeforeTargetInspect, OnDispose, OnOutputClose;
         public Func<CancellationToken, ValueTask>? OnInspect, BeforePrompt, BeforePassword, OnWrite;
         public Func<ValueTask>? BeforeOutputRelease;
         public int ErrorEntry;
@@ -201,7 +202,7 @@ public sealed class GameCopyServiceTests
             var volume = new CopyVolumeEvidence(key, id, "g1", new(key, "volume"), id, "/psp", MountedPathSyntax.Linux);
             return new(Guid.NewGuid(), new(Guid.NewGuid(), "Game", GameMedium.Usb, null, "/game.zip", GameFormat.Iso, 999999, null), volume, volume);
         }
-        public Task<GameCopyResult> Run() => new GameCopyService(this, this, this).CopyAsync(Request(), this, Cancel.Token);
+        public Task<GameCopyResult> Run() => new GameCopyService(this, this, this, Resources).CopyAsync(Request(), this, Cancel.Token);
         public void Report(GameCopySnapshot value) { Snapshots.Add(value); if (GameCopyRules.IsTerminal(value.State)) TerminalObservedClosed = Closed && !OutputOpen; }
         public ValueTask<IGameArchiveSource> OpenSourceAsync(CopyVolumeEvidence source, string location, CancellationToken token)
         { token.ThrowIfCancellationRequested(); OpenedSource = source; SourceOpens++; return ValueTask.FromResult<IGameArchiveSource>(this); }
@@ -220,6 +221,7 @@ public sealed class GameCopyServiceTests
         }
         public ValueTask<CopyTargetSnapshot> InspectAsync(ImmutableArray<string> path, CancellationToken token)
         {
+            BeforeTargetInspect?.Invoke();
             var name = string.Join('/', path);
             return ValueTask.FromResult(new CopyTargetSnapshot(TargetError == GameCopyErrorCode.FileDirectoryConflict ? CopyTargetKind.Directory : Files.ContainsKey(name) ? CopyTargetKind.File : CopyTargetKind.Missing,
                 Files.ContainsKey(name) ? new(name, Files[name].Length, Mutations.ToString()) : null, TargetError != GameCopyErrorCode.InvalidName));

@@ -12,7 +12,7 @@ public sealed class CopyStartup : IAsyncDisposable
 {
     public CopyStartup(DeviceSessionService? session, string? startupError = null,
         IGameCopyFileSystem? fileSystem = null, IGameArchiveReader? archiveReader = null,
-        MountedPathSyntax? syntax = null, Action<Action>? postToUi = null)
+        MountedPathSyntax? syntax = null, Action<Action>? postToUi = null, IGameCopyResources? resources = null)
     {
         ViewModel = new(postToUi, startupError);
         if (session is null) return;
@@ -22,7 +22,8 @@ public sealed class CopyStartup : IAsyncDisposable
             return ValueTask.FromResult(session.Snapshot.Inventory);
         });
         archiveReader ??= new SevenZipGameArchiveReader();
-        Coordinator = new(session, new GameCopyService(fileSystem, archiveReader, ViewModel),
+        resources ??= new CopyDestinationResources();
+        Coordinator = new(session, new GameCopyService(fileSystem, archiveReader, ViewModel, resources),
             syntax ?? (OperatingSystem.IsWindows() ? MountedPathSyntax.Windows : MountedPathSyntax.Linux));
         ViewModel.AttachCoordinator(Coordinator);
     }

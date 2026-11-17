@@ -36,7 +36,8 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
         f.Session = new([f.Devices]);
         await f.Session.StartAsync();
         await f.Session.SetAssociationsAsync(DeviceAssociationRules.ChooseVolume(new(), SourceGroup.Removable, new(new("copy-ui", "source"), "volume")));
-        f.Startup = new(f.Session, fileSystem: f.IO, archiveReader: f.IO, syntax: MountedPathSyntax.Linux, postToUi: post);
+        f.Startup = new(f.Session, fileSystem: f.IO, archiveReader: f.IO, syntax: MountedPathSyntax.Linux, postToUi: post,
+            resources: new TestCopyResources());
         f.DeviceModel = new(f.Session, removalInterceptor: f.Startup.Coordinator);
         f.Catalog = new(f.Game);
         f.Main = new(new GameCatalogService(f.Catalog), null, devicesViewModel: f.DeviceModel, mountedPathSyntax: MountedPathSyntax.Linux);
@@ -47,6 +48,41 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         while (!predicate()) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5, timeout.Token); }
+    }
+
+    // Controlled UI I/O only. Production composition always uses native CopyDestinationResources.
+    internal sealed class TestCopyResources : IGameCopyResources
+    {
+        public IGameCopyDestination BindDestination(Guid id, CopyVolumeEvidence volume, IGameCopyDestination destination) => destination;
+        public async ValueTask<IGameCopyBudgetLease> ReserveAsync(Guid id, CopyVolumeEvidence volume,
+            IGameCopyDestination destination, long pending, CancellationToken token)
+        {
+            var lease = new Budget(id, volume, destination);
+            await lease.RevalidateAsync(pending, token); return lease;
+        }
+        public ValueTask<IGameCopyEntryLease> AcquireEntryAsync(Guid id, CopyVolumeEvidence volume, IGameCopyDestination destination,
+            ImmutableArray<string> segments, bool directory, IProgress<GameCopyResourceWait>? waiting, CancellationToken token)
+            => ValueTask.FromResult<IGameCopyEntryLease>(new Entry(id, volume));
+        private sealed class Entry(Guid id, CopyVolumeEvidence volume) : IGameCopyEntryLease
+        {
+            public Guid OperationId => id;
+            public CopyVolumeKey Volume => CopyVolumeKey.From(volume);
+            public string TargetIdentity => "controlled";
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+        private sealed class Budget(Guid id, CopyVolumeEvidence volume, IGameCopyDestination destination) : IGameCopyBudgetLease
+        {
+            public Guid OperationId => id;
+            public CopyVolumeKey Volume => CopyVolumeKey.From(volume);
+            public async ValueTask RevalidateAsync(long bytes, CancellationToken token)
+            {
+                var error = GameCopyRules.CheckCapacity(bytes, await destination.GetAvailableBytesAsync(token));
+                if (error is not null) throw new GameCopyException(error);
+            }
+            public ValueTask SkipPendingAsync(long bytes, CancellationToken token) => ValueTask.CompletedTask;
+            public ValueTask<IGameCopyWriteLease> BeginWriteAsync(long bytes, CancellationToken token) => throw new NotSupportedException();
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
     public async ValueTask DisposeAsync()
     { Main.AttachCopy(null); await Startup.DisposeAsync(); DeviceModel.Dispose(); await Session.DisposeAsync(); }

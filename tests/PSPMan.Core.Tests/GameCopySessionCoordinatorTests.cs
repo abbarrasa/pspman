@@ -315,7 +315,7 @@ public sealed class GameCopySessionCoordinatorTests
         await f.Coordinator.DisposeAsync();
         await f.Change(devices => devices.Select(d => d with { Volumes = [d.Volumes[0] with {
             Root = d.Key == Context.Source ? "C:\\source\\" : "D:\\psp\\" }] }).ToImmutableArray());
-        f.Coordinator = new(f.Session, new(f.IO, f.IO, f.IO), MountedPathSyntax.Windows);
+        f.Coordinator = new(f.Session, new(f.IO, f.IO, f.IO, f.IO.Resources), MountedPathSyntax.Windows);
         f.Coordinator.SetSelectedGame(f.Game);
         Assert.Equal(GameCopyState.Completed, (await f.Coordinator.StartAsync()).State);
         Assert.Equal(MountedPathSyntax.Windows, f.IO.OpenedSource!.Syntax);
@@ -444,7 +444,7 @@ public sealed class GameCopySessionCoordinatorTests
                 var state = DeviceAssociationRules.ChooseVolume(new(), SourceGroup.Removable, new(Source, "volume"));
                 await f.Session.SetAssociationsAsync(DeviceAssociationRules.ChooseDestination(state, f.Game.Id, Psp));
             }
-            f.Coordinator = new(f.Session, new(f.IO, f.IO, f.IO), MountedPathSyntax.Linux);
+            f.Coordinator = new(f.Session, new(f.IO, f.IO, f.IO, f.IO.Resources), MountedPathSyntax.Linux);
             f.Coordinator.SetSelectedGame(f.Game);
             return f;
         }

@@ -11,6 +11,13 @@ public sealed record GameCopyResourceWait(Guid OperationId, GameCopyWaitReason R
 public interface IGameCopyResources
 {
     /// <summary>
+    /// Bind one caller-owned native destination to this operation. The returned adapter accounts
+    /// output chunks automatically; callers must not debit progress or wrap its writes again.
+    /// Dispose entry/output, then budget, then the original destination. Binding never owns that root.
+    /// </summary>
+    IGameCopyDestination BindDestination(Guid operationId, CopyVolumeEvidence volume, IGameCopyDestination destination);
+
+    /// <summary>
     /// Reserve actual pending output using consistent held-volume free-space evidence. Insufficient/unknown
     /// space fails this operation before new writes; it does not wait for space. Retry replaces its claim.
     /// </summary>
