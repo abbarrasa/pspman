@@ -1,9 +1,10 @@
+using System.Collections.Immutable;
 using PSPMan.Core.Devices;
 using PSPMan.Core.Games;
 
 namespace PSPMan.Core.Transfers;
 
-/// <summary>Observes a caller-owned session. Dispose this coordinator before disposing that session.</summary>
+/// <summary>Session-only operation ownership. Dispose before its caller-owned device session.</summary>
 public sealed class GameCopySessionCoordinator : IDeviceRemovalInterceptor, IAsyncDisposable
 {
     private const string RetentionWarning = "Incomplete or incorrect files remain on the PSP. Overwritten files are not restored.";
@@ -11,12 +12,14 @@ public sealed class GameCopySessionCoordinator : IDeviceRemovalInterceptor, IAsy
     private readonly DeviceSessionService session;
     private readonly GameCopyService engine;
     private readonly MountedPathSyntax syntax;
+    private readonly Dictionary<Guid, CopyOperation> operations = [], active = [];
+    private readonly Dictionary<DeviceKey, HashSet<CopyOperation>> dependencies = [];
     private readonly Dictionary<DeviceKey, TaskCompletionSource> removals = [];
     private GameRecord? selectedGame;
-    private ActiveCopy? active;
-    private GameCopySnapshot? snapshot;
+    private Guid? legacyOperation, closeDecision;
     private bool disposed;
     private Task? disposeTask;
+    private Task<bool>? closeDrain;
 
     public GameCopySessionCoordinator(DeviceSessionService session, GameCopyService engine, MountedPathSyntax syntax)
     {
@@ -26,70 +29,160 @@ public sealed class GameCopySessionCoordinator : IDeviceRemovalInterceptor, IAsy
         session.SnapshotChanged += OnSessionChanged;
     }
 
-    public bool IsBusy { get { lock (gate) return active is not null; } }
-    public GameCopySnapshot? Snapshot { get { lock (gate) return snapshot; } }
+    public bool IsBusy { get { lock (gate) return active.Count != 0; } }
+    public bool IsAdmissionOpen { get { lock (gate) return !disposed && closeDecision is null; } }
+    public ImmutableArray<GameCopyOperationSnapshot> Operations
+    { get { lock (gate) return operations.Values.Select(o => o.Snapshot).ToImmutableArray(); } }
+
+    /// <summary>Compatibility projection for the existing single-row screen, removed when T19 activates batches.</summary>
+    public GameCopySnapshot? Snapshot
+    { get { lock (gate) return legacyOperation is { } id ? operations[id].Snapshot.Snapshot : null; } }
 
     public void SetSelectedGame(GameRecord? game)
-    {
-        ActiveCopy? stop = null;
-        lock (gate)
-        {
-            ObjectDisposedException.ThrowIf(disposed, this);
-            selectedGame = game;
-            if (active is { } operation && operation.Request.Game != game)
-                stop = FailLocked(operation, new(GameCopyErrorCode.SourceChanged, "The selected game changed."));
-        }
-        Cancel(stop);
-    }
+    { lock (gate) { ObjectDisposedException.ThrowIf(disposed, this); selectedGame = game; } }
 
-    /// <summary>Rejects a second start rather than queuing it. Progress observers must return promptly.</summary>
-    public Task<GameCopyResult> StartAsync(IProgress<GameCopySnapshot>? progress = null, CancellationToken cancellationToken = default)
+    /// <summary>Capture/register the entire ready subset against one observation before scheduling any runner.</summary>
+    public GameCopyAdmission Submit(IEnumerable<GameCopySubmission> submissions,
+        IProgress<GameCopyOperationSnapshot>? observer = null, CancellationToken cancellationToken = default)
     {
-        ActiveCopy operation;
+        ArgumentNullException.ThrowIfNull(submissions);
+        // Enumerators are caller code and must never run under the registry gate.
+        var items = submissions.ToImmutableArray();
+        var runners = new List<CopyOperation>();
+        GameCopyAdmission result;
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
             cancellationToken.ThrowIfCancellationRequested();
-            if (active is not null) throw Error(GameCopyErrorCode.CopyInProgress, "A copy is already active or stopping.");
-            var game = selectedGame ?? throw Error(GameCopyErrorCode.NoGameSelected, "Select a game to copy.");
             var observation = session.Snapshot;
-            var request = Capture(observation, game);
-            if (removals.ContainsKey(request.Source.Device) || removals.ContainsKey(request.Destination.Device))
-                throw Error(GameCopyErrorCode.CopyInProgress, "A required device is being removed.");
-            operation = new(request, observation.Associations, progress, cancellationToken);
-            active = operation;
+            var capture = GameCopySubmissionRules.Capture(items, observation.Inventory, observation.Associations, syntax);
+            var requests = capture.Accepted.ToDictionary(r => r.OperationId);
+            var incidents = capture.Incidents.ToDictionary(i => i.SubmissionIndex);
+            var accepted = ImmutableArray.CreateBuilder<GameCopyRequest>();
+            for (var index = 0; index < items.Length; index++)
+            {
+                if (incidents.ContainsKey(index)) continue;
+                var request = requests[items[index].OperationId];
+                var error = closeDecision is not null ? new GameCopyError(GameCopyErrorCode.CopyInProgress, "Copy admission is closed.")
+                    : operations.ContainsKey(request.OperationId) ? new(GameCopyErrorCode.InvalidSubmission, "This operation identity has already been used.")
+                    : removals.ContainsKey(request.Source.Device) || removals.ContainsKey(request.Destination.Device)
+                        ? new(GameCopyErrorCode.CopyInProgress, "A required device is being removed.")
+                        : ValidateCaptured(request, observation);
+                if (error is not null) { incidents.Add(index, new(index, request.Game.Id, error)); continue; }
+                var owner = Register(request, observer, null, cancellationToken);
+                runners.Add(owner); accepted.Add(request);
+            }
+            result = new(accepted.ToImmutable(), incidents.Values.OrderBy(i => i.SubmissionIndex).ToImmutableArray());
         }
-        // Capture/reserve synchronously, then run potentially synchronous adapter work off the caller.
-        _ = Task.Run(() => RunAsync(operation));
-        return operation.Completion.Task;
+        // All owners/completions are reserved before a reentrant observer can stop/dispose the batch.
+        foreach (var owner in runners) _ = Task.Run(() => RunAsync(owner));
+        return result;
     }
 
-    public async Task CancelAsync()
+    public Task<GameCopyResult> GetCompletion(Guid operationId)
+    { lock (gate) return operations.TryGetValue(operationId, out var owner) ? owner.Completion.Task : throw new KeyNotFoundException("Unknown copy operation."); }
+
+    /// <summary>Single-copy compatibility entry point. Public multi-submission composition remains unwired until T19.</summary>
+    public Task<GameCopyResult> StartAsync(IProgress<GameCopySnapshot>? progress = null, CancellationToken cancellationToken = default)
     {
-        ActiveCopy? operation;
+        CopyOperation owner;
         lock (gate)
         {
-            operation = active;
-            if (operation is not null) operation.CancelRequested = true;
+            ObjectDisposedException.ThrowIf(disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (active.Count != 0 || closeDecision is not null) throw Error(GameCopyErrorCode.CopyInProgress, "A copy is already active or admission is closed.");
+            var game = selectedGame ?? throw Error(GameCopyErrorCode.NoGameSelected, "Select a game to copy.");
+            var request = Capture(session.Snapshot, game);
+            if (removals.ContainsKey(request.Source.Device) || removals.ContainsKey(request.Destination.Device))
+                throw Error(GameCopyErrorCode.CopyInProgress, "A required device is being removed.");
+            owner = Register(request, null, progress, cancellationToken);
+            legacyOperation = request.OperationId;
         }
-        Cancel(operation);
-        if (operation is not null) await operation.Completion.Task.ConfigureAwait(false);
+        _ = Task.Run(() => RunAsync(owner));
+        return owner.Completion.Task;
     }
 
-    public async Task FailAndStopAsync(GameCopyError error)
+    private CopyOperation Register(GameCopyRequest request, IProgress<GameCopyOperationSnapshot>? observer,
+        IProgress<GameCopySnapshot>? legacyObserver, CancellationToken token)
     {
-        ActiveCopy? operation;
-        lock (gate) operation = active is { } current ? FailLocked(current, error) : null;
-        Cancel(operation);
-        if (operation is not null) await operation.Completion.Task.ConfigureAwait(false);
+        var owner = new CopyOperation(request, observer, legacyObserver, token);
+        operations.Add(request.OperationId, owner); active.Add(request.OperationId, owner);
+        foreach (var device in new[] { request.Source.Device, request.Destination.Device }.Distinct())
+        {
+            if (!dependencies.TryGetValue(device, out var owners)) dependencies.Add(device, owners = []);
+            owners.Add(owner);
+        }
+        return owner;
+    }
+
+    public Task CancelAsync()
+    { Guid? id; lock (gate) id = legacyOperation; return id is { } value ? CancelAsync(value) : Task.CompletedTask; }
+
+    public Task CancelAsync(Guid operationId) => StopAsync(operationId, null);
+    public Task FailAndStopAsync(Guid operationId, GameCopyError error)
+    { ArgumentNullException.ThrowIfNull(error); return StopAsync(operationId, error); }
+    public Task FailAndStopAsync(GameCopyError error)
+    { Guid? id; lock (gate) id = legacyOperation; return id is { } value ? FailAndStopAsync(value, error) : Task.CompletedTask; }
+
+    private Task StopAsync(Guid operationId, GameCopyError? error)
+    {
+        CopyOperation owner;
+        lock (gate)
+        {
+            if (!active.TryGetValue(operationId, out owner!)) return Task.CompletedTask;
+            if (error is null) owner.CancelRequested = true; else FailLocked(owner, error);
+        }
+        Signal(owner);
+        return owner.Completion.Task;
+    }
+
+    /// <summary>Stops the current set. Call BeginClose first when additions must also be excluded.</summary>
+    public Task CancelAllAsync()
+    {
+        CopyOperation[] owners;
+        lock (gate) { owners = active.Values.ToArray(); foreach (var owner in owners) owner.CancelRequested = true; }
+        foreach (var owner in owners) Signal(owner);
+        return Task.WhenAll(owners.Select(o => o.Completion.Task));
+    }
+
+    /// <summary>One identity-bound close decision; completion cannot reopen admission.</summary>
+    public Guid BeginClose()
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            return closeDecision ??= Guid.NewGuid();
+        }
+    }
+
+    public Task<bool> ResolveCloseAsync(Guid decisionId, bool accept)
+    {
+        CopyOperation[] owners; Task[] waiting; TaskCompletionSource<bool> completion;
+        lock (gate)
+        {
+            if (disposed || closeDecision != decisionId) return Task.FromResult(false);
+            if (closeDrain is not null) return closeDrain;
+            if (!accept) { closeDecision = null; return Task.FromResult(true); }
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            closeDrain = completion.Task; // Reserve before cancellation callbacks can reenter.
+            owners = active.Values.ToArray(); foreach (var owner in owners) owner.CancelRequested = true;
+            waiting = removals.Values.Select(r => r.Task).ToArray();
+        }
+        foreach (var owner in owners) Signal(owner);
+        _ = FinishCloseAsync(owners, waiting, completion);
+        return completion.Task;
+    }
+
+    private static async Task FinishCloseAsync(CopyOperation[] owners, Task[] waiting, TaskCompletionSource<bool> completion)
+    {
+        try { await DrainAsync(owners, waiting).ConfigureAwait(false); completion.TrySetResult(true); }
+        catch (Exception error) { completion.TrySetException(error); }
     }
 
     public async ValueTask RemoveDeviceAsync(DeviceKey device, DeviceInventorySnapshot observation,
         CancellationToken cancellationToken = default)
     {
-        TaskCompletionSource reservation;
-        ActiveCopy? operation;
-        DeviceSnapshot expected;
+        TaskCompletionSource reservation; CopyOperation[] owners; DeviceSnapshot expected;
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
@@ -98,121 +191,116 @@ public sealed class GameCopySessionCoordinator : IDeviceRemovalInterceptor, IAsy
                 ?? throw Error(GameCopyErrorCode.DestinationUnavailable, "The removal observation is unavailable.");
             ValidateRemoval(expected, session.Snapshot.Inventory);
             if (removals.ContainsKey(device)) throw Error(GameCopyErrorCode.CopyInProgress, "The device already has a pending removal request.");
-            reservation = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            removals.Add(device, reservation);
-            operation = active is { } current && (current.Request.Source.Device == device || current.Request.Destination.Device == device)
-                ? FailLocked(current, new(GameCopyErrorCode.DestinationChanged, "Copy stopped because device removal was requested.")) : null;
+            reservation = new(TaskCreationOptions.RunContinuationsAsynchronously); removals.Add(device, reservation);
+            owners = dependencies.TryGetValue(device, out var dependants) ? dependants.ToArray() : [];
+            foreach (var owner in owners) FailLocked(owner, new(owner.Request.Source.Device == device ? GameCopyErrorCode.SourceChanged : GameCopyErrorCode.DestinationChanged,
+                "Copy stopped because device removal was requested."));
         }
         try
         {
-            Cancel(operation);
-            // Keep the reservation until files are closed, even when the removal caller cancels.
-            if (operation is not null) await operation.Completion.Task.ConfigureAwait(false);
+            foreach (var owner in owners) Signal(owner);
+            // Caller cancellation cannot abandon owned file/resource release.
+            await Task.WhenAll(owners.Select(o => o.Completion.Task)).ConfigureAwait(false);
             DeviceInventorySnapshot fresh;
             lock (gate)
             {
                 ObjectDisposedException.ThrowIf(disposed, this);
                 cancellationToken.ThrowIfCancellationRequested();
-                fresh = session.Snapshot.Inventory;
-                ValidateRemoval(expected, fresh);
+                fresh = session.Snapshot.Inventory; ValidateRemoval(expected, fresh);
             }
             await session.RemoveDeviceAsync(device, cancellationToken, fresh).ConfigureAwait(false);
-            // Session acceptance publishes Removing before returning; it then owns native completion.
         }
-        finally
-        {
-            lock (gate) { removals.Remove(device); reservation.TrySetResult(); }
-        }
+        finally { lock (gate) { removals.Remove(device); reservation.TrySetResult(); } }
     }
 
-    private async Task RunAsync(ActiveCopy operation)
+    private async Task RunAsync(CopyOperation owner)
     {
         GameCopyResult result;
         try
         {
+            bool stop;
             lock (gate)
             {
-                if (ValidateActive(operation, session.Snapshot) is { } changed) FailLocked(operation, changed);
+                if (ValidateCaptured(owner.Request, session.Snapshot) is { } changed) FailLocked(owner, changed);
+                stop = owner.Failure is not null || owner.CancelRequested;
             }
-            if (operation.Failure is not null || operation.CancelRequested) Cancel(operation);
-            result = await engine.CopyAsync(operation.Request, new InlineProgress(value => OnProgress(operation, value)), operation.Cancellation.Token).ConfigureAwait(false);
+            if (stop) Signal(owner);
+            result = await engine.CopyAsync(owner.Request, new InlineProgress(value => OnProgress(owner, value)), owner.Cancellation.Token).ConfigureAwait(false);
         }
         catch (Exception error)
         {
             var detail = error is GameCopyException copy ? copy.Error : new GameCopyError(GameCopyErrorCode.ReadError, "Copy operation failed.");
-            if (!detail.Message.Contains(RetentionWarning, StringComparison.Ordinal))
-                detail = detail with { Message = detail.Message + " " + RetentionWarning };
+            if (!detail.Message.Contains(RetentionWarning, StringComparison.Ordinal)) detail = detail with { Message = detail.Message + " " + RetentionWarning };
             var cancelled = error is OperationCanceledException;
-            result = new(operation.Request.OperationId, cancelled ? GameCopyState.Cancelled : GameCopyState.Failed,
-                snapshot?.Destination ?? operation.Request.Destination.Root, 0,
-                cancelled ? new(GameCopyErrorCode.Cancelled, "Copy cancelled. " + RetentionWarning) : detail);
+            result = new(owner.Request.OperationId, cancelled ? GameCopyState.Cancelled : GameCopyState.Failed,
+                owner.Snapshot.Snapshot.Destination, 0, cancelled ? new(GameCopyErrorCode.Cancelled, "Copy cancelled. " + RetentionWarning) : detail);
         }
-        GameCopySnapshot final;
+        GameCopyOperationSnapshot final;
         lock (gate)
         {
-            if (operation.Failure is null && ValidateActive(operation, session.Snapshot) is { } changed)
-                FailLocked(operation, changed);
-            if (operation.Failure is { } failure && result.Error?.Code != GameCopyErrorCode.CloseError)
+            if (owner.Failure is null && ValidateCaptured(owner.Request, session.Snapshot) is { } changed) FailLocked(owner, changed);
+            if (owner.Failure is { } failure && result.Error?.Code != GameCopyErrorCode.CloseError)
                 result = result with { State = GameCopyState.Failed, Error = failure };
-            else if ((operation.CancelRequested || operation.Cancellation.IsCancellationRequested) && result.State is GameCopyState.Completed or GameCopyState.CompletedWithSkippedFiles)
+            else if ((owner.CancelRequested || owner.Cancellation.IsCancellationRequested) && result.State is GameCopyState.Completed or GameCopyState.CompletedWithSkippedFiles)
                 result = result with { State = GameCopyState.Cancelled, Error = new(GameCopyErrorCode.Cancelled, "Copy cancelled. " + RetentionWarning) };
-            var basis = operation.Terminal ?? (snapshot?.OperationId == operation.Request.OperationId ? snapshot : null);
-            var progress = basis?.Progress;
-            if (result.State is GameCopyState.Failed or GameCopyState.Cancelled && progress?.Fraction == 1)
-                progress = progress with { Fraction = .999m };
-            final = new(result.OperationId, operation.Request.Game.Title, result.Destination, result.State,
-                progress, null, result.Error, result.SkippedEntries);
-            snapshot = final;
-            active = null;
-            operation.Completion.TrySetResult(result);
+            var progress = (owner.Terminal ?? owner.Snapshot.Snapshot).Progress;
+            if (result.State is GameCopyState.Failed or GameCopyState.Cancelled && progress?.Fraction == 1) progress = progress with { Fraction = .999m };
+            final = Update(owner, new(result.OperationId, owner.Request.Game.Title, result.Destination, result.State, progress, null, result.Error, result.SkippedEntries));
+            active.Remove(owner.Request.OperationId);
+            foreach (var device in new[] { owner.Request.Source.Device, owner.Request.Destination.Device }.Distinct())
+                if (dependencies.TryGetValue(device, out var dependants)) { dependants.Remove(owner); if (dependants.Count == 0) dependencies.Remove(device); }
+            owner.Completion.TrySetResult(result);
         }
-        operation.Cancellation.Dispose();
-        // A failed presentation consumer cannot strand ownership or prevent removal after release.
-        try { Notify(operation, final); } catch { /* The authoritative terminal snapshot remains available. */ }
+        owner.Cancellation.Dispose();
+        try { Notify(owner, final); } catch { /* Authoritative result/ownership must survive a failed terminal consumer. */ }
+        finally { lock (gate) { owner.Observer = null; owner.LegacyObserver = null; } }
     }
 
-    private void OnProgress(ActiveCopy operation, GameCopySnapshot value)
+    private void OnProgress(CopyOperation owner, GameCopySnapshot value)
     {
+        GameCopyOperationSnapshot publication;
         lock (gate)
         {
-            if (disposed || active != operation || value.OperationId != operation.Request.OperationId) return;
-            if (GameCopyRules.IsTerminal(value.State)) { operation.Terminal = value; return; }
-            if (operation.Failure is { } failure) value = value with { State = GameCopyState.Stopping, Prompt = null, Error = failure };
-            snapshot = value;
+            if (disposed || !active.TryGetValue(owner.Request.OperationId, out var current) || current != owner || value.OperationId != owner.Request.OperationId) return;
+            if (GameCopyRules.IsTerminal(value.State)) { owner.Terminal = value; return; }
+            if (owner.Failure is { } failure) value = value with { State = GameCopyState.Stopping, Prompt = null, Error = failure, WaitReason = null };
+            publication = Update(owner, value);
         }
-        Notify(operation, value);
+        Notify(owner, publication);
     }
 
-    private void Notify(ActiveCopy operation, GameCopySnapshot value)
+    private static GameCopyOperationSnapshot Update(CopyOperation owner, GameCopySnapshot value)
+        => owner.Snapshot = new(owner.Request, checked(owner.Snapshot.Revision + 1), value);
+
+    private void Notify(CopyOperation owner, GameCopyOperationSnapshot value)
     {
-        lock (gate) { if (disposed || snapshot?.OperationId != value.OperationId) return; }
-        operation.Observer?.Report(value);
+        IProgress<GameCopyOperationSnapshot>? observer; IProgress<GameCopySnapshot>? legacy;
+        lock (gate)
+        {
+            if (disposed || owner.Snapshot.Revision != value.Revision) return;
+            observer = owner.Observer; legacy = owner.LegacyObserver;
+        }
+        observer?.Report(value); legacy?.Report(value.Snapshot);
     }
 
     private void OnSessionChanged(object? sender, DeviceSessionSnapshot observation)
     {
-        ActiveCopy? stop = null;
+        CopyOperation[] affected;
         lock (gate)
         {
-            if (!disposed && active is { } operation && ValidateActive(operation, observation) is { } error)
-                stop = FailLocked(operation, error);
+            if (disposed) return;
+            affected = dependencies.Values.SelectMany(owners => owners).Distinct()
+                .Where(owner => ValidateCaptured(owner.Request, observation) is not null).ToArray();
+            foreach (var owner in affected) FailLocked(owner, ValidateCaptured(owner.Request, observation)!);
         }
-        Cancel(stop);
+        foreach (var owner in affected) Signal(owner);
     }
 
-    private GameCopyError? ValidateActive(ActiveCopy operation, DeviceSessionSnapshot observation)
+    private static GameCopyError? ValidateCaptured(GameCopyRequest request, DeviceSessionSnapshot observation)
     {
-        if (selectedGame != operation.Request.Game) return new(GameCopyErrorCode.SourceChanged, "The selected game changed.");
-        var optical = operation.Request.Game.Medium == GameMedium.Dvd;
-        var before = operation.Associations;
-        var now = observation.Associations;
-        if ((optical ? before.OpticalSource != now.OpticalSource || before.OpticalVolume != now.OpticalVolume
-                : before.RemovableSource != now.RemovableSource || before.RemovableVolume != now.RemovableVolume)
-            || before.PspDestinations.GetValueOrDefault(operation.Request.Game.Id) != now.PspDestinations.GetValueOrDefault(operation.Request.Game.Id))
-            return new(GameCopyErrorCode.SourceChanged, "The selected source or PSP changed.");
-        var sourceCapability = optical ? DeviceCapabilities.OpticalSource : DeviceCapabilities.RemovableSource;
-        if (!Matches(operation.Request.Source, observation, sourceCapability)) return new(GameCopyErrorCode.SourceChanged, "The source device or mounted volume changed or became unavailable.");
-        if (!Matches(operation.Request.Destination, observation, DeviceCapabilities.PspDestination)) return new(GameCopyErrorCode.DestinationChanged, "The PSP or mounted volume changed or became unavailable.");
+        var required = request.Game.Medium == GameMedium.Dvd ? DeviceCapabilities.OpticalSource : DeviceCapabilities.RemovableSource;
+        if (!Matches(request.Source, observation, required)) return new(GameCopyErrorCode.SourceChanged, "The source device or mounted volume changed or became unavailable.");
+        if (!Matches(request.Destination, observation, DeviceCapabilities.PspDestination)) return new(GameCopyErrorCode.DestinationChanged, "The PSP or mounted volume changed or became unavailable.");
         return null;
     }
 
@@ -266,57 +354,65 @@ public sealed class GameCopySessionCoordinator : IDeviceRemovalInterceptor, IAsy
             throw Error(GameCopyErrorCode.DestinationChanged, "The requested device changed or is no longer available for removal.");
     }
 
-    private static ActiveCopy FailLocked(ActiveCopy operation, GameCopyError error)
+    private static void FailLocked(CopyOperation owner, GameCopyError error)
+    { owner.Failure ??= error with { Message = error.Message + " " + RetentionWarning }; }
+
+    private void Signal(CopyOperation owner)
     {
-        operation.Failure ??= error with { Message = error.Message + " " + RetentionWarning };
-        return operation;
-    }
-    private static void Cancel(ActiveCopy? operation)
-    {
-        try { operation?.Cancellation.Cancel(); } catch (ObjectDisposedException) { } // Completion won the race.
+        try { owner.Cancellation.Cancel(); }
+        catch (ObjectDisposedException) { } // Completion won the race.
+        catch (AggregateException)
+        {
+            lock (gate)
+                if (active.TryGetValue(owner.Request.OperationId, out var current) && current == owner)
+                    FailLocked(owner, new(GameCopyErrorCode.CloseError, "A cancellation callback failed."));
+        }
     }
     private static GameCopyException Error(GameCopyErrorCode code, string message) => new(new(code, message));
 
     public ValueTask DisposeAsync()
     {
-        ActiveCopy? operation;
-        Task[] waiting;
-        TaskCompletionSource completion;
+        CopyOperation[] owners; Task[] waiting; TaskCompletionSource completion;
         lock (gate)
         {
             if (disposeTask is not null) return new(disposeTask);
-            disposed = true;
-            session.SnapshotChanged -= OnSessionChanged;
-            operation = active;
-            if (operation is not null) operation.CancelRequested = true;
+            disposed = true; session.SnapshotChanged -= OnSessionChanged;
+            owners = active.Values.ToArray(); foreach (var owner in owners) owner.CancelRequested = true;
             waiting = removals.Values.Select(r => r.Task).ToArray();
-            completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            disposeTask = completion.Task;
+            completion = new(TaskCreationOptions.RunContinuationsAsynchronously); disposeTask = completion.Task;
         }
-        // Mark the stop under the gate, then cancel immediately outside it before returning.
-        Cancel(operation);
-        _ = DrainAsync(operation, waiting, completion);
+        foreach (var owner in owners) Signal(owner);
+        _ = FinishDisposalAsync(owners, waiting, completion);
         return new(completion.Task);
     }
 
-    private static async Task DrainAsync(ActiveCopy? operation, Task[] waiting, TaskCompletionSource completion)
+    private static async Task DrainAsync(CopyOperation[] owners, Task[] waiting)
     {
-        try
-        {
-            if (operation is not null) await operation.Completion.Task.ConfigureAwait(false);
-            await Task.WhenAll(waiting).ConfigureAwait(false);
-            completion.TrySetResult();
-        }
+        await Task.WhenAll(owners.Select(o => o.Completion.Task)).ConfigureAwait(false);
+        await Task.WhenAll(waiting).ConfigureAwait(false);
+    }
+    private static async Task FinishDisposalAsync(CopyOperation[] owners, Task[] waiting, TaskCompletionSource completion)
+    {
+        try { await DrainAsync(owners, waiting).ConfigureAwait(false); completion.TrySetResult(); }
         catch (Exception error) { completion.TrySetException(error); }
     }
 
-    private sealed class ActiveCopy(GameCopyRequest request, DeviceSessionState associations,
-        IProgress<GameCopySnapshot>? observer, CancellationToken token)
+    private sealed class CopyOperation
     {
-        internal GameCopyRequest Request { get; } = request;
-        internal DeviceSessionState Associations { get; } = associations;
-        internal IProgress<GameCopySnapshot>? Observer { get; } = observer;
-        internal CancellationTokenSource Cancellation { get; } = CancellationTokenSource.CreateLinkedTokenSource(token);
+        internal CopyOperation(GameCopyRequest request, IProgress<GameCopyOperationSnapshot>? observer,
+            IProgress<GameCopySnapshot>? legacyObserver, CancellationToken token)
+        {
+            Request = request; Observer = observer; LegacyObserver = legacyObserver;
+            Cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var separator = request.Destination.Syntax == MountedPathSyntax.Windows ? "\\" : "/";
+            Snapshot = new(request, 0, new(request.OperationId, request.Game.Title,
+                request.Destination.Root.TrimEnd('/', '\\') + separator + "ISO", GameCopyState.Preparing));
+        }
+        internal GameCopyRequest Request { get; }
+        internal IProgress<GameCopyOperationSnapshot>? Observer;
+        internal IProgress<GameCopySnapshot>? LegacyObserver;
+        internal GameCopyOperationSnapshot Snapshot;
+        internal CancellationTokenSource Cancellation { get; }
         internal TaskCompletionSource<GameCopyResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal GameCopyError? Failure;
         internal GameCopySnapshot? Terminal;

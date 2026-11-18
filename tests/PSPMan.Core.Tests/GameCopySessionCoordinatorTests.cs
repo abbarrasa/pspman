@@ -42,7 +42,7 @@ public sealed class GameCopySessionCoordinatorTests
     }
 
     [Fact]
-    public async Task A_second_copy_is_rejected_while_input_is_pending()
+    public async Task Legacy_single_row_start_rejects_a_second_legacy_start_while_input_is_pending()
     {
         await using var f = await Context.Create();
         var pending = f.PauseInspection();
@@ -103,7 +103,7 @@ public sealed class GameCopySessionCoordinatorTests
     [InlineData("game")]
     [InlineData("source")]
     [InlineData("destination")]
-    public async Task Selection_changes_fail_pending_password_decisions_and_release_slot(string selection)
+    public async Task Selection_changes_preserve_captured_work_and_pending_password_decisions(string selection)
     {
         await using var f = await Context.Create();
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -114,7 +114,11 @@ public sealed class GameCopySessionCoordinatorTests
         if (selection == "game") f.Coordinator.SetSelectedGame(f.Game with { Id = Guid.NewGuid() });
         else if (selection == "source") await f.Session.SetAssociationsAsync(DeviceAssociationRules.ChooseSource(f.Session.Snapshot.Associations, SourceGroup.Removable, Context.Other));
         else await f.Session.SetAssociationsAsync(DeviceAssociationRules.ChooseDestination(f.Session.Snapshot.Associations, f.Game.Id, Context.Other));
-        Assert.Equal(GameCopyState.Failed, (await operation.WaitAsync(TimeSpan.FromSeconds(5))).State);
+        Assert.False(operation.IsCompleted);
+        Assert.True(f.Coordinator.IsBusy);
+        Assert.NotNull(f.Coordinator.Snapshot!.Prompt);
+        await f.Coordinator.CancelAsync();
+        Assert.Equal(GameCopyState.Cancelled, (await operation.WaitAsync(TimeSpan.FromSeconds(5))).State);
         Assert.Null(f.Coordinator.Snapshot!.Prompt);
         Assert.False(f.Coordinator.IsBusy);
     }
