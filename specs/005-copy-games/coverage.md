@@ -1,186 +1,236 @@
-# T10 — Regression, coverage and runtime evidence
+# T10 — Concurrent-copy regression, coverage and runtime evidence
 
-Evidence date: 2026-11-17. Specification 0.5; plan/tasks 0.2. Task consolidation authorized by the user's
-“apruebo el plan”. Baseline: clean local dev `eb28eb6`; branch
-`feature/005_T10_regression-coverage-native-evidence`. No production/test code,
-packages, specification requirements or device policy changed. Existing behavior
-tests already exercise this documentary task's evidence; no artificial RED test
-or implementation change was introduced. T10 and whole-feature verification
-remain incomplete pending mandatory Windows/physical evidence.
+Evidence date: 2026-11-18. Specification 0.6; plan/tasks 0.3.
+The user approved the displayed plan and partial continuation with
+“Apruebo el plan y la continuación parcial con las pruebas pendientes”.
+Baseline: clean local `dev` at `77d5f11`; branch
+`feature/005_T10_concurrent-copy-verification`. T10 remains **incomplete** pending
+mandatory native Windows and physical evidence. No production/test code,
+package, device policy or approved requirement changes are part of this work.
+Existing behavioral suites demonstrate the requested verification scope; no
+artificial failing test is introduced for documentary consolidation.
 
-## Current automated checks
+The previous 2026-11-17 consolidation concerned specification 0.5/plan 0.2:
+1850 passing tests, 26 Windows discovery skips and owning line/branch coverage
+96.45%/89.31% Core, 70.09%/59.28% Infrastructure and 93.98%/89.50% Desktop.
+Those values are historical and cannot certify the concurrent production flow.
+The [current matrix](./manual-validation.md) supersedes obsolete single-slot and
+selection-change expectations without changing approved requirements.
 
-Linux x86_64, .NET SDK 10.0.404, xUnit 2.9.3/VSTest with
-Microsoft.NET.Test.Sdk 17.14.1 and coverlet.collector 6.0.4. No global.json,
-Directory.Build.props or Directory.Packages.props overrides were found.
+## Current automated verification
+
+Debian 13, Linux x86_64/glibc 2.41; .NET SDK 10.0.404, net10.0,
+xUnit 2.9.3/VSTest, Microsoft.NET.Test.Sdk 17.14.1 and
+coverlet.collector 6.0.4. No global.json, Directory.Build.props or
+Directory.Packages.props override or Desktop publish profile/RuntimeIdentifiers
+was found. Only the staged `linux-x64` native runtime is available here.
 
 | Check | Actual result |
 | --- | --- |
-| `dotnet build PSPMan.slnx` | PASS before collection and again after it; zero warnings/errors |
-| `dotnet test PSPMan.slnx --logger trx --results-directory <scratch>/t10-regression` | PASS; 1850 passed, zero failed, 26 Windows discovery entries skipped |
-| Core regression | 734 passed, no skips |
-| Infraestructure regression | 739 passed, 26 Windows skips |
-| Desktop regression | 377 passed, no skips |
+| `dotnet build PSPMan.slnx` before coverage | PASS, zero warnings/errors |
+| `dotnet build PSPMan.slnx` after coverage | PASS, zero warnings/errors |
+| `PSPMAN_REQUIRE_NATIVE_TESTS=1 dotnet test PSPMan.slnx --no-build --no-restore --blame-hang-timeout 60s --blame-hang-dump-type mini --logger trx --results-directory <scratch>/regression` | PASS, 2037 passed, zero failed, 37 Windows discovery skips; no hang abort |
+| Core regression | 795 passed, zero skips |
+| Infraestructure regression | 820 passed, 37 Windows discovery skips |
+| Desktop regression | 422 passed, zero skips |
+| Sequential owning coverage | The same 795 / 820 + 37 skips / 422 cases pass in separate runs |
+| Assembly restoration | All 15 PSPMan application/test/dependency DLL copies under Debug output match their pre-coverage SHA-256 after each collector exits |
 
-Skipped theories may represent multiple unexecuted fixture rows. The 26 are not
-26 passing Windows scenarios and are not a complete hardware matrix. Native
-Windows bridge/reader tests also need a real Windows runner even where their
-Linux counterpart passes. See [pending gates](./pending-validation.md).
+Skipped theories may represent several unexecuted scenarios; 37 skips do not
+mean 37 passing Windows tests or define the complete Windows/physical matrix.
+Required-native guards make missing native assets fail instead of silently
+skipping available Linux adapter/bridge proof. Native Windows guards and runs
+remain separate mandatory work in [pending validation](./pending-validation.md).
 
 ## Sequential owning-component coverage
 
-Run these commands separately, waiting for each process to exit before the next;
-no application/test process may use the instrumented binaries concurrently:
+Each command ran to completion before the next, with no application or other
+suite using instrumented binaries. The collector configuration requests JSON
+and Cobertura, without excluding Windows sources or inventing a numeric target:
 
 ```sh
-dotnet test tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj --no-build --collect:"XPlat Code Coverage" --results-directory <scratch>/t10-coverage-core
-PSPMAN_REQUIRE_NATIVE_TESTS=1 dotnet test tests/PSPMan.Infraestructure.Tests/PSPMan.Infraestructure.Tests.csproj --no-build --collect:"XPlat Code Coverage" --results-directory <scratch>/t10-coverage-infra
-dotnet test tests/PSPMan.Desktop.Tests/PSPMan.Desktop.Tests.csproj --no-build --collect:"XPlat Code Coverage" --results-directory <scratch>/t10-coverage-desktop
+dotnet test tests/PSPMan.Core.Tests/PSPMan.Core.Tests.csproj --no-build --no-restore --collect 'XPlat Code Coverage' --settings <json-cobertura.runsettings> --logger trx --results-directory <scratch>/coverage-core
+PSPMAN_REQUIRE_NATIVE_TESTS=1 dotnet test tests/PSPMan.Infraestructure.Tests/PSPMan.Infraestructure.Tests.csproj --no-build --no-restore --collect 'XPlat Code Coverage' --settings <json-cobertura.runsettings> --logger trx --results-directory <scratch>/coverage-infra
+dotnet test tests/PSPMan.Desktop.Tests/PSPMan.Desktop.Tests.csproj --no-build --no-restore --collect 'XPlat Code Coverage' --settings <json-cobertura.runsettings> --logger trx --results-directory <scratch>/coverage-desktop
 ```
 
-Each collector produces a `coverage.cobertura.xml` attachment. Read the package
-matching its owning test project, rather than adding duplicate dependency
-assemblies from other projects or averaging their percentages. Results measure
-managed IL/source, **not** C++ native bridge/engine coverage or XAML rendering.
-No numeric acceptance threshold has been invented. Rebuild before later native
-application runs. Scratch TRX/XML files are intermediate results, not portable
-physical evidence; this report records the commands, scope and observed values.
+The runsettings DataCollector is `XPlat Code Coverage`, with
+`<Configuration><Format>json,cobertura</Format></Configuration>`.
+Assembly SHA-256 baselines include the application/test assemblies and their
+PSPMan dependency copies, checked after each run. Rebuild before subsequent
+application/native publication checks. Reports are managed IL/source coverage,
+not C++ 7-Zip/bridge coverage, XAML rendering coverage or physical acceptance.
 
-| Owning assembly | Line coverage | Branch coverage |
+Use only the package named for the owning assembly from its owning suite's
+Cobertura report. Dependency hits from Desktop's native-close tests are not
+merged into Infrastructure or Core coverage, and percentages are not averaged.
+
+| Owning assembly / suite | Line coverage | Branch coverage |
 | --- | ---: | ---: |
-| Core, measured by Core.Tests | 96.45% | 89.31% |
-| Infraestructure, measured by Infraestructure.Tests | 70.09% | 59.28% |
-| Desktop, measured by Desktop.Tests | 93.98% | 89.50% |
+| PSPMan.Core / Core.Tests | 96.64% | 89.78% |
+| PSPMan.Infraestructure / Infraestructure.Tests | 71.38% | 60.32% |
+| PSPMan.Desktop / Desktop.Tests | 94.70% | 89.73% |
 
-### Transfer component detail
+### Transfer and composition detail
 
-Per-file figures below use distinct source lines across compiler-generated
-classes/state machines, taking maximum hits and reported covered/total branch
-counts per source line. They are a source view, not a cross-suite branch union.
+Source figures use distinct line numbers within each source, combining hits
+across its classes/state machines. Branches are the owning JSON report's
+class/method/line/offset/path identities; no cross-suite branch union is made.
 “No branches” means the collector reports no branch denominator.
 
-| Owner / source | Lines | Branches |
+| Owner / source | Covered lines | Covered branches |
 | --- | ---: | ---: |
+| Core / GameCopyModels | 39/39 (100%) | No branches |
 | Core / GameCopyRules | 108/109 (99.08%) | 148/156 (94.87%) |
-| Core / GameCopyService | 213/220 (96.82%) | 120/140 (85.71%) |
-| Core / GameCopySessionCoordinator | 239/244 (97.95%) | 200/245 (81.63%) |
-| Core / GameCopyModels | 33/33 (100%) | No branches |
-| Infraestructure / ArchiveRuntimeResolver | 53/54 (98.15%) | 43/60 (71.67%) |
-| Infraestructure / ArchiveSizeInspector | 13/21 (61.90%) | 4/4 (100%) |
-| Infraestructure / SevenZipNativeSession | 316/325 (97.23%) | 121/163 (74.23%) |
-| Infraestructure / SevenZipGameArchiveReader | 9/9 (100%) | No branches |
-| Infraestructure / CopyAccessStream | 60/68 (88.24%) | 30/36 (83.33%) |
-| Infraestructure / FileGameCopyFileSystem | 26/30 (86.67%) | 1/2 (50%) |
-| Infraestructure / LinuxArchiveSource | 58/68 (85.29%) | 16/26 (61.54%) |
-| Infraestructure / LinuxCopyDestination | 120/127 (94.49%) | 52/62 (83.87%) |
-| Infraestructure / LinuxCopyFileAccess | 169/179 (94.41%) | 91/118 (77.12%) |
-| Infraestructure / LinuxCopyNative | 40/45 (88.89%) | 25/38 (65.79%) |
-| Infraestructure / WindowsCopyPathRules | 37/38 (97.37%) | 90/94 (95.74%) |
-| Infraestructure / WindowsArchiveSource | 0/65 | 0/26 |
-| Infraestructure / WindowsCopyDestination | 0/109 | 0/32 |
-| Infraestructure / WindowsCopyFileAccess | 0/240 | 0/166 |
-| Infraestructure / WindowsCopyNative | 17/130 (13.08%) | 40/124 (32.26%) |
-| Desktop / GameCopyViewModel | 164/171 (95.91%) | 88/100 (88.00%) |
-| Desktop / GameCopyViewModel.Shutdown | 34/34 (100%) | 23/26 (88.46%) |
+| Core / GameCopyService | 241/245 (98.37%) | 131/156 (83.97%) |
+| Core / GameCopySessionCoordinator | 293/304 (96.38%) | 219/261 (83.91%) |
+| Core / GameCopySubmissionRules | 69/69 (100%) | 63/70 (90.00%) |
+| Core / GameCopySpaceReservations | 66/66 (100%) | 36/38 (94.74%) |
+| Infrastructure / ArchiveRuntimeResolver | 53/54 (98.15%) | 43/60 (71.67%) |
+| Infrastructure / ArchiveSizeInspector | 13/21 (61.90%) | 4/4 (100%) |
+| Infrastructure / SevenZipGameArchiveReader | 9/9 (100%) | No branches |
+| Infrastructure / SevenZipNativeSession | 317/325 (97.54%) | 122/163 (74.85%) |
+| Infrastructure / CopyDestinationResources | 368/393 (93.64%) | 160/197 (81.22%) |
+| Infrastructure / CopyAccessStream | 63/70 (90.00%) | 35/40 (87.50%) |
+| Infrastructure / FileGameCopyFileSystem | 26/30 (86.67%) | 5/8 (62.50%) |
+| Infrastructure / LinuxArchiveSource | 58/68 (85.29%) | 20/30 (66.67%) |
+| Infrastructure / LinuxCopyDestination | 171/178 (96.07%) | 116/134 (86.57%) |
+| Infrastructure / LinuxCopyFileAccess | 170/180 (94.44%) | 108/138 (78.26%) |
+| Infrastructure / WindowsArchiveSource | 0/65 (0%) | 0/30 (0%) |
+| Infrastructure / WindowsCopyDestination | 0/161 (0%) | 0/108 (0%) |
+| Infrastructure / WindowsCopyFileAccess | 0/242 (0%) | 0/178 (0%) |
+| Infrastructure / WindowsCopyNative | 17/133 (12.78%) | 40/126 (31.75%) |
+| Infrastructure / WindowsCopyPathRules | 37/38 (97.37%) | 90/94 (95.74%) |
+| Desktop / CopyOperationViewModel | 126/126 (100%) | 126/130 (96.92%) |
+| Desktop / CopySubmissionViewModel | 107/107 (100%) | 83/90 (92.22%) |
+| Desktop / GameCopyViewModel.Operations | 71/72 (98.61%) | 58/74 (78.38%) |
+| Desktop / GameCopyViewModel.Shutdown | 52/53 (98.11%) | 41/50 (82.00%) |
+| Desktop / GameCopyViewModel internal historical adapter | 123/130 (94.62%) | 65/74 (87.84%) |
 | Desktop / CopyCloseConfirmationViewModel | 11/11 (100%) | No branches |
 | Desktop / CopyInputViewModel | 19/19 (100%) | No branches |
-| Desktop / MainViewModel.Copy | 17/17 (100%) | 10/12 (83.33%) |
-| Desktop / CopyStartup | 16/19 (84.21%) | 9/10 (90.00%) |
-| Desktop / ApplicationDeviceLifetime | 128/130 (98.46%) | 47/52 (90.38%) |
+| Desktop / MainViewModel.Copy | 19/19 (100%) | 12/12 (100%) |
+| Desktop / MainViewModel.CopySubmissions | 81/87 (93.10%) | 62/70 (88.57%) |
+| Desktop / CopyStartup | 20/20 (100%) | 11/12 (91.67%) |
+| Desktop / ApplicationDeviceLifetime | 142/144 (98.61%) | 51/56 (91.07%) |
+| Desktop / CopySelectionModeConverter | 1/2 (50%) | 4/4 (100%) |
 
-### Significant gaps and interpretation
+### Significant gaps and limits
 
-- Windows native source/destination/access paths are unexecuted. Portable
-  name/identity calculations account for some WindowsCopyNative hits, without
-  proving Windows system calls, filesystem sharing, volume replacement or FAT
-  semantics. The low infrastructure total includes these and existing device
-  provider native paths; none is excluded to improve the percentage.
-- Core's remaining service lines include invalid reader entry identity, invalid
-  callback/skip shapes and defensive source/session checks. The coordinator's
-  remaining lines include final-publication cancellation/invalidation races,
-  invalid selected-root resolution and exceptional drain completion. Unit/UI
-  races that do pass do not establish every defensive interleaving.
-- ArchiveSizeInspector's missing lines are unsupported stream members and the
-  checked counter overflow handler; a real multi-exabyte decompression was not
-  attempted. Core sum overflow is tested separately and does not cover that
-  adapter catch. Native-session gaps include loader/ABI failures after verified
-  resolution and impossible-sized metadata/callback defenses. Missing coverage
-  is disclosed, not treated as automatically safe or passed.
-- Linux confinement uses actual openat2/statx temporary-root integration, with
-  injected inventories/faults. Kernel/filesystem fallback/error paths, removable
-  FAT behavior, privilege delays, physical loss and disk-full/flush effects still
-  need designated-media tests. Native archive callback tests exercise actual
-  7-Zip, but are not a hardware-removal demonstration.
-- Desktop headless tests exercise compiled bindings and lifetime/UI projection.
-  The remaining copy VM lines include exceptional start/cancellation handling;
-  CopyStartup's inventory callback is not invoked by controlled-I/O composition
-  tests. ApplicationDeviceLifetime's remaining lines 59/125 are defensive
-  initialization/stop exception barriers. These are disclosed gaps rather than
-  additional exercised production-adapter flows.
-  They do not prove Windows rendering, native device prompts, OS logout, forced
-  termination behavior or physical PSP copying. Historical controlled X11
-  evidence remains scoped to [T08](./copy-screen-interactions.md) and
-  [T09](./confirmed-shutdown.md).
+- Windows native source/destination paths are entirely unexecuted. Portable
+  Windows path/identity logic accounts for WindowsCopyNative hits, not Windows
+  system-call, driver, sharing, UAC, FAT or physical device evidence. Windows
+  device-provider paths also contribute to the lower Infrastructure total and
+  remain included in its denominator.
+- Core service gaps include invalid archive identities, incomplete extraction,
+  unexpected callbacks and progress guards. Registry gaps include cancellation
+  callback exceptions/completion races, exceptional close/dispose drains and
+  invalid-root rejection in the retained single-call adapter. Submission and
+  reservation branch gaps are defensive combinations; passing overlap/race
+  tests do not exhaust every possible interleaving.
+- Shared native resources cover real capacity, waits, settlement, skips, retry,
+  partial writes and owner faults in temporary roots. Remaining lines include
+  invalid operation/native binding, changed root identity, exceptional ledger
+  guards and synchronous/unsupported accounted-stream members. CopyAccessStream
+  and ArchiveSizeInspector retain unsupported members and exceptional counter/
+  release paths. Real multi-exabyte output is not attempted to cover overflow.
+- Native loader/session gaps include ABI/load-failure cleanup, oversized/invalid
+  metadata and uncommon callback/error paths. Linux gaps include kernel/native
+  failures, link/root race branches and unsupported source-stream operations.
+  Native software tests with injected inventory/fault scheduling do not prove
+  actual USB loss, removable filesystem behavior, full media or authorization.
+- Desktop gaps include defensive unknown-operation routing, admission-exception
+  mapping, generic historical-adapter failures and initialization/stop/decision
+  exception barriers. Row/input stale/disposed/closing conditions have branch
+  gaps despite actual cancellation, removal and aggregate-close race coverage.
+  The one-way selection converter's unsupported ConvertBack is unexecuted.
+- No report certifies physical PSP/source media, multiple real optical readers,
+  Windows rendering/native prompts, OS logout, forced termination or every
+  deployment architecture. A passing graphical/managed probe cannot close those
+  gates, and coverage percentages are not an acceptance verdict.
 
-## Runtime/package and graphical checks
+## Native runtime/package checks
 
-Only `linux-x64` is staged. Desktop declares no RuntimeIdentifiers or publish
-profiles, so this is the verified target available here, not a declaration that
-Linux/Windows support is restricted to x64. Windows, other CPUs/libcs and actual
-deployment-target inventory remain mandatory open work.
+Current staged inventory contains only `linux-x64`. Both binaries are ELF x86-64
+shared objects. ABI 1, engine version 2606 (7-Zip 26.06) and the pinned source
+SHA-256 are recorded in the manifest and exercised by native resolver/reader
+checks. All **17 staged files** were independently rehashed with matching
+results, including engine, bridge, full source archive, notices and bridge/build
+sources. Packaged bridge/build sources match current repository inputs byte for
+byte. This establishes consistency with pinned inputs, not independent signature
+verification of an arbitrary runtime.
 
-The staged manifest reports ABI 1, version 2606 (7-Zip 26.06), RID linux-x64 and
-source SHA-256
-`a4e374c8f864f51df48c2cfd0e1413ec3b2ea030deae852d6a655402ebb61ac4`.
-All 17 listed assets were independently rehashed and matched, including the full
-pinned source archive, bridge/build sources and GPL/LGPL/unRAR notices. Both
-binaries are ELF x86-64 shared objects. The manifest's engine hash is
-`eecf6e133a35f4e857a821fd80738a2636c0dff2fb704a3dab286ec8ee6575c3`;
-bridge hash is
-`6059ea325114313dc20030810d668bf773e98756fd17bc023fc14f283e184cd6`.
-This verifies consistency against the pinned packaged inputs, not an independent
-signature/authentication of an arbitrary engine. The required-native Linux test
-run passed 739 with the same 26 Windows skips; ABI/version exports and
-missing/mismatched-package rejection are covered by existing tests.
+- Source: `a4e374c8f864f51df48c2cfd0e1413ec3b2ea030deae852d6a655402ebb61ac4`.
+- Engine: `eecf6e133a35f4e857a821fd80738a2636c0dff2fb704a3dab286ec8ee6575c3`.
+- Bridge: `6059ea325114313dc20030810d668bf773e98756fd17bc023fc14f283e184cd6`.
 
-The packaged bridge/build source files also compare byte-for-byte with current
-repository inputs. The local publication and reader/service checks passed:
+For each `runtime.json` Files entry, compute the file's SHA-256 relative to its
+native package directory and compare it with the entry; also compare the full
+source archive hash with SourceSha256. Compare each bridge-source file with its
+matching repository input. Reapply these checks to publication output, not only
+the staged source package. Tests using PSPMAN_TEST_PUBLISH_ROOT must resolve the
+published runtime explicitly rather than accidentally using repository assets.
+
+After the successful post-coverage root build, local publication passes:
 
 ```sh
-dotnet publish src/PSPMan.Desktop/PSPMan.Desktop.csproj -c Release -r linux-x64 --self-contained false -o <scratch>/t10-publish-linux
-PSPMAN_REQUIRE_NATIVE_TESTS=1 PSPMAN_TEST_PUBLISH_ROOT=<scratch>/t10-publish-linux dotnet test tests/PSPMan.Infraestructure.Tests/PSPMan.Infraestructure.Tests.csproj --no-build --filter 'FullyQualifiedName~GameArchiveReader|FullyQualifiedName~GameCopyServiceIntegrationTests' --logger trx --results-directory <scratch>/t10-published-reader
+dotnet publish src/PSPMan.Desktop/PSPMan.Desktop.csproj -c Release -r linux-x64 --self-contained false -o <scratch>/publish-linux
+PSPMAN_REQUIRE_NATIVE_TESTS=1 PSPMAN_TEST_PUBLISH_ROOT=<scratch>/publish-linux dotnet test tests/PSPMan.Infraestructure.Tests/PSPMan.Infraestructure.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~GameArchiveReader|FullyQualifiedName~GameArchiveConcurrencyTests|FullyQualifiedName~GameCopyServiceIntegrationTests|FullyQualifiedName~GameCopyEngineResourceTests' --blame-hang-timeout 60s --blame-hang-dump-type mini --logger trx --results-directory <scratch>/published-native
 ```
 
-Publication succeeded and all 17 published manifest assets were rehashed with
-matching results. Reader/service execution against the published runtime passed
-66 cases, with one Windows theory skipped. This is actual application-local
-native extraction, not reference CLI or historical managed-reader evidence.
-Publication with `--no-build --no-restore` and
-`-p:PspArchivePackageRoot=<scratch>/t10-absent-runtime` failed as expected with
-exit 1 and “Build and package the matched 7-Zip/PSPMan archive runtime for
-linux-x64 before publishing.” This intentional negative check is not a failed
-regression. No published binary was distributed or deployed.
+The published runtime's 17 assets/source copies match before and after the
+native run: **109 passed, zero failures, two Windows discovery skips**. This
+includes actual native reader/session overlap and shared engine resources
+against the publication, with fixture source/output hash and release assertions.
+The two Windows theories remain unexecuted, not accepted by the Linux results.
 
-After coverage/rebuild, a fresh graphical smoke used
-`dotnet run --project src/PSPMan.Desktop/PSPMan.Desktop.csproj --no-build --no-restore`
-inside `dbus-run-session`, with temporary XDG data/config/cache roots and
-`DBUS_SYSTEM_BUS_ADDRESS` set to that private session bus. Before startup,
-ListActivatableNames was checked to exclude org.freedesktop.UDisks2. Only the
-launched application's PID/window was observed and controlled. Its temporary
-SQLite catalogue was created; the 1200 × 650 window rendered and was resized to
-900 × 450. The own-window capture was inspected: empty catalogue, Copy to PSP,
-English controls and the expected visible device-unavailable error from the
-isolated bus. Alt+F4 with no active copy exited 0 without an unhandled exception.
-Private-bus portal/FUSE/keyring diagnostics occurred; no UDisks discovery,
-physical mount, archive/PSP transfer or active-copy close was exercised by this
-smoke. Active-copy controlled-I/O UI evidence remains T09, and physical matrix
-rows remain open.
+Publication with `--no-build --no-restore` and
+`-p:PspArchivePackageRoot=<scratch>/absent-runtime` is rejected with
+“Build and package the matched 7-Zip/PSPMan archive runtime for linux-x64 before
+publishing.” This is the expected negative package check, not a failed positive
+regression. No staged asset is removed and no publication is distributed.
+
+## Controlled graphical verification
+
+Both graphical runs occur after coverage restoration/rebuild and publication
+tests. Each uses a temporary catalogue/config/cache and a private D-Bus, with
+DBUS_SYSTEM_BUS_ADDRESS redirected to that bus and ListActivatableNames checked
+to exclude org.freedesktop.UDisks2. No arbitrary hardware discovery/mount or
+physical game transfer is performed.
+
+1. Production starts through `dotnet run --project
+   src/PSPMan.Desktop/PSPMan.Desktop.csproj --no-build --no-restore`. Only its
+   owned PID/window is observed. The isolated SQLite catalogue is created;
+   geometry is observed at 1200 × 650 and then **900 × 450**. An own-window X11
+   capture is inspected: empty catalogue, English controls, Prepare copies
+   disabled and the expected visible private-bus device-service error. A normal
+   window-close request exits **0** with no unhandled application exception.
+   No focus change or keyboard input is sent to other applications.
+2. A temporary native X11 harness reuses the existing shutdown fixture, actual
+   Avalonia views and bound buttons with controlled inventory/byte I/O. Two
+   active rows and a pending draft are created. Rendered 900 × 450 window
+   captures are inspected; both aggregate choices fit after temporary draft
+   hiding. Decline preserves both owners/draft and reopens admission. An old
+   confirmation cannot accept a fresh decision. Acceptance drains both owners,
+   retains both one-byte outputs, disposes the provider once and exits **0**.
+   Keyboard behavior is covered separately by the headless regression; the
+   native harness invokes the bound buttons directly.
+
+Private-bus portal/FUSE/keyring diagnostics are environment messages, not
+physical authorization evidence. The controlled graphical harness is distinct
+from the four actual Linux native archive/filesystem callback cases in Desktop
+regression. Neither substitutes for Windows graphics, real device presentation,
+native authorization/removal or OS logout. Temporary harnesses, TRX, coverage
+files, screenshots and publication outputs are verification intermediates; this
+report records their reproducible scope/results rather than treating them as
+portable hardware evidence.
 
 ## Completion status
 
-[The requirement/AC index and physical procedures](./manual-validation.md) cover
-FR-1–FR-19, NFR-1–NFR-4 and AC-1–AC-19. Current automated evidence is passing;
-mandatory Windows, real PSP/source media, actual filesystem/native removal and
-OS-shutdown checks remain unexecuted. T01/T03/T05/T06 and T10 remain open.
-Specification 0.5 remains approved, not implemented. Formal SDD review and user
-acceptance have not been performed or authorized by this consolidation.
+The [requirement/AC index and physical procedures](./manual-validation.md) cover
+FR-1–FR-24, NFR-1–NFR-4 and AC-1–AC-24, with P01–P26 unexecuted on both physical
+platforms. All inherited Windows and Spec 004 native gates remain open.
+Available verification in this approved partial continuation is complete; the
+mandatory physical/native remainder is not. Specification 0.6 stays approved;
+T10 is unchecked. No production/test source, packages or device policy changes,
+commit or push occur. Final document links/identifiers and added-line whitespace
+are checked. This is not formal SDD validation/code review or feature acceptance.
