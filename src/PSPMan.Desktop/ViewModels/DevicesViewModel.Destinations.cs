@@ -26,6 +26,8 @@ public sealed partial class DevicesViewModel
     private Guid? _selectedGameId;
     private long _selectedGameVersion;
     private DeviceSessionSnapshot? _destinationSnapshot;
+    /// <summary>Latest UI-projected observation; draft choices never modify its associations.</summary>
+    public DeviceSessionSnapshot? SubmissionObservation => _destinationSnapshot;
 
     public IAsyncRelayCommand<PspDestinationChoice> ChoosePspCommand { get; private set; } = null!;
     public GameDestinationViewModel GameDestination { get; private set; } = NoGameDestination();
@@ -75,6 +77,7 @@ public sealed partial class DevicesViewModel
     {
         _destinationSnapshot = snapshot;
         ProjectGameDestination();
+        OnPropertyChanged(nameof(SubmissionObservation));
     }
 
     private void ProjectGameDestination()

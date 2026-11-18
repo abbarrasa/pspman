@@ -15,6 +15,7 @@
         <vm:MainViewModel />
     </Design.DataContext>
     <Window.Resources>
+        <views:CopySelectionModeConverter x:Key="CopySelectionMode" />
         <views:DeviceWorkspaceWidthConverter x:Key="CatalogColumnWidth" WithDevices="170" WithoutDevices="240" />
         <views:DeviceWorkspaceWidthConverter x:Key="EditorColumnWidth" WithDevices="240" WithoutDevices="360" />
         <views:DeviceWorkspaceWidthConverter x:Key="DeviceColumnWidth" WithDevices="270" WithoutDevices="0" />
@@ -146,7 +147,8 @@
             </Grid.ColumnDefinitions>
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <StackPanel Spacing="6"><TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
-                    <Button x:Name="CopySelectedGameButton" Content="Copy to PSP" Command="{Binding CopySelectedGameCommand}" IsVisible="{Binding HasCopy}" /></StackPanel>
+                    <Button x:Name="CopySelectedGameButton" Content="Copy to PSP" Command="{Binding CopySelectedGameCommand}" IsVisible="{Binding ShowLegacyCopy}" />
+                    <Button x:Name="PrepareSelectedCopiesButton" Content="Prepare copies" AutomationProperties.Name="Prepare copies of selected games" Command="{Binding PrepareSelectedCopiesCommand}" IsVisible="{Binding IsCopyPreparationEnabled}" /></StackPanel>
                 <StackPanel Grid.Row="1">
                     <TextBlock x:Name="EmptyStateText" Text="No games in the catalog."
                                IsVisible="{Binding IsEmpty}" />
@@ -154,6 +156,8 @@
                 <ListBox x:Name="GamesList" Grid.Row="2" ItemsSource="{Binding Games}"
                          AutomationProperties.Name="Game catalog"
                          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+                         SelectedItems="{Binding SelectedGames}"
+                         SelectionMode="{Binding IsCopyPreparationEnabled, Converter={StaticResource CopySelectionMode}}"
                          IsVisible="{Binding HasGames}">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="games:GameRecord">
@@ -352,7 +356,10 @@
                 <views:DevicesView x:Name="DevicePanel" DataContext="{Binding Devices}" />
             </Border>
         </Grid>
-        <views:GameCopyView x:Name="CopyPanel" Grid.Row="6" MaxHeight="220"
-                            DataContext="{Binding Copy}" IsVisible="{Binding IsOpen, FallbackValue=False}" />
+        <Grid Grid.Row="6" RowDefinitions="Auto,*" MaxHeight="260" ClipToBounds="True">
+            <views:CopySubmissionView x:Name="CopySubmissionPanel" MaxHeight="180" IsVisible="{Binding HasCopyDrafts}" />
+            <views:GameCopyView x:Name="CopyPanel" Grid.Row="1" MaxHeight="220"
+                                DataContext="{Binding Copy}" IsVisible="{Binding IsOpen, FallbackValue=False}" />
+        </Grid>
     </Grid>
 </Window>

@@ -29,10 +29,10 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
             DeviceCapabilities.SafeRemoval | (psp ? DeviceCapabilities.PspDestination : DeviceCapabilities.RemovableSource),
             identity, "g1", DeviceState.Ready, [new(new(key, "volume"), name, "/" + name, identity, DeviceState.Ready)]);
     }
-    internal static async Task<GameCopyTestContext> Create(int psps = 1, Action<Action>? post = null)
+    internal static async Task<GameCopyTestContext> Create(int psps = 1, Action<Action>? post = null, DeviceInventorySnapshot? inventory = null)
     {
         var f = new GameCopyTestContext();
-        f.Devices.Inventory = new(1, [Device("source"), Device("alternate"), .. Enumerable.Range(0, psps).Select(i => Device("psp" + i, true))]);
+        f.Devices.Inventory = inventory ?? new(1, [Device("source"), Device("alternate"), .. Enumerable.Range(0, psps).Select(i => Device("psp" + i, true))]);
         f.Session = new([f.Devices]);
         await f.Session.StartAsync();
         await f.Session.SetAssociationsAsync(DeviceAssociationRules.ChooseVolume(new(), SourceGroup.Removable, new(new("copy-ui", "source"), "volume")));
@@ -105,6 +105,7 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
         internal int Removals;
         internal DeviceInventorySnapshot Inventory = new(0, []);
         private readonly Channel<DeviceInventorySnapshot> _changes = Channel.CreateUnbounded<DeviceInventorySnapshot>();
+        internal void Publish(DeviceInventorySnapshot inventory) { Inventory = inventory; _changes.Writer.TryWrite(inventory); }
         public string ProviderId => "copy-ui";
         public ValueTask<DeviceInventorySnapshot> GetSnapshotAsync(CancellationToken token = default) { ++Reads; return new(Inventory); }
         public async IAsyncEnumerable<DeviceInventorySnapshot> WatchChangesAsync([EnumeratorCancellation] CancellationToken token = default)
@@ -143,14 +144,17 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
         public ValueTask<CopyTargetSnapshot> InspectAsync(ImmutableArray<string> segments, CancellationToken token)
         {
             var name = string.Join('/', segments);
-            return new(new CopyTargetSnapshot(Files.TryGetValue(name, out var stream) ? CopyTargetKind.File : CopyTargetKind.Missing,
-                stream is null ? null : new(name, stream.Length, "version")));
+            lock (Files)
+                return new(new CopyTargetSnapshot(Files.TryGetValue(name, out var stream) ? CopyTargetKind.File : CopyTargetKind.Missing,
+                    stream is null ? null : new(name, stream.Length, "version")));
         }
         public ValueTask<GameCopySkipReason?> EnsureDirectoryAsync(ImmutableArray<string> segments, CancellationToken token) => new((GameCopySkipReason?)null);
         public ValueTask<CopyOutputOpenResult> OpenOutputAsync(ImmutableArray<string> segments, CopyFileEvidence? consent, CancellationToken token)
         {
             if (ChangeOnce) { ChangeOnce = false; return new(new CopyOutputOpenResult(null, TargetChanged: true)); }
-            var stream = new MemoryStream(); Files[string.Join('/', segments)] = stream; OutputClosed = false;
+            var stream = new MemoryStream();
+            lock (Files) Files[string.Join('/', segments)] = stream;
+            OutputClosed = false;
             return new(new CopyOutputOpenResult(new OutputFile(this, stream)));
         }
         public ValueTask DisposeAsync() { Closed = true; return ValueTask.CompletedTask; }

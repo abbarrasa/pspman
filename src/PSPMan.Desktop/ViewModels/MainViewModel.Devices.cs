@@ -14,7 +14,10 @@ public partial class MainViewModel
     internal void AttachDevices(DevicesViewModel? devices)
     {
         if (ReferenceEquals(Devices, devices)) return;
+        if (Devices is not null) Devices.PropertyChanged -= OnSubmissionDevicesChanged;
         Devices = devices;
+        if (devices is not null) devices.PropertyChanged += OnSubmissionDevicesChanged;
+        RefreshCopyDrafts();
         UpdateSelectedGameDevices();
         OnPropertyChanged(nameof(Devices));
         OnPropertyChanged(nameof(HasDevices));

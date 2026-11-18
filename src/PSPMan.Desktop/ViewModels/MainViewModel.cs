@@ -32,6 +32,7 @@ public partial class MainViewModel : ViewModelBase
         Devices = devicesViewModel;
         _mountedPathSyntax = mountedPathSyntax ?? (OperatingSystem.IsWindows() ? MountedPathSyntax.Windows : MountedPathSyntax.Linux);
         UpdateSelectedGameDevices();
+        InitializeCopySelection();
         _importFilePicker = importFilePicker;
         ImportService = importService;
         _exportFolderPicker = exportFolderPicker;
@@ -143,11 +144,13 @@ public partial class MainViewModel : ViewModelBase
         get => _games;
         private set
         {
+            var selectedBeforeRefresh = SelectedGames.ToArray();
             if (SetProperty(ref _games, value))
             {
                 OnPropertyChanged(nameof(HasGames));
                 OnPropertyChanged(nameof(IsEmpty));
                 OnPropertyChanged(nameof(NeedsSelection));
+                ReconcileCopySelection(selectedBeforeRefresh);
             }
         }
     }

@@ -20,11 +20,16 @@ public partial class MainViewModel
             copy.PropertyChanged += OnCopyChanged;
         }
         OnPropertyChanged(nameof(Copy)); OnPropertyChanged(nameof(HasCopy));
+        OnPropertyChanged(nameof(ShowLegacyCopy));
         UpdateCopyCommand();
+        UpdatePreparationCommands();
     }
 
     private void OnCopyChanged(object? sender, PropertyChangedEventArgs args)
-    { if (args.PropertyName == nameof(GameCopyViewModel.CanStart)) UpdateCopyCommand(); }
+    {
+        if (args.PropertyName == nameof(GameCopyViewModel.CanStart)) UpdateCopyCommand();
+        if (args.PropertyName is nameof(GameCopyViewModel.CanStart) or nameof(GameCopyViewModel.CanSubmitCopies)) UpdatePreparationCommands();
+    }
     private void UpdateCopyCommand()
     { OnPropertyChanged(nameof(CanCopySelectedGame)); CopySelectedGameCommand.NotifyCanExecuteChanged(); }
 
