@@ -5,6 +5,22 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T16 coordinator — scoped checks complete, inherited native gates unchanged
+
+“Apruebo el plan y su implementación” approved the T16 scoped plan and explicit
+exception to continue while T15's native Windows dependency remains open. The
+[coordinator report](./multi-operation-coordinator.md) records the registry,
+immutable batch capture, independent cancellation/revisions, shared-device stop
+and removal reservations, and identity-bound close/drain APIs.
+
+Controlled Core/awaited headless evidence verifies ownership and affected
+single-row behavior; it is not actual native archive/device removal, optical
+media, PSP/FAT, UAC or Windows filesystem evidence. T15 and all earlier native
+prerequisites below remain mandatory and unchecked. T10 must exercise the final
+concurrent production flow after T17–T19 activate it; no device/provider or
+authorization policy is changed here. T17 needs its own scoped plan and explicit
+authorization; formal SDD validation remains unauthorized.
+
 ## T15 engine resources — integration prepared, native Windows gate open
 
 “Apruebo el plan y autorizo a realizar T15” approved the presented scoped plan
@@ -25,8 +41,8 @@ filesystem, source-hash and post-terminal handle evidence.
 
 T15 stays unchecked pending native Windows; T10's physical PSP/FAT/optical/device
 matrix is unchanged. No public concurrent admission or aggregate close/removal
-is enabled before T16–T19. T16 needs a separate scoped plan, authorization and
-explicit handling of still-open dependencies; no SDD validation is authorized.
+is enabled before T16–T19. T16's later scoped authorization and unchanged
+dependency gates are recorded above; no SDD validation is authorized.
 
 ## T14 Windows resources — implementation prepared, native gate open
 

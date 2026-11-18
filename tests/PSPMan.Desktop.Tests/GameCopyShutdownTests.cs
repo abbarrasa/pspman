@@ -313,7 +313,7 @@ public sealed class GameCopyShutdownTests
     [Theory]
     [InlineData("password")]
     [InlineData("ambiguous")]
-    public async Task ChangingGameDuringCloseDecisionFailsAndRetiresInputWithoutRestarting(string stage)
+    public async Task ChangingGameDuringCloseDecisionPreservesInputUntilExplicitCancellation(string stage)
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
         await ui.DispatchAsync(async () =>
@@ -321,11 +321,14 @@ public sealed class GameCopyShutdownTests
             await using var f = await Fixture.Create(); var operation = await f.PauseAt(stage);
             var input = f.Copy.Input!;
             f.Window.Close(); f.Main.SelectedGame = null;
-            await operation; await Wait(() => f.Copy.Input is null);
+            Assert.False(operation.IsCompleted); Assert.Same(input, f.Copy.Input);
             f.Copy.CloseConfirmation!.KeepOpenCommand.Execute(null);
             await f.Lifetime.ShutdownCompletion;
+            Assert.False(operation.IsCompleted); Assert.Same(input, f.Copy.Input);
+            await f.Copy.CancelCommand.ExecuteAsync(null);
+            await operation; await Wait(() => f.Copy.Input is null);
             input.RetryCommand.Execute(null);
-            Assert.Equal("Failed", f.Copy.Status); Assert.Equal(0, f.Exits);
+            Assert.Equal("Cancelled", f.Copy.Status); Assert.Equal(0, f.Exits);
             Assert.False(f.Copy.HasCloseConfirmation); Assert.False(f.Copy.IsBusy);
             Assert.Equal(1, f.IO.Opens);
         });

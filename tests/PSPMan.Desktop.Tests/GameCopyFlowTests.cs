@@ -24,9 +24,12 @@ public sealed class GameCopyFlowTests
             var operation = f.Copy.StartAsync();
             // No await/UI yield between submitting the action and changing the selection.
             f.Main.SelectedGame = null;
+            await Wait(() => f.Copy.ProgressPercentage > 0);
+            Assert.False(operation.IsCompleted);
+            Assert.Equal(f.Game.Title, f.Copy.Title);
+            await f.Copy.CancelCommand.ExecuteAsync(null);
             await operation;
-            Assert.Contains("selected game changed", f.Copy.Notification, StringComparison.OrdinalIgnoreCase);
-            Assert.Equal("Failed", f.Copy.Status);
+            Assert.Equal("Cancelled", f.Copy.Status);
             Assert.Equal(0, f.Catalog.Writes);
         });
     }
@@ -170,7 +173,7 @@ public sealed class GameCopyFlowTests
     [InlineData("source")]
     [InlineData("psp")]
     [InlineData("cancel")]
-    public async Task ChangingRelevantSelectionOrCancellingStopsAndRetainsBytes(string change)
+    public async Task SelectionChangesPreserveCapturedCopyAndExplicitCancellationRetainsBytes(string change)
     {
         using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
         await ui.DispatchAsync(async () =>
@@ -188,8 +191,14 @@ public sealed class GameCopyFlowTests
                 case "psp": await f.Session.SetAssociationsAsync(DeviceAssociationRules.ChooseDestination(f.Session.Snapshot.Associations, f.Game.Id, new("copy-ui", "psp1"))); break;
                 default: await f.Copy.CancelCommand.ExecuteAsync(null); break;
             }
+            if (change != "cancel")
+            {
+                Assert.False(operation.IsCompleted);
+                Assert.True(f.Copy.IsBusy);
+                await f.Copy.CancelCommand.ExecuteAsync(null);
+            }
             await operation;
-            Assert.Equal(change == "cancel" ? "Cancelled" : "Failed", f.Copy.Status);
+            Assert.Equal("Cancelled", f.Copy.Status);
             Assert.Contains("remain on the PSP", f.Copy.Warning);
             Assert.Equal(new byte[] { 1 }, f.IO.Files["game.iso"].ToArray());
             Assert.True(f.IO.OutputClosed); Assert.False(f.Copy.IsBusy);
