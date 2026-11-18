@@ -10,9 +10,11 @@ public sealed partial class GameCopyViewModel
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCloseConfirmation))]
     [NotifyPropertyChangedFor(nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(CanSubmitCopies))]
     private CopyCloseConfirmationViewModel? _closeConfirmation;
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanStart))] private bool _isClosing;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CanStart))] [NotifyPropertyChangedFor(nameof(CanSubmitCopies))] private bool _isClosing;
+    public bool CanSubmitCopies => !_disposed && !IsClosing && !HasCloseConfirmation && _coordinator is { IsAdmissionOpen: true };
     public bool HasCloseConfirmation => CloseConfirmation is not null;
     public bool CanStart => !_disposed && !IsBusy && !HasCloseConfirmation && !IsClosing;
 

@@ -5,6 +5,19 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T18 submissions — local choices, inherited native gates unchanged
+
+“apruebo el plan y la implementación” approved T18's displayed scope. The
+[submission report](./copy-submission-choices.md) records separate catalogue
+multi-selection, local reader/volume/PSP choices, indexed partial admission and
+explicit resubmission. Controlled composition exercises additions through the
+real coordinator; production remains single-copy until T19 connects aggregate
+shutdown. No shared associations, catalogue records or native policy are
+modified by preparing/submitting games. Existing Windows/physical rows remain
+mandatory; multiple actual readers/discs/PSPs must be covered by final T10.
+T19 needs its own scoped plan and explicit approval. Formal SDD validation
+remains unauthorized.
+
 ## T17 presentation — independent rows, inherited native gates unchanged
 
 “Apruebo el plan y su implementación” approved the displayed T17 plan. The
@@ -15,8 +28,8 @@ production batch admission remains for T19 after T18's selection/choice work.
 Available headless/graphical checks cannot establish physical PSP, optical,
 Windows filesystem or removal/authorization acceptance. All earlier native and
 physical rows remain mandatory; T10 must cover the final production flow.
-T18 needs its own plan and explicit authorization. No formal SDD validation is
-authorized.
+T18's later approval and evidence are recorded above. No formal SDD validation
+is authorized.
 
 ## T16 coordinator — scoped checks complete, inherited native gates unchanged
 

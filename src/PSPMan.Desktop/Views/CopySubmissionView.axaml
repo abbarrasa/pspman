@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PSPMan.Desktop.ViewModels"
+             x:Class="PSPMan.Desktop.Views.CopySubmissionView"
+             x:DataType="vm:MainViewModel" x:CompileBindings="True">
+    <Grid RowDefinitions="Auto,*" RowSpacing="6">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+            <Button x:Name="SendPreparedCopiesButton" Content="Send prepared games" Command="{Binding SendPreparedCopiesCommand}" AutomationProperties.Name="Send prepared games for copying" />
+            <TextBlock Grid.Column="1" Text="{Binding CopyPreparationSummary}" TextWrapping="Wrap" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" x:Name="CopyDraftScrollViewer" HorizontalScrollBarVisibility="Disabled" ClipToBounds="True"
+                      AutomationProperties.Name="Game copy choices">
+            <ItemsControl ItemsSource="{Binding CopyDrafts}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CopySubmissionViewModel">
+                        <Border Padding="6" Margin="0,0,0,6" BorderThickness="1" BorderBrush="{DynamicResource ThemeBorderMidBrush}" AutomationProperties.Name="{Binding Title}">
+                            <Grid ColumnDefinitions="2*,3*,3*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Game.Location}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Source reader / device and mounted volume" TextWrapping="Wrap" />
+                                    <ComboBox x:Name="CopySourceDeviceInput" ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                                              HorizontalAlignment="Stretch" AutomationProperties.Name="Source reader or device">
+                                        <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CopyDeviceOption"><TextBlock Text="{Binding Label}" TextWrapping="Wrap" /></DataTemplate></ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <ComboBox x:Name="CopySourceVolumeInput" ItemsSource="{Binding Volumes}" SelectedItem="{Binding SelectedVolume, Mode=TwoWay}"
+                                              HorizontalAlignment="Stretch" AutomationProperties.Name="Source mounted volume">
+                                        <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CopyVolumeOption"><TextBlock Text="{Binding Label}" TextWrapping="Wrap" /></DataTemplate></ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="4">
+                                    <TextBlock Text="One destination PSP" />
+                                    <ComboBox x:Name="CopyDestinationPspInput" ItemsSource="{Binding Psps}" SelectedItem="{Binding SelectedPsp, Mode=TwoWay}"
+                                              HorizontalAlignment="Stretch" AutomationProperties.Name="Destination PSP">
+                                        <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CopyDeviceOption"><TextBlock Text="{Binding Label}" TextWrapping="Wrap" /></DataTemplate></ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <TextBlock Text="{Binding SelectedPspRoot}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding Status}" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
