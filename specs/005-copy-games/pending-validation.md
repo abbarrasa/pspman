@@ -5,6 +5,59 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## Current T10 continuation — approved partial evidence, mandatory gates open
+
+On 2026-11-18 the user approved the scoped plan and continuation with
+“Apruebo el plan y la continuación parcial con las pruebas pendientes”. Work
+starts from clean local `dev` at `77d5f11` on
+`feature/005_T10_concurrent-copy-verification`. This renews the explicit
+unavailable-environment deferral for available T10 verification; no Windows,
+physical, architecture or Spec 004 prerequisite is completed or waived.
+
+The [current verification/coverage report](./coverage.md) records automated,
+native package/publication and controlled graphical evidence. The
+[requirement/acceptance index and P01–P26 matrix](./manual-validation.md) now
+cover all 24 FR/AC and four NFR, preserving earlier physical procedure IDs while
+reconciling obsolete one-slot/selection-change expectations with revision 0.6.
+Every P row remains BLOCKED/unexecuted on both physical platforms. Passing
+temporary-root native and controlled-inventory tests does not satisfy them.
+
+Available continuation results: root builds before/after coverage pass without
+warnings/errors; full regression passes 2037 with zero failures and 37 Windows
+discovery skips. Sequential owning line/branch coverage is Core 96.64%/89.78%,
+Infraestructure 71.38%/60.32% and Desktop 94.70%/89.73%; all 15 assembly copies
+restore their hashes after each collector. Staged/published linux-x64 assets
+match all 17 hashes; published native checks pass 109 with two Windows skips.
+Missing runtime publication is rejected as expected. Controlled concurrent X11
+closure and isolated production startup/resize/normal close exit 0. These
+passing available checks do not change any blocker in the following table.
+
+| Outstanding scope | Blocker retained | Environment and exact restart path |
+| --- | --- | --- |
+| Windows archive bridge/reader and parallel sessions: T01/T03/T12 | No designated native Windows execution host/package; no Windows result | Establish the selected Windows CPU/RID and .NET 10 desktop/toolchain; build/package the pinned bridge/engine and verify every source/notice/hash. Set `PSPMAN_REQUIRE_NATIVE_TESTS=1`; run the bridge/reader suites and all [T12 parallel-session cases](./parallel-native-archive-sessions.md), first against staged assets and then the selected publication root. Retain ABI/version, actual native overlap, source hashes and session-release results. |
+| Windows filesystem/resources/engine: T05/T06/T14/T15 | Same missing native host; Linux and portable rules cannot execute these APIs | After archive prerequisites, set both `PSPMAN_REQUIRE_WINDOWS_COPY_TESTS=1` and `PSPMAN_REQUIRE_NATIVE_TESTS=1`. Execute [Windows shared resources](./windows-destination-resources.md) and [engine-resource matrix](./copy-engine-resources.md), including all 13 engine scenarios, confinement/alias/case/sharing/space races, failure/cancel/retry and release. Then run full Windows regression/coverage and publish checks. A required-Windows run on Linux must fail, not close this gate. |
+| Linux real PSP/source/reader matrix: P01–P26, Spec 004 T49/T50 | No designated disposable PSP/source media or established real-service authorization setup for this continuation | Use a native Linux desktop, system D-Bus/UDisks2/Polkit agent and explicitly selected backed-up media; complete Spec 004 discovery/mount/authorization/removal prerequisites. Execute each P row with per-operation captures, logical catalogue state and source/output hashes. Two PSPs and multiple actual mounted readers/discs are required for their respective cases. |
+| Windows real PSP/source/reader matrix: P01–P26, Spec 004 T51/T52/T53 | No designated Windows environment or physical targets | Complete the relevant [Spec 004 native sequence](../004-device-mounting/pending-validation.md#current-blockers-and-restart-order), including ordinary-account apphost/UAC and actual device forwarding. Execute P01–P26 on the designated PSP/filesystems/readers, documenting VM/passthrough limits if used; hosted CI alone cannot prove physical removal or USB presentation. |
+| OS desktop shutdown and real native authorization/removal delays: P15/P16/P25/P26 | Actual Linux/Windows session/logout and device-delay cases not executed | On the designated test desktop/media, exercise normal OS logout and confirmed aggregate closure with active, waiting and independent-input owners. Verify no late admission, files/native callbacks/resources released before exit/removal, retained bytes and unrelated continuation. A forced kill is not graceful-shutdown evidence. |
+| Deployment architecture inventory and packages | Only linux-x64/glibc assets are staged/executed; the project has no declared publish profiles/RuntimeIdentifiers | Identify actual Linux/Windows deployment CPU/libc targets, package matching native assets and run native/published tests on each actual target. Retain source/notices/hashes/ABI and platform evidence; do not infer a narrower support promise from the single available package. |
+
+The current NativeConcurrentShutdownTests fixture is deliberately Linux-only.
+A passing Windows regression that skips it cannot establish Windows aggregate
+native-callback closure. P26 needs actual Windows release-order evidence with
+appropriate observation/delay instrumentation or an approved Windows-native
+controlled counterpart; any additional test-code work requires its own scoped
+authorization rather than being inferred from this documentary continuation.
+
+No Windows/VM/CI provisioning, media formatting or arbitrary device discovery,
+mount, overwrite or ejection is authorized by this documentary continuation.
+Use the existing reports' setup commands and explicit target-selection
+procedures before future hardware execution. No formal SDD review/acceptance is
+authorized. T10 remains unchecked until all mandatory evidence passes.
+Next: report the completed available consolidation and stop. Resume outstanding
+native/physical checks when their designated environments/media are established,
+with the applicable scoped execution plan; do not infer permission to move to
+formal SDD validation from this partial continuation.
+
 ## T19 production activation — scoped integration complete, final T10 open
 
 “Apruebo el plan” approved the presented T19 scope. The
@@ -27,9 +80,9 @@ startup/removal work remain outstanding. Reuse the existing environment/media
 preparation and source/output-hash procedures; simulated inventory and temporary
 native filesystem roots are not hardware acceptance.
 
-Next: report T19 and stop. A request to continue begins final T10's scoped plan,
-reviewing its open native prerequisites and unavailable environments before
-execution. No provisioning or formal SDD validation/review is authorized here.
+T19's next step was final T10 planning; that later partial-continuation approval
+and its retained prerequisites are recorded above. No provisioning or formal
+SDD validation/review is authorized here.
 
 ## T18 submissions — local choices, inherited native gates unchanged
 
