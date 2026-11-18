@@ -22,7 +22,7 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
     private CopyStartup? _copy;
     private DevicesViewModel _devices;
     private Task? _disposeTask;
-    private bool _started, _stopping, _shutdownRequested;
+    private bool _started, _stopping, _shutdownRequested, _presentationDetached;
 
     public ApplicationDeviceLifetime(Window window, MainViewModel main, Action<int> shutdown,
         Func<CancellationToken, ValueTask<DeviceProviderFactoryResult>>? createProviders = null,
@@ -153,14 +153,16 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
         {
             try
             {
-                _devices.Dispose();
-                _main.AttachDevices(null);
-                _main.AttachCopy(null);
+                try
+                {
+                    // No copy owner exists during early startup: retire initializing UI immediately.
+                    if (_copy is null) DetachPresentation();
+                }
+                finally { _cancellation.Cancel(); }
             }
             finally
             {
-                try { _cancellation.Cancel(); }
-                finally { await DisposeCoreAsync(); }
+                await DisposeCoreAsync();
             }
             completion.TrySetResult();
         }
@@ -181,8 +183,15 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
                 }
                 finally
                 {
-                    if (_startup is not null)
-                        await Task.Run(async () => await _startup.DisposeAsync().ConfigureAwait(false));
+                    try
+                    {
+                        DetachPresentation();
+                    }
+                    finally
+                    {
+                        if (_startup is not null)
+                            await Task.Run(async () => await _startup.DisposeAsync().ConfigureAwait(false));
+                    }
                 }
             }
         }
@@ -191,6 +200,18 @@ public sealed class ApplicationDeviceLifetime : IAsyncDisposable
             _window.Opened -= OnOpened;
             _window.Closing -= OnClosing;
             _cancellation.Dispose();
+        }
+    }
+
+    private void DetachPresentation()
+    {
+        if (_presentationDetached) return;
+        _presentationDetached = true;
+        try { _devices.Dispose(); }
+        finally
+        {
+            try { _main.AttachDevices(null); }
+            finally { _main.AttachCopy(null); }
         }
     }
 }

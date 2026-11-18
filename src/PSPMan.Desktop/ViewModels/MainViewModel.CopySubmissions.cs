@@ -18,8 +18,8 @@ public partial class MainViewModel
     public ObservableCollection<CopySubmissionViewModel> CopyDrafts { get; } = [];
     private bool _copyPreparationEnabled;
     public bool IsCopyPreparationEnabled => _copyPreparationEnabled;
-    public bool ShowLegacyCopy => HasCopy && !IsCopyPreparationEnabled;
     public bool HasCopyDrafts => CopyDrafts.Count != 0;
+    public bool ShowCopyDrafts => HasCopyDrafts && Copy is { HasCloseConfirmation: false, IsClosing: false };
     public bool CanPrepareSelectedCopies => IsCopyPreparationEnabled && SelectedGames.Count != 0 && Copy is { CanSubmitCopies: true };
     public bool CanSendPreparedCopies => IsCopyPreparationEnabled && HasCopyDrafts && Copy is { CanSubmitCopies: true };
     [ObservableProperty] private string _copyPreparationSummary = "";
@@ -30,14 +30,17 @@ public partial class MainViewModel
     private void InitializeCopySelection()
     {
         SelectedGames.CollectionChanged += (_, _) => UpdatePreparationCommands();
-        CopyDrafts.CollectionChanged += (_, _) => { OnPropertyChanged(nameof(HasCopyDrafts)); UpdatePreparationCommands(); };
+        CopyDrafts.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasCopyDrafts)); OnPropertyChanged(nameof(ShowCopyDrafts)); UpdatePreparationCommands();
+        };
         if (Devices is not null) Devices.PropertyChanged += OnSubmissionDevicesChanged;
     }
-    // T18 tests enable this controlled composition; production activation and aggregate close belong to T19.
+    // Enabled on copy-service attachment, including unavailable-service presentation.
     internal void EnableCopyPreparation()
     {
         _copyPreparationEnabled = true;
-        OnPropertyChanged(nameof(IsCopyPreparationEnabled)); OnPropertyChanged(nameof(ShowLegacyCopy));
+        OnPropertyChanged(nameof(IsCopyPreparationEnabled));
         UpdatePreparationCommands();
     }
     private void OnSubmissionDevicesChanged(object? sender, PropertyChangedEventArgs args)

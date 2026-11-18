@@ -192,8 +192,8 @@ public sealed class CopySubmissionFlowTests
             Assert.Equal(0, repository.Writes); window.Close();
             var legacy = new MainViewModel(new GameCatalogService(repository), null); legacy.AttachCopy(f.Copy);
             var legacyWindow = new MainWindow { DataContext = legacy }; legacyWindow.Show();
-            Assert.False(legacy.IsCopyPreparationEnabled); Assert.True(legacy.ShowLegacyCopy);
-            Assert.Equal(SelectionMode.Single, legacyWindow.FindControl<ListBox>("GamesList")!.SelectionMode);
+            Assert.True(legacy.IsCopyPreparationEnabled);
+            Assert.Equal(SelectionMode.Multiple, legacyWindow.FindControl<ListBox>("GamesList")!.SelectionMode);
             Assert.False(legacy.PrepareSelectedCopiesCommand.CanExecute(null)); legacy.AttachCopy(null); legacyWindow.Close();
         });
     }

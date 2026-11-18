@@ -243,7 +243,6 @@ public partial class MainViewModel : ViewModelBase
     partial void OnSelectedGameChanged(GameRecord? value)
     {
         UpdateSelectedGameDevices();
-        Copy?.SetSelectedGame(value);
         StartEditCommand.NotifyCanExecuteChanged();
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }

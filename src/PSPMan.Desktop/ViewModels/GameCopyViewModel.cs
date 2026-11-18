@@ -26,7 +26,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
     { _post = postToUi ?? (action => Dispatcher.UIThread.Post(action)); _startupError = startupError; }
 
     internal void AttachCoordinator(GameCopySessionCoordinator coordinator) => _coordinator = coordinator;
-    public void SetSelectedGame(GameRecord? game) { if (!_disposed) _coordinator?.SetSelectedGame(game); }
+    internal void SetSelectedGame(GameRecord? game) { if (!_disposed) _coordinator?.SetSelectedGame(game); }
     [ObservableProperty] private bool _isOpen;
     [ObservableProperty] [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
     [NotifyPropertyChangedFor(nameof(CanStart))] private bool _isBusy;
@@ -42,7 +42,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasInput))] private CopyInputViewModel? _input;
     public bool HasInput => Input is not null;
 
-    public async Task StartAsync()
+    internal async Task StartAsync()
     {
         long version;
         CancellationTokenSource cancellation;
