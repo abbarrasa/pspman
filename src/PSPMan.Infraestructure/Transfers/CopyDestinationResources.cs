@@ -5,8 +5,8 @@ using static PSPMan.Infraestructure.Transfers.LinuxCopyFileAccess;
 namespace PSPMan.Infraestructure.Transfers;
 
 /// <summary>
-/// Session-owned destination coordination. Bindings are an opt-in adapter for engine integration;
-/// ordinary single-copy composition is unchanged. Destinations remain caller-owned.
+/// Session-owned destination coordination, required by the copy engine in production.
+/// Destinations remain caller-owned.
 /// </summary>
 public sealed class CopyDestinationResources : IGameCopyResources
 {

@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using PSPMan.Core.Devices;
 using PSPMan.Core.Games;
+using PSPMan.Core.Transfers;
 using PSPMan.Desktop.ViewModels;
 using PSPMan.Desktop.Views;
 using PSPMan.Infraestructure.Devices;
@@ -13,6 +14,23 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public sealed class GameCopyCompositionTests
 {
+    [Fact]
+    public async Task DefaultCompositionRejectsAnUnconfinedDestinationBeforeOutputMutation()
+    {
+        using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await ui.DispatchAsync(async () =>
+        {
+            await using var f = await GameCopyTestContext.Create();
+            // No controlled resource injection: exercise the production resource composition.
+            await using var startup = new CopyStartup(f.Session, fileSystem: f.IO, archiveReader: f.IO,
+                syntax: MountedPathSyntax.Linux);
+            startup.Coordinator!.SetSelectedGame(f.Game);
+            var result = await startup.Coordinator.StartAsync();
+            Assert.Equal(GameCopyState.Failed, result.State);
+            Assert.Empty(f.IO.Files);
+        });
+    }
+
     [Fact]
     public async Task LifetimeAttachesCopyWithTheLatestGameAndDetachesItBeforeSessionDisposal()
     {

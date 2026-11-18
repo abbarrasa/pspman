@@ -5,6 +5,29 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T15 engine resources — integration prepared, native Windows gate open
+
+“Apruebo el plan y autorizo a realizar T15” approved the presented scoped plan
+and explicit unavailable-Windows dependency exception. The [engine resource
+report](./copy-engine-resources.md) records mandatory shared composition,
+actual-size reservations, per-entry waits/consent, retry settlement and release
+before terminal results. Linux uses the actual packaged reader and confined
+temporary-root filesystem, with injected scheduling/capacity/fault seams;
+portable probes are not native acceptance.
+
+Thirteen Windows engine-resource scenarios are prepared. Execute them on the
+designated native host with both `PSPMAN_REQUIRE_WINDOWS_COPY_TESTS=1` and
+`PSPMAN_REQUIRE_NATIVE_TESTS=1`, alongside existing native service integration,
+full regression and T12/T14/T06's earlier Windows prerequisites. The required
+Windows guard must reject a Linux-only attempt instead of counting skipped rows
+as success. Follow the report's restart commands and retain native runtime,
+filesystem, source-hash and post-terminal handle evidence.
+
+T15 stays unchecked pending native Windows; T10's physical PSP/FAT/optical/device
+matrix is unchanged. No public concurrent admission or aggregate close/removal
+is enabled before T16–T19. T16 needs a separate scoped plan, authorization and
+explicit handling of still-open dependencies; no SDD validation is authorized.
+
 ## T14 Windows resources — implementation prepared, native gate open
 
 The user approved the presented T14 plan and explicit open-T05 dependency
@@ -28,8 +51,8 @@ and actual exclusive reopen/root rename must pass without skips.
 T14 remains unchecked. No Windows endpoint is established; no native Windows
 allocation, ABI, syscall, case/short-alias or handle outcome is claimed. T10's
 designated PSP/FAT/device-loss matrix and earlier Windows gates stay mandatory.
-T15 still requires its own scoped plan/authorization and explicit handling of
-all open native dependencies.
+T15's later scoped authorization and unchanged dependency gates are recorded
+above; this earlier exception completes no Windows dependency.
 
 ## T13 Linux resources — physical filesystem follow-up remains in T10
 
@@ -49,10 +72,9 @@ unexecuted filesystem/kernel/architecture cases stay pending; temporary-root
 tests do not certify them. Do not create mounts, loop devices or operate arbitrary
 hardware without the designated environment. These remain mandatory T10 gates.
 
-T14 still needs its scoped plan/authorization and explicit handling of open T05
-Windows execution before dependent work. T15 will integrate budget/entry leases
-and owning-budget fault reporting into the engine; no concurrent production
-submission or aggregate close/removal behavior is enabled by T13.
+T14's later scoped authorization and T15's engine integration are recorded above.
+No concurrent production submission or aggregate close/removal behavior is
+enabled by these resource tasks.
 
 ## T12 independent native sessions — mandatory Windows gate open
 

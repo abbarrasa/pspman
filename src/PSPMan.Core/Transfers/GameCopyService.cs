@@ -5,19 +5,20 @@ namespace PSPMan.Core.Transfers;
 
 /// <summary>Executes one operation without owning device selection, UI, or catalogue storage.</summary>
 public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchiveReader archiveReader,
-    IGameCopyInteraction interaction)
+    IGameCopyInteraction interaction, IGameCopyResources resources)
 {
     public Task<GameCopyResult> CopyAsync(GameCopyRequest request,
         IProgress<GameCopySnapshot>? progress = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.OperationId == Guid.Empty) throw new ArgumentException("An operation identity is required.", nameof(request));
-        return new Operation(fileSystem, archiveReader, interaction, request, progress, cancellationToken).RunAsync();
+        ArgumentNullException.ThrowIfNull(resources);
+        return new Operation(fileSystem, archiveReader, interaction, resources, request, progress, cancellationToken).RunAsync();
     }
 
     private sealed class Operation(IGameCopyFileSystem fileSystem, IGameArchiveReader reader,
-        IGameCopyInteraction interaction, GameCopyRequest request, IProgress<GameCopySnapshot>? observer,
-        CancellationToken token) : IGameArchiveExtractionTarget, IProgress<ArchiveByteProgress>
+        IGameCopyInteraction interaction, IGameCopyResources resources, GameCopyRequest request, IProgress<GameCopySnapshot>? observer,
+        CancellationToken token) : IGameArchiveExtractionTarget, IProgress<ArchiveByteProgress>, IProgress<GameCopyResourceWait>
     {
         private const string RetentionWarning = "Incomplete or incorrect files remain on the PSP. Overwritten files are not restored.";
         private readonly GameCopyTerminalGate terminal = new();
@@ -26,6 +27,9 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
         private readonly Dictionary<int, long> decoded = [], written = [];
         private IGameArchiveSource? source;
         private IGameCopyDestination? destination;
+        private IGameCopyDestination? nativeDestination;
+        private IGameCopyBudgetLease? budget;
+        private IGameCopyEntryLease? entryLease;
         private IGameCopyOutputFile? output;
         private int? outputIndex;
         private ImmutableArray<GameArchiveEntry> entries;
@@ -47,7 +51,8 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
                 token.ThrowIfCancellationRequested();
                 source = await fileSystem.OpenSourceAsync(request.Source, request.Game.Location, token).ConfigureAwait(false);
                 sourceEvidence = await source.CaptureEvidenceAsync(token).ConfigureAwait(false);
-                destination = await fileSystem.OpenDestinationAsync(request.Destination, token).ConfigureAwait(false);
+                nativeDestination = await fileSystem.OpenDestinationAsync(request.Destination, token).ConfigureAwait(false);
+                destination = resources.BindDestination(request.OperationId, request.Destination, nativeDestination);
                 await TransferAsync().ConfigureAwait(false);
                 await ValidateAsync().ConfigureAwait(false);
             }
@@ -55,7 +60,9 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
             finally
             {
                 await CloseOutputAsync().ConfigureAwait(false);
-                await ReleaseAsync(destination).ConfigureAwait(false);
+                await CloseEntryAsync().ConfigureAwait(false);
+                await ReleaseAsync(budget).ConfigureAwait(false);
+                await ReleaseAsync(nativeDestination).ConfigureAwait(false);
                 await ReleaseAsync(source).ConfigureAwait(false);
             }
             // The cancellation registration remains live through release and atomic terminal arbitration.
@@ -100,8 +107,10 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
                             throw new GameCopyException(new(GameCopyErrorCode.SourceChanged, "Archive entries changed during retry."));
                         await ValidateAsync().ConfigureAwait(false);
                         var remaining = entries.Where(e => !completed.Contains(e.Index) && !e.IsDirectory).Sum(e => e.SizeBytes!.Value);
-                        var capacity = GameCopyRules.CheckCapacity(remaining, await destination!.GetAvailableBytesAsync(token).ConfigureAwait(false));
-                        if (capacity is not null) throw new GameCopyException(capacity);
+                        if (budget is null)
+                            budget = await resources.ReserveAsync(request.OperationId, request.Destination, destination!, remaining, token).ConfigureAwait(false);
+                        else
+                            await budget.RevalidateAsync(remaining, token).ConfigureAwait(false);
                         Publish(GameCopyState.Transferring);
                         await archive.ExtractAsync(entries.Where(e => !completed.Contains(e.Index)).Select(e => e.Index).ToImmutableArray(),
                             this, this, token).ConfigureAwait(false);
@@ -113,6 +122,7 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
                     {
                         password = null;
                         await CloseOutputAsync().ConfigureAwait(false);
+                        await CloseEntryAsync().ConfigureAwait(false);
                         await ReleaseAsync(archive).ConfigureAwait(false);
                     }
                     if (failure is not null) throw new GameCopyException(failure);
@@ -157,21 +167,25 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
         {
             cancellationToken.ThrowIfCancellationRequested();
             await ValidateAsync().ConfigureAwait(false);
-            if (output is not null || !entries.Contains(entry) || completed.Contains(entry.Index))
+            if (output is not null || entryLease is not null || !entries.Contains(entry) || completed.Contains(entry.Index))
                 throw new GameCopyException(new(GameCopyErrorCode.ReadError, "Unexpected archive entry callback."));
             var path = GameCopyRules.ClassifyEntry(entry.Path, entry.IsLink, entry.IsDirectory);
-            if (!path.IsSafe) return Skip(entry.Index, path.SkipReason!.Value);
+            if (!path.IsSafe) return await SkipAsync(entry, path.SkipReason!.Value).ConfigureAwait(false);
+            entryLease = await resources.AcquireEntryAsync(request.OperationId, request.Destination, destination!,
+                path.Segments, entry.IsDirectory, this, token).ConfigureAwait(false);
             while (true)
             {
+                prompt = null;
                 await ValidateAsync().ConfigureAwait(false);
                 var target = await destination!.InspectAsync(path.Segments, token).ConfigureAwait(false);
+                Publish(GameCopyState.Transferring);
                 var decision = GameCopyRules.ValidateTarget(entry, target);
                 if (decision.Error is not null) throw new GameCopyException(decision.Error);
-                if (decision.SkipReason is { } skip) return Skip(entry.Index, skip);
+                if (decision.SkipReason is { } skip) return await SkipAsync(entry, skip).ConfigureAwait(false);
                 if (entry.IsDirectory)
                 {
                     var directorySkip = await destination.EnsureDirectoryAsync(path.Segments, token).ConfigureAwait(false);
-                    return directorySkip is { } reason ? Skip(entry.Index, reason) : new(null, null);
+                    return directorySkip is { } reason ? await SkipAsync(entry, reason).ConfigureAwait(false) : new(null, null);
                 }
                 CopyFileEvidence? consent = null;
                 if (target.Kind == CopyTargetKind.File)
@@ -185,14 +199,14 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
                     if (answer.Identity != prompt) continue;
                     prompt = null;
                     if (answer.Decision == CopyOverwriteDecision.Cancel) throw new OperationCanceledException(token);
-                    if (answer.Decision == CopyOverwriteDecision.Skip) return Skip(entry.Index, GameCopySkipReason.OverwriteDeclined);
+                    if (answer.Decision == CopyOverwriteDecision.Skip) return await SkipAsync(entry, GameCopySkipReason.OverwriteDeclined).ConfigureAwait(false);
                     if (answer.Decision != CopyOverwriteDecision.Overwrite) continue;
                     consent = target.Evidence;
                 }
                 await ValidateAsync().ConfigureAwait(false);
                 var opened = await destination.OpenOutputAsync(path.Segments, consent, token).ConfigureAwait(false);
                 if (opened.TargetChanged) continue;
-                if (opened.SkipReason is { } openSkip) return Skip(entry.Index, openSkip);
+                if (opened.SkipReason is { } openSkip) return await SkipAsync(entry, openSkip).ConfigureAwait(false);
                 output = opened.File ?? throw new GameCopyException(new(GameCopyErrorCode.WriteError, "Destination output is unavailable."));
                 outputIndex = entry.Index;
                 Publish(GameCopyState.Transferring);
@@ -200,9 +214,12 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
             }
         }
 
-        private ArchiveEntryTarget Skip(int index, GameCopySkipReason reason)
+        private async ValueTask<ArchiveEntryTarget> SkipAsync(GameArchiveEntry entry, GameCopySkipReason reason)
         {
-            skipped.Add(index);
+            await CloseEntryAsync().ConfigureAwait(false);
+            if (failure is not null) throw new GameCopyException(failure);
+            await budget!.SkipPendingAsync(entry.IsDirectory ? 0 : entry.SizeBytes!.Value, token).ConfigureAwait(false);
+            skipped.Add(entry.Index);
             return new(null, reason);
         }
 
@@ -210,6 +227,7 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
         {
             if (error is not null) Publish(GameCopyState.Stopping, error);
             if (outputIndex == entryIndex) await CloseOutputAsync().ConfigureAwait(false);
+            await CloseEntryAsync().ConfigureAwait(false);
             if (failure is not null) throw new GameCopyException(failure);
             if (error is null && !token.IsCancellationRequested)
             {
@@ -228,6 +246,14 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
             decoded[value.EntryIndex] = Math.Max(decoded.GetValueOrDefault(value.EntryIndex), value.DecompressedBytes);
             written[value.EntryIndex] = Math.Max(written.GetValueOrDefault(value.EntryIndex), value.WrittenBytes);
             UpdateProgress();
+        }
+
+        public void Report(GameCopyResourceWait value)
+        {
+            // Resource callbacks are synchronous and scoped to the currently awaited entry.
+            if (value.OperationId != request.OperationId || token.IsCancellationRequested) return;
+            prompt = null;
+            Publish(GameCopyState.WaitingForResource, wait: value.Reason);
         }
 
         private void UpdateProgress(bool closed = false)
@@ -252,11 +278,19 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
             await ReleaseAsync(owned).ConfigureAwait(false);
         }
 
+        private async ValueTask CloseEntryAsync()
+        {
+            var owned = entryLease;
+            entryLease = null;
+            await ReleaseAsync(owned).ConfigureAwait(false);
+        }
+
         private async ValueTask ReleaseAsync(IAsyncDisposable? owned)
         {
             if (owned is null) return;
             try { await owned.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception error) { RecordFailure(new GameCopyException(new(GameCopyErrorCode.CloseError, "Copy files could not be closed. " + RetentionWarning), error)); }
+            catch (Exception error) { RecordFailure(error is GameCopyException ? error :
+                new GameCopyException(new(GameCopyErrorCode.CloseError, "Copy resources could not be closed."), error)); }
         }
 
         private void RecordFailure(Exception error)
@@ -273,10 +307,10 @@ public sealed class GameCopyService(IGameCopyFileSystem fileSystem, IGameArchive
             terminal.RequestStop(GameCopyStopReason.Failed);
         }
 
-        private void Publish(GameCopyState next, GameCopyError? detail = null)
+        private void Publish(GameCopyState next, GameCopyError? detail = null, GameCopyWaitReason? wait = null)
         {
             state = next;
-            observer?.Report(new(request.OperationId, request.Game.Title, Destination, state, progress, prompt, detail ?? failure, skipped.Count));
+            observer?.Report(new(request.OperationId, request.Game.Title, Destination, state, progress, prompt, detail ?? failure, skipped.Count, wait));
         }
     }
 }

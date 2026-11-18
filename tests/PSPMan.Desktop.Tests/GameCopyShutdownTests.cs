@@ -410,7 +410,7 @@ public sealed class GameCopyShutdownTests
                 _ => ValueTask.FromResult(new DeviceProviderFactoryResult([Provider])),
                 createCopy: (session, error) =>
                 {
-                    var copy = new CopyStartup(session, error, IO, IO, MountedPathSyntax.Linux);
+                    var copy = new CopyStartup(session, error, IO, IO, MountedPathSyntax.Linux, resources: new TestCopyResources());
                     AfterCopyCreated?.Invoke(); return copy;
                 });
         }

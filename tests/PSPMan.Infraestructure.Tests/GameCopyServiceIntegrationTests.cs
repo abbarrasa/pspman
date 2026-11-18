@@ -46,7 +46,7 @@ public sealed class GameCopyServiceIntegrationTests
         var originals = Hashes(sourceRoot);
         var interaction = new Interaction { FirstPassword = firstPassword };
         var snapshots = new Snapshots();
-        var result = await new GameCopyService(fs, new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction)
+        var result = await new GameCopyService(fs, new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction, new CopyDestinationResources())
             .CopyAsync(Request(source, destination, name), snapshots);
         Assert.True(result.State == GameCopyState.Completed, result.Error?.Message);
         Assert.Equal(1m, snapshots.Values[^1].Progress!.Fraction);
@@ -82,7 +82,7 @@ public sealed class GameCopyServiceIntegrationTests
         }
         var interaction = new Interaction();
         var result = await new GameCopyService(new RoutedFileSystem(source.FileSystem, destination.FileSystem),
-            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction).CopyAsync(Request(source.Evidence, destination.Evidence, "game.zip"));
+            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction, new CopyDestinationResources()).CopyAsync(Request(source.Evidence, destination.Evidence, "game.zip"));
         if (scenario == "skip")
         {
             Assert.Equal(GameCopyState.CompletedWithSkippedFiles, result.State);
@@ -133,7 +133,7 @@ public sealed class GameCopyServiceIntegrationTests
         };
         var snapshots = new Snapshots();
         var result = await new GameCopyService(new RoutedFileSystem(source.FileSystem, destinationFs),
-            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction)
+            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction, new CopyDestinationResources())
             .CopyAsync(Request(source.Evidence, destination.Evidence, name), snapshots);
         Assert.True(result.State == GameCopyState.Cancelled, result.Error?.Message);
         Assert.Contains(snapshots.Values, s => s.State == GameCopyState.AwaitingPasswordDecision && s.Error!.Message == "Incorrect password or damaged archive");
@@ -155,7 +155,7 @@ public sealed class GameCopyServiceIntegrationTests
         Stage(source.Root); File.Delete(Path.Combine(source.Root, missing));
         var interaction = new Interaction();
         var result = await new GameCopyService(new RoutedFileSystem(source.FileSystem, destination.FileSystem),
-            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction).CopyAsync(Request(source.Evidence, destination.Evidence, first));
+            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), interaction, new CopyDestinationResources()).CopyAsync(Request(source.Evidence, destination.Evidence, first));
         Assert.Equal(GameCopyErrorCode.MissingPart, result.Error!.Code);
         Assert.Equal(0, interaction.Passwords);
     }
@@ -193,7 +193,7 @@ public sealed class GameCopyServiceIntegrationTests
             if (snapshot.Progress?.Work.WrittenBytes > 0 && !GameCopyRules.IsTerminal(snapshot.State)) cancellation.Cancel();
         } };
         var result = await new GameCopyService(new RoutedFileSystem(source.FileSystem, destination.FileSystem),
-            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), new Interaction())
+            new SevenZipGameArchiveReader(GameArchiveReaderTests.RuntimeRoot), new Interaction(), new CopyDestinationResources())
             .CopyAsync(Request(source.Evidence, destination.Evidence, "game.zip"), snapshots, cancellation.Token);
         Assert.Equal(GameCopyState.Cancelled, result.State);
         var retained = File.ReadAllBytes(Path.Combine(destination.Root, "ISO/game.iso"));
