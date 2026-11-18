@@ -26,10 +26,10 @@ public sealed class GameCopyPresentationTests
             Dispatcher.UIThread.RunJobs();
             var prompt = Assert.IsType<CopyInputViewModel>(model.Input);
             Assert.Contains("Incorrect password or damaged archive", prompt.Message);
-            var input = view.FindControl<TextBox>("CopyPasswordInput")!;
+            var input = view.CopyControl<TextBox>("CopyPasswordInput")!;
             Assert.Equal('●', input.PasswordChar);
             input.Text = "private-password";
-            var retry = view.FindControl<Button>("RetryCopyPasswordButton")!;
+            var retry = view.CopyControl<Button>("RetryCopyPasswordButton")!;
             Assert.Same(prompt.RetryCommand, retry.Command);
             Assert.True(retry.Focus());
             window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);

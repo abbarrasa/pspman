@@ -221,7 +221,7 @@ public sealed class GameCopyShutdownTests
             var panel = f.Window.FindControl<GameCopyView>("CopyPanel")!;
             foreach (var name in new[] { "KeepCopyingButton", "ConfirmCopyCloseButton" })
             {
-                var button = panel.FindControl<Button>(name)!;
+                var button = panel.CopyControl<Button>(name)!;
                 var point = button.TranslatePoint(default, f.Window)!.Value;
                 Assert.InRange(point.Y, 0, 450);
                 Assert.InRange(point.Y + button.Bounds.Height, 1, 450);

@@ -5,6 +5,19 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T17 presentation — independent rows, inherited native gates unchanged
+
+“Apruebo el plan y su implementación” approved the displayed T17 plan. The
+[presentation report](./concurrent-copy-presentation.md) records typed captured
+rows, sequenced progress and private per-operation password/overwrite/FR-19
+input. Controlled concurrent submission exercises the real Core coordinator;
+production batch admission remains for T19 after T18's selection/choice work.
+Available headless/graphical checks cannot establish physical PSP, optical,
+Windows filesystem or removal/authorization acceptance. All earlier native and
+physical rows remain mandatory; T10 must cover the final production flow.
+T18 needs its own plan and explicit authorization. No formal SDD validation is
+authorized.
+
 ## T16 coordinator — scoped checks complete, inherited native gates unchanged
 
 “Apruebo el plan y su implementación” approved the T16 scoped plan and explicit
@@ -18,8 +31,8 @@ single-row behavior; it is not actual native archive/device removal, optical
 media, PSP/FAT, UAC or Windows filesystem evidence. T15 and all earlier native
 prerequisites below remain mandatory and unchecked. T10 must exercise the final
 concurrent production flow after T17–T19 activate it; no device/provider or
-authorization policy is changed here. T17 needs its own scoped plan and explicit
-authorization; formal SDD validation remains unauthorized.
+authorization policy is changed here. T17's later authorization and evidence are
+recorded above; formal SDD validation remains unauthorized.
 
 ## T15 engine resources — integration prepared, native Windows gate open
 
