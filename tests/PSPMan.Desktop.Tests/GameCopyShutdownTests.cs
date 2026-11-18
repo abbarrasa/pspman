@@ -16,6 +16,85 @@ namespace PSPMan.Desktop.Tests;
 [Collection("Headless UI")]
 public sealed class GameCopyShutdownTests
 {
+    [Fact]
+    public async Task ProductionEnablesExplicitConcurrentPreparation()
+    {
+        using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await ui.DispatchAsync(async () =>
+        {
+            await using var f = await Fixture.Create();
+            Assert.True(f.Main.IsCopyPreparationEnabled);
+            f.Main.SelectedGames.Add(f.Game);
+            f.Main.PrepareSelectedCopiesCommand.Execute(null);
+            Assert.Single(f.Main.CopyDrafts);
+            f.IO.Pause = token => Task.Delay(Timeout.Infinite, token);
+            f.Main.SendPreparedCopiesCommand.Execute(null);
+            var first = Assert.Single(f.Main.LastCopyAdmission!.Accepted);
+            await Wait(() => f.Copy.Operations.Any(row => row.IsBusy));
+            Assert.True(f.Main.CanPrepareSelectedCopies);
+            f.Main.PrepareSelectedCopiesCommand.Execute(null);
+            Assert.True(f.Main.CanSendPreparedCopies);
+            f.Window.Close();
+            f.Copy.CloseConfirmation!.AcceptCommand.Execute(null);
+            await f.Lifetime.ShutdownCompletion;
+            Assert.Equal(GameCopyState.Cancelled, (await f.Copy.GetCompletion(first.OperationId)).State);
+        });
+    }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("password")]
+    [InlineData("overwrite")]
+    [InlineData("ambiguous")]
+    public async Task AggregateDecisionBlocksAdmissionPreservesInputsOnDeclineAndDrainsEveryOwner(string stage)
+    {
+        using var ui = HeadlessUnitTestSession.StartNew(typeof(TestApplication));
+        await ui.DispatchAsync(async () =>
+        {
+            await using var f = await Fixture.Create();
+            async Task<CopyOperationViewModel> Add(string name)
+            {
+                f.IO.Entries = [new(0, name + ".iso", 3)];
+                if (stage == "password") f.IO.OpenErrorOnce = GameCopyErrorCode.PasswordRequired;
+                if (stage == "overwrite") f.IO.Files[name + ".iso"] = new([9]);
+                if (stage == "ambiguous") f.IO.ExtractErrorOnce = GameCopyErrorCode.IndeterminateEncryptedError;
+                if (stage == "io") f.IO.Pause = token => Task.Delay(Timeout.Infinite, token);
+                var request = Assert.Single(f.Copy.Submit([new(Guid.NewGuid(), f.Game with { Id = Guid.NewGuid(), Title = name })]).Accepted);
+                await Wait(() => f.Copy.Operations.Any(row => row.OperationId == request.OperationId &&
+                    (stage == "io" ? row.ProgressPercentage > 0 : row.HasInput)));
+                return f.Copy.Operations.Single(row => row.OperationId == request.OperationId);
+            }
+            var first = await Add("first"); var second = await Add("second");
+            var inputs = new[] { first.Input, second.Input };
+            f.Window.Close(); var oldDecision = f.Copy.CloseConfirmation!;
+            Assert.False(f.Copy.CanSubmitCopies);
+            var coordinator = f.Coordinator;
+            Assert.False(coordinator.IsAdmissionOpen);
+            Assert.Empty(coordinator.Submit([new(Guid.NewGuid(), f.Game)]).Accepted);
+            oldDecision.KeepOpenCommand.Execute(null); await f.Lifetime.ShutdownCompletion;
+            Assert.True(coordinator.IsAdmissionOpen);
+            Assert.Same(inputs[0], first.Input); Assert.Same(inputs[1], second.Input);
+            Assert.True(first.IsBusy); Assert.True(second.IsBusy);
+            f.Window.Close(); var decision = f.Copy.CloseConfirmation!;
+            oldDecision.AcceptCommand.Execute(null);
+            Assert.Same(decision, f.Copy.CloseConfirmation);
+            f.Provider.OnDispose = () =>
+            {
+                Assert.True(f.Copy.GetCompletion(first.OperationId).IsCompleted);
+                Assert.True(f.Copy.GetCompletion(second.OperationId).IsCompleted);
+                return ValueTask.CompletedTask;
+            };
+            decision.AcceptCommand.Execute(null);
+            await f.Lifetime.ShutdownCompletion.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(GameCopyState.Cancelled, (await f.Copy.GetCompletion(first.OperationId)).State);
+            Assert.Equal(GameCopyState.Cancelled, (await f.Copy.GetCompletion(second.OperationId)).State);
+            Assert.False(coordinator.IsAdmissionOpen); Assert.Equal(1, f.Exits);
+            foreach (var input in inputs) { input?.RetryCommand.Execute(null); input?.OverwriteCommand.Execute(null); }
+            await Wait(() => first.Input is null && second.Input is null);
+            Assert.Null(first.Input); Assert.Null(second.Input);
+        });
+    }
+
     [Theory]
     [InlineData("io")]
     [InlineData("password")]
@@ -135,7 +214,7 @@ public sealed class GameCopyShutdownTests
             f.Window.Close(); var confirmation = f.Copy.CloseConfirmation!;
             release.SetResult(); await operation;
             Assert.Equal("Completed", f.Copy.Status); Assert.True(f.Copy.HasCloseConfirmation);
-            Assert.False(f.Copy.CanStart); Assert.False(f.Main.CopySelectedGameCommand.CanExecute(null));
+            Assert.False(f.Copy.CanStart); Assert.False(f.Main.CanSendPreparedCopies);
             await f.Copy.StartAsync(); Assert.Equal(1, f.IO.Opens);
             if (accept) confirmation.AcceptCommand.Execute(null); else confirmation.KeepOpenCommand.Execute(null);
             await f.Lifetime.ShutdownCompletion;
@@ -216,8 +295,12 @@ public sealed class GameCopyShutdownTests
         await ui.DispatchAsync(async () =>
         {
             await using var f = await Fixture.Create(); var operation = await f.PauseAt("password");
+            if (!f.Main.SelectedGames.Contains(f.Game)) f.Main.SelectedGames.Add(f.Game);
+            f.Main.PrepareSelectedCopiesCommand.Execute(null);
+            Assert.Single(f.Main.CopyDrafts);
             if (longDestination) f.Copy.Destination = "/psp/ISO/" + new string('a', 5000);
             f.Window.Close(); Dispatcher.UIThread.RunJobs();
+            Assert.False(f.Main.ShowCopyDrafts);
             var panel = f.Window.FindControl<GameCopyView>("CopyPanel")!;
             foreach (var name in new[] { "KeepCopyingButton", "ConfirmCopyCloseButton" })
             {
@@ -226,6 +309,8 @@ public sealed class GameCopyShutdownTests
                 Assert.InRange(point.Y, 0, 450);
                 Assert.InRange(point.Y + button.Bounds.Height, 1, 450);
                 Assert.True(button.IsEffectivelyVisible);
+                var local = button.TranslatePoint(default, panel)!.Value;
+                Assert.InRange(local.Y + button.Bounds.Height, 1, panel.Bounds.Height);
             }
             var keep = panel.FindControl<Button>("KeepCopyingButton")!;
             Assert.Same(f.Copy.CloseConfirmation!.KeepOpenCommand, keep.Command);
@@ -234,6 +319,8 @@ public sealed class GameCopyShutdownTests
             f.Window.KeyReleaseQwerty(PhysicalKey.Enter, RawInputModifiers.None);
             await f.Lifetime.ShutdownCompletion;
             Assert.False(f.Copy.HasCloseConfirmation); Assert.False(operation.IsCompleted);
+            Assert.Single(f.Main.CopyDrafts);
+            Assert.True(f.Main.ShowCopyDrafts);
         });
     }
 
@@ -275,7 +362,8 @@ public sealed class GameCopyShutdownTests
                 await f.Main.Devices!.Devices.Single(d => d.Key.DeviceId == "psp0").RemoveCommand.ExecuteAsync(null);
                 await Wait(() => f.Provider.Removals == 1); await operation;
                 f.Copy.CloseConfirmation!.AcceptCommand.Execute(null);
-                await Wait(() => f.Main.Devices is null);
+                await Wait(() => f.Copy.IsClosing);
+                Assert.NotNull(f.Main.Devices); // Removal ownership must drain before detachment.
                 Assert.True(f.IO.OutputClosed); Assert.Equal(0, f.Exits);
                 Assert.Equal(0, f.Provider.Disposals);
             }
@@ -298,7 +386,7 @@ public sealed class GameCopyShutdownTests
             try
             {
                 f.Window.Close(); f.Copy.CloseConfirmation!.AcceptCommand.Execute(null);
-                await Wait(() => f.Copy.IsClosing && f.Copy.Status == "Stopping");
+                await Wait(() => f.Copy.IsClosing && f.Copy.Operations.Single().Status == "Stopping");
                 Assert.False(operation.IsCompleted); Assert.False(f.IO.OutputClosed);
                 Assert.Equal(0, f.Exits); Assert.Equal(0, f.Provider.Disposals);
                 Assert.Same(f.Copy, f.Main.Copy);
@@ -403,6 +491,7 @@ public sealed class GameCopyShutdownTests
         internal readonly MainWindow Window;
         internal readonly ApplicationDeviceLifetime Lifetime;
         internal GameCopyViewModel Copy = null!;
+        internal GameCopySessionCoordinator Coordinator = null!;
         internal int Exits, ExitCode;
         internal Action? AfterCopyCreated;
         internal Fixture()
@@ -414,6 +503,7 @@ public sealed class GameCopyShutdownTests
                 createCopy: (session, error) =>
                 {
                     var copy = new CopyStartup(session, error, IO, IO, MountedPathSyntax.Linux, resources: new TestCopyResources());
+                    Coordinator = copy.Coordinator!;
                     AfterCopyCreated?.Invoke(); return copy;
                 });
         }
@@ -422,7 +512,7 @@ public sealed class GameCopyShutdownTests
             var f = new Fixture(); f.Window.Show(); await f.Lifetime.Initialization;
             await Wait(() => f.Main.Devices!.RemovableSource.Candidates.Length == 1);
             await f.Main.Devices!.ChooseSourceCommand.ExecuteAsync(f.Main.Devices.RemovableSource.Candidates[0]);
-            f.Copy = f.Main.Copy!; return f;
+            f.Copy = f.Main.Copy!; f.Copy.SetSelectedGame(f.Game); return f;
         }
         internal async Task<Task> PauseAt(string stage)
         {

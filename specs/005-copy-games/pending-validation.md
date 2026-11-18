@@ -5,18 +5,44 @@ historical single-copy scope. Unexecuted checks are mandatory and never count
 as passing evidence. See [native T01 evidence](./native-archive-compatibility.md)
 and [Spec 004 dependencies](../004-device-mounting/pending-validation.md).
 
+## T19 production activation — scoped integration complete, final T10 open
+
+“Apruebo el plan” approved the presented T19 scope. The
+[aggregate lifetime report](./concurrent-copy-lifetime.md) records production
+explicit concurrent submission, Core-owned admission closure and aggregate
+decline/accept/drain. Thirteen new cases include four actual packaged Linux
+7-Zip/native-filesystem callback cases, covering separate writes/shared-file
+waits under confirmed and programmatic close. Native release/descriptor and
+source/output assertions pass. Final regression passes 2037 tests with zero
+failures and 37 Windows discovery skips; sequential Desktop coverage and
+controlled X11/isolated private-bus startup/closure pass.
+
+This does not execute Windows equivalents, physical PSP recognition/mounting,
+multiple real readers/discs/PSPs, filesystem behavior on actual destination
+media, Polkit/UAC, OS logout or forced termination. All earlier native gates
+and final T10 remain mandatory. Final T10 must extend the native/physical matrix
+to the activated production flow, including independent inputs, shared-device
+loss/removal, resource waits and aggregate close while native callbacks or
+startup/removal work remain outstanding. Reuse the existing environment/media
+preparation and source/output-hash procedures; simulated inventory and temporary
+native filesystem roots are not hardware acceptance.
+
+Next: report T19 and stop. A request to continue begins final T10's scoped plan,
+reviewing its open native prerequisites and unavailable environments before
+execution. No provisioning or formal SDD validation/review is authorized here.
+
 ## T18 submissions — local choices, inherited native gates unchanged
 
 “apruebo el plan y la implementación” approved T18's displayed scope. The
 [submission report](./copy-submission-choices.md) records separate catalogue
 multi-selection, local reader/volume/PSP choices, indexed partial admission and
 explicit resubmission. Controlled composition exercises additions through the
-real coordinator; production remains single-copy until T19 connects aggregate
-shutdown. No shared associations, catalogue records or native policy are
+real coordinator; at T18 completion production remained single-copy pending T19.
+T19's activation and unchanged gates are recorded above. No shared associations, catalogue records or native policy are
 modified by preparing/submitting games. Existing Windows/physical rows remain
 mandatory; multiple actual readers/discs/PSPs must be covered by final T10.
-T19 needs its own scoped plan and explicit approval. Formal SDD validation
-remains unauthorized.
+T19 was subsequently authorized and completed as recorded above. Formal SDD
+validation remains unauthorized.
 
 ## T17 presentation — independent rows, inherited native gates unchanged
 

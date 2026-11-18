@@ -17,7 +17,7 @@ public sealed partial class GameCopyViewModel
     private Guid? _legacyInputOperation;
     public ReadOnlyObservableCollection<CopyOperationViewModel> Operations => _readOnlyOperations ??= new(_operations);
 
-    // Controlled entry point for T17 tests; production multi-selection/activation belongs to T18/T19.
+    // Explicit immutable submissions used by production and functional tests.
     internal GameCopyAdmission Submit(IEnumerable<GameCopySubmission> submissions, CancellationToken token = default)
     {
         if (_disposed || IsClosing || HasCloseConfirmation) throw new OperationCanceledException("The application is closing.");
@@ -57,6 +57,7 @@ public sealed partial class GameCopyViewModel
             row.PropertyChanged += OnRowChanged;
             _rows.Add(id, row);
         }
+        if (IsClosing) row.BeginStopping();
         _post(() =>
         {
             if (_disposed) return;
@@ -81,7 +82,7 @@ public sealed partial class GameCopyViewModel
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (IsClosing) throw new OperationCanceledException("The application is closing.");
-            // Legacy aliases support the existing single-copy commands/tests until T19 removes them.
+            // Historical single-operation harnesses retain aliases; production prompts belong to rows.
             if (_coordinator is null || _coordinator.Snapshot?.OperationId == identity.OperationId)
                 _legacyInputOperation = identity.OperationId;
         }
@@ -91,6 +92,12 @@ public sealed partial class GameCopyViewModel
     {
         foreach (var row in _rows.Values.ToArray()) { row.PropertyChanged -= OnRowChanged; row.Dispose(); }
         _post(() => Input = null);
+    }
+    private void StopRows()
+    {
+        CopyOperationViewModel[] rows;
+        lock (_gate) rows = _rows.Values.ToArray();
+        foreach (var row in rows) row.BeginStopping();
     }
     private sealed class OperationProgress(Action<GameCopyOperationSnapshot> report) : IProgress<GameCopyOperationSnapshot>
     { public void Report(GameCopyOperationSnapshot value) => report(value); }

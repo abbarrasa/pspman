@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.Input;
 
 namespace PSPMan.Desktop.ViewModels;
 
@@ -8,7 +6,6 @@ public partial class MainViewModel
 {
     public GameCopyViewModel? Copy { get; private set; }
     public bool HasCopy => Copy is not null;
-    public bool CanCopySelectedGame => Copy is { CanStart: true };
 
     internal void AttachCopy(GameCopyViewModel? copy)
     {
@@ -16,23 +13,18 @@ public partial class MainViewModel
         Copy = copy;
         if (copy is not null)
         {
-            copy.SetSelectedGame(SelectedGame);
             copy.PropertyChanged += OnCopyChanged;
+            EnableCopyPreparation();
         }
         OnPropertyChanged(nameof(Copy)); OnPropertyChanged(nameof(HasCopy));
-        OnPropertyChanged(nameof(ShowLegacyCopy));
-        UpdateCopyCommand();
+        OnPropertyChanged(nameof(ShowCopyDrafts));
         UpdatePreparationCommands();
     }
 
     private void OnCopyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        if (args.PropertyName == nameof(GameCopyViewModel.CanStart)) UpdateCopyCommand();
-        if (args.PropertyName is nameof(GameCopyViewModel.CanStart) or nameof(GameCopyViewModel.CanSubmitCopies)) UpdatePreparationCommands();
+        if (args.PropertyName == nameof(GameCopyViewModel.CanSubmitCopies)) UpdatePreparationCommands();
+        if (args.PropertyName is nameof(GameCopyViewModel.HasCloseConfirmation) or nameof(GameCopyViewModel.IsClosing))
+            OnPropertyChanged(nameof(ShowCopyDrafts));
     }
-    private void UpdateCopyCommand()
-    { OnPropertyChanged(nameof(CanCopySelectedGame)); CopySelectedGameCommand.NotifyCanExecuteChanged(); }
-
-    [RelayCommand(CanExecute = nameof(CanCopySelectedGame))]
-    private Task CopySelectedGameAsync() => Copy?.StartAsync() ?? Task.CompletedTask;
 }

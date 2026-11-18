@@ -147,7 +147,6 @@
             </Grid.ColumnDefinitions>
             <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
                 <StackPanel Spacing="6"><TextBlock Text="Games" FontSize="18" FontWeight="SemiBold" />
-                    <Button x:Name="CopySelectedGameButton" Content="Copy to PSP" Command="{Binding CopySelectedGameCommand}" IsVisible="{Binding ShowLegacyCopy}" />
                     <Button x:Name="PrepareSelectedCopiesButton" Content="Prepare copies" AutomationProperties.Name="Prepare copies of selected games" Command="{Binding PrepareSelectedCopiesCommand}" IsVisible="{Binding IsCopyPreparationEnabled}" /></StackPanel>
                 <StackPanel Grid.Row="1">
                     <TextBlock x:Name="EmptyStateText" Text="No games in the catalog."
@@ -357,7 +356,7 @@
             </Border>
         </Grid>
         <Grid Grid.Row="6" RowDefinitions="Auto,*" MaxHeight="260" ClipToBounds="True">
-            <views:CopySubmissionView x:Name="CopySubmissionPanel" MaxHeight="180" IsVisible="{Binding HasCopyDrafts}" />
+            <views:CopySubmissionView x:Name="CopySubmissionPanel" MaxHeight="180" IsVisible="{Binding ShowCopyDrafts}" />
             <views:GameCopyView x:Name="CopyPanel" Grid.Row="1" MaxHeight="220"
                                 DataContext="{Binding Copy}" IsVisible="{Binding IsOpen, FallbackValue=False}" />
         </Grid>

@@ -45,11 +45,11 @@ public sealed class GameCopyFlowTests
             f.IO.Pause = token => release.Task.WaitAsync(token);
             var window = new MainWindow { DataContext = f.Main, Width = 900, Height = 450 };
             window.Show();
-            var start = f.Main.CopySelectedGameCommand.ExecuteAsync(null);
+            var start = f.Copy.StartAsync();
             await Wait(() => f.Copy.ProgressPercentage > 0);
             Assert.False(f.IO.RanOnUi);
             Assert.True(f.Copy.IsBusy);
-            Assert.False(f.Main.CopySelectedGameCommand.CanExecute(null));
+            Assert.False(f.Copy.CanStart);
             Assert.Equal("Test game", window.FindControl<GameCopyView>("CopyPanel")!.CopyControl<TextBlock>("CopyTitleText")!.Text);
             Assert.Contains("3 bytes total", f.Copy.WorkText);
             Assert.InRange(f.Copy.ProgressPercentage, 1, 99);
@@ -82,8 +82,8 @@ public sealed class GameCopyFlowTests
         await ui.DispatchAsync(async () =>
         {
             await using var f = await Create(Math.Max(0, psps));
-            if (psps < 0) f.Main.SelectedGame = null;
-            await f.Main.CopySelectedGameCommand.ExecuteAsync(null);
+            if (psps < 0) { f.Main.SelectedGame = null; f.Copy.SetSelectedGame(null); }
+            await f.Copy.StartAsync();
             Assert.Contains(message, f.Copy.Notification);
             Assert.True(f.Copy.IsOpen); Assert.False(f.Copy.IsBusy);
             Assert.Equal(0, f.IO.Opens); Assert.Empty(f.IO.Files);
@@ -234,6 +234,7 @@ public sealed class GameCopyFlowTests
             Assert.Equal("Completed", f.Copy.Status);
             Assert.False(queue.IsEmpty);
             f.Main.SelectedGame = null;
+            f.Copy.SetSelectedGame(null); // Exercise the retained adapter, independently of production selection.
             await f.Copy.StartAsync();
             // Previous-operation progress is deliberately delivered after the new operation ends.
             while (queue.TryDequeue(out var action)) action();
@@ -292,10 +293,10 @@ public sealed class GameCopyFlowTests
         await ui.DispatchAsync(async () =>
         {
             var main = new MainViewModel();
-            Assert.False(main.HasCopy); Assert.False(main.CopySelectedGameCommand.CanExecute(null));
+            Assert.False(main.HasCopy); Assert.False(main.CanSendPreparedCopies);
             await using var startup = new CopyStartup(null, "Devices could not be initialized.");
             main.AttachCopy(startup.ViewModel);
-            await main.CopySelectedGameCommand.ExecuteAsync(null);
+            await startup.ViewModel.StartAsync();
             Assert.Equal("Devices could not be initialized.", main.Copy!.Notification);
             main.AttachCopy(null);
             Assert.False(main.HasCopy);

@@ -132,9 +132,14 @@ public sealed partial class CopyOperationViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(IsBusy))]
     private async Task CancelAsync()
     {
-        lock (gate) { if (disposed || terminal || stopping) return; stopping = true; ReleasePending(true); }
-        Status = "Stopping";
+        if (!BeginStopping()) return;
         await cancel(OperationId);
+    }
+    internal bool BeginStopping()
+    {
+        lock (gate) { if (disposed || terminal || stopping) return false; stopping = true; ReleasePending(true); }
+        post(() => { lock (gate) { if (!disposed && !terminal) Status = "Stopping"; } });
+        return true;
     }
     internal void Dispose()
     {

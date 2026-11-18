@@ -49,10 +49,15 @@ public sealed class GameCopyCompositionTests
             await lifetime.Initialization;
             await Wait(() => main.Devices!.RemovableSource.Candidates.Length == 1);
             await main.Devices!.ChooseSourceCommand.ExecuteAsync(main.Devices.RemovableSource.Candidates[0]);
-            await main.CopySelectedGameCommand.ExecuteAsync(null);
-            Assert.Contains("No selected PSP", main.Copy!.Notification);
+            main.SelectedGames.Add(main.SelectedGame);
+            main.PrepareSelectedCopiesCommand.Execute(null);
+            main.SendPreparedCopiesCommand.Execute(null);
+            var incident = Assert.Single(main.LastCopyAdmission!.Incidents);
+            Assert.Equal(GameCopyErrorCode.DestinationUnavailable, incident.Error.Code);
+            Assert.Contains("PSP", incident.Error.Message);
+            Assert.Equal(main.SelectedGame.Id, incident.GameId);
             Assert.Same(main.Copy, window.FindControl<GameCopyView>("CopyPanel")!.DataContext);
-            var retired = main.Copy;
+            var retired = main.Copy!;
             await lifetime.DisposeAsync();
             Assert.Null(main.Copy); Assert.Null(main.Devices);
             await retired.StartAsync(); // Disposed presentation cannot restart or attach itself.
@@ -73,9 +78,10 @@ public sealed class GameCopyCompositionTests
             await using var lifetime = new ApplicationDeviceLifetime(window, main, _ => { }, _ => throw new IOException("Unavailable"));
             window.Show(); await lifetime.Initialization;
             Assert.NotNull(main.Copy);
-            await main.CopySelectedGameCommand.ExecuteAsync(null);
-            Assert.Contains("could not be initialized", main.Copy!.Notification);
-            Assert.True(main.Copy.IsOpen);
+            Assert.True(main.IsCopyPreparationEnabled);
+            Assert.False(main.Copy!.CanSubmitCopies);
+            Assert.False(main.CanSendPreparedCopies);
+            await Wait(() => main.Devices!.HasErrors);
             await lifetime.DisposeAsync(); window.Close();
         });
     }

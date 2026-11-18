@@ -42,6 +42,7 @@ internal sealed class GameCopyTestContext : IAsyncDisposable
         f.Catalog = new(f.Game);
         f.Main = new(new GameCatalogService(f.Catalog), null, devicesViewModel: f.DeviceModel, mountedPathSyntax: MountedPathSyntax.Linux);
         f.Main.AttachCopy(f.Copy); f.Main.SelectedGame = f.Game;
+        f.Copy.SetSelectedGame(f.Game); // Historical single-operation harness; production submits explicit requests.
         return f;
     }
     internal static async Task Wait(Func<bool> predicate)
