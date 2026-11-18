@@ -50,7 +50,7 @@ public sealed class GameCopyFlowTests
             Assert.False(f.IO.RanOnUi);
             Assert.True(f.Copy.IsBusy);
             Assert.False(f.Main.CopySelectedGameCommand.CanExecute(null));
-            Assert.Equal("Test game", window.FindControl<GameCopyView>("CopyPanel")!.FindControl<TextBlock>("CopyTitleText")!.Text);
+            Assert.Equal("Test game", window.FindControl<GameCopyView>("CopyPanel")!.CopyControl<TextBlock>("CopyTitleText")!.Text);
             Assert.Contains("3 bytes total", f.Copy.WorkText);
             Assert.InRange(f.Copy.ProgressPercentage, 1, 99);
             Assert.Equal("/psp0/ISO", f.Copy.Destination);

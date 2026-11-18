@@ -3,7 +3,7 @@
              xmlns:vm="using:PSPMan.Desktop.ViewModels"
              x:Class="PSPMan.Desktop.Views.GameCopyView"
              x:DataType="vm:GameCopyViewModel" x:CompileBindings="True">
-    <Grid RowDefinitions="Auto,*">
+    <Grid RowDefinitions="Auto,Auto,*">
         <Border x:Name="CopyCloseConfirmationPanel" IsVisible="{Binding HasCloseConfirmation}" Padding="8"
                 BorderThickness="1" BorderBrush="{DynamicResource ThemeBorderMidBrush}" MaxHeight="180"
                 AutomationProperties.Name="Confirm closing PSPMan">
@@ -20,42 +20,60 @@
                 </StackPanel>
             </Grid>
         </Border>
-    <ScrollViewer x:Name="CopyScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Auto"
-                  VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Game copy">
-        <StackPanel Spacing="6" MinWidth="720" Margin="0,8,0,0">
-            <TextBlock Text="Copy to PSP" FontSize="18" FontWeight="SemiBold" />
-            <Grid ColumnDefinitions="2*,2*,2*,160" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
-                <TextBlock Text="Game" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="1" Text="Destination" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="2" Text="State" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="3" Text="Decompression and copy" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock x:Name="CopyTitleText" Grid.Row="1" Text="{Binding Title}" TextWrapping="Wrap" />
-                <TextBlock x:Name="CopyDestinationText" Grid.Row="1" Grid.Column="1" Text="{Binding Destination}" TextWrapping="Wrap" />
-                <TextBlock x:Name="CopyStatusText" Grid.Row="1" Grid.Column="2" Text="{Binding Status}" TextWrapping="Wrap" />
-                <ProgressBar x:Name="CopyProgressBar" Grid.Row="1" Grid.Column="3" Minimum="0" Maximum="100"
-                             Value="{Binding ProgressPercentage}" IsIndeterminate="{Binding IsIndeterminate}"
-                             AutomationProperties.Name="Decompression and copy progress" Height="10" />
-            </Grid>
-            <TextBlock Text="{Binding WorkText}" TextWrapping="Wrap" />
-            <TextBlock x:Name="CopyNotificationText" Text="{Binding Notification}" TextWrapping="Wrap" />
-            <TextBlock x:Name="CopyWarningText" Text="{Binding Warning}" TextWrapping="Wrap" />
-            <Button x:Name="CancelCopyButton" Content="Cancel copy" Command="{Binding CancelCommand}" IsVisible="{Binding IsBusy}" />
-            <Border IsVisible="{Binding HasInput}" BorderThickness="1" Padding="8" BorderBrush="{DynamicResource ThemeBorderMidBrush}">
-                <StackPanel DataContext="{Binding Input}" x:DataType="vm:CopyInputViewModel" Spacing="6">
-                    <TextBlock Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding Path}" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" />
-                    <TextBox x:Name="CopyPasswordInput" Text="{Binding Password, Mode=TwoWay}" PasswordChar="●"
-                             IsVisible="{Binding IsPassword}" AutomationProperties.Name="Archive password" MaxWidth="400" HorizontalAlignment="Left" MinWidth="240" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="RetryCopyPasswordButton" Content="Retry" Command="{Binding RetryCommand}" IsVisible="{Binding IsPassword}" />
-                        <Button x:Name="OverwriteCopyFileButton" Content="Overwrite" Command="{Binding OverwriteCommand}" IsVisible="{Binding IsOverwrite}" />
-                        <Button x:Name="SkipCopyFileButton" Content="Skip file" Command="{Binding SkipCommand}" IsVisible="{Binding IsOverwrite}" />
-                        <Button x:Name="CancelCopyInputButton" Content="Cancel copy" Command="{Binding CancelCommand}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </StackPanel>
-    </ScrollViewer>
+        <TextBlock Grid.Row="1" Text="Copy to PSP" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,4" />
+        <ScrollViewer x:Name="CopyScrollViewer" Grid.Row="2" HorizontalScrollBarVisibility="Disabled" ClipToBounds="True"
+                      VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Game copies">
+            <StackPanel Spacing="6">
+                <!-- Admission/start errors have no accepted operation row. -->
+                <TextBlock x:Name="CopyStartNotificationText" Text="{Binding Notification}" IsVisible="{Binding HasStartError}" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding Operations}" AutomationProperties.Name="Copy operations">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CopyOperationViewModel">
+                            <Border BorderThickness="1" BorderBrush="{DynamicResource ThemeBorderMidBrush}" Padding="8" Margin="0,0,0,8"
+                                    AutomationProperties.Name="{Binding Title}">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="2*,2*,2*,160" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                                        <TextBlock Text="Game" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="1" Text="PSP / destination" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="2" Text="State" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="3" Text="Decompression and copy" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="CopyTitleText" Grid.Row="1" Text="{Binding Title}" TextWrapping="Wrap" />
+                                        <StackPanel Grid.Row="1" Grid.Column="1">
+                                            <TextBlock Text="{Binding Psp}" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="CopyDestinationText" Text="{Binding Destination}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <TextBlock x:Name="CopyStatusText" Grid.Row="1" Grid.Column="2" Text="{Binding Status}" TextWrapping="Wrap" />
+                                        <ProgressBar x:Name="CopyProgressBar" Grid.Row="1" Grid.Column="3" Minimum="0" Maximum="100" MinWidth="0"
+                                                     Value="{Binding ProgressPercentage}" IsIndeterminate="{Binding IsIndeterminate}"
+                                                     AutomationProperties.Name="Decompression and copy progress" Height="10" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding Source}" TextWrapping="Wrap" AutomationProperties.Name="Captured source" />
+                                    <TextBlock Text="{Binding WorkText}" IsVisible="{Binding HasWork}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding WaitText}" IsVisible="{Binding HasWait}" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="CopyNotificationText" Text="{Binding Notification}" IsVisible="{Binding HasNotification}" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="CopyWarningText" Text="{Binding Warning}" IsVisible="{Binding HasWarning}" TextWrapping="Wrap" />
+                                    <Button x:Name="CancelCopyButton" Content="Cancel copy" Command="{Binding CancelCommand}" IsVisible="{Binding IsBusy}" AutomationProperties.Name="Cancel this copy" />
+                                    <Border IsVisible="{Binding HasInput}" BorderThickness="1" Padding="8" BorderBrush="{DynamicResource ThemeBorderMidBrush}">
+                                        <StackPanel DataContext="{Binding Input}" x:DataType="vm:CopyInputViewModel" Spacing="6">
+                                            <TextBlock Text="{Binding Message}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Path}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" />
+                                            <TextBox x:Name="CopyPasswordInput" Text="{Binding Password, Mode=TwoWay}" PasswordChar="●"
+                                                     IsVisible="{Binding IsPassword}" AutomationProperties.Name="Archive password" MaxWidth="400" HorizontalAlignment="Left" MinWidth="240" />
+                                            <WrapPanel Orientation="Horizontal">
+                                                <Button x:Name="RetryCopyPasswordButton" Content="Retry" Command="{Binding RetryCommand}" IsVisible="{Binding IsPassword}" Margin="0,0,8,4" />
+                                                <Button x:Name="OverwriteCopyFileButton" Content="Overwrite" Command="{Binding OverwriteCommand}" IsVisible="{Binding IsOverwrite}" Margin="0,0,8,4" />
+                                                <Button x:Name="SkipCopyFileButton" Content="Skip file" Command="{Binding SkipCommand}" IsVisible="{Binding IsOverwrite}" Margin="0,0,8,4" />
+                                                <Button x:Name="CancelCopyInputButton" Content="Cancel copy" Command="{Binding CancelCommand}" Margin="0,0,8,4" />
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </UserControl>

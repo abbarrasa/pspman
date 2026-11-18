@@ -17,9 +17,6 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
     private readonly Action<Action> _post;
     private readonly string? _startupError;
     private GameCopySessionCoordinator? _coordinator;
-    private CopyInputViewModel? _pendingInput;
-    private Action<string, string>? _respond;
-    private Action? _cancelInput;
     private long _version;
     private bool _disposed, _terminal;
     private Task? _disposeTask;
@@ -37,6 +34,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
     [ObservableProperty] private string _destination = "";
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private string _notification = "";
+    [ObservableProperty] private bool _hasStartError;
     [ObservableProperty] private string _warning = "";
     [ObservableProperty] private double _progressPercentage;
     [ObservableProperty] private bool _isIndeterminate;
@@ -55,20 +53,20 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
             cancellation = _operationCancellation = new();
         }
         IsOpen = true; IsBusy = true; Title = ""; Destination = "";
-        Status = "Preparing"; Notification = ""; Warning = "";
+        Status = "Preparing"; Notification = ""; Warning = ""; HasStartError = false;
         WorkText = ""; ProgressPercentage = 0; IsIndeterminate = true;
         try
         {
             if (_coordinator is null) throw new GameCopyException(new(GameCopyErrorCode.DestinationUnavailable,
                 _startupError ?? "Device services are not available."));
             var result = await _coordinator.StartAsync(new SnapshotProgress(snapshot =>
-                _post(() => Apply(version, snapshot))), cancellation.Token);
+                { ObserveLegacy(snapshot); _post(() => Apply(version, snapshot)); }), cancellation.Token);
             lock (_gate)
             {
                 if (_disposed || version != _version) return;
                 // Final projection is authoritative even if UI progress was still queued.
                 if (_coordinator.Snapshot is { } final) Apply(version, final);
-                _terminal = true;
+                _terminal = true; Input = null;
                 Status = StateText(result.State);
                 Notification = result.Error?.Message ?? Status;
                 Destination = result.Destination;
@@ -96,7 +94,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
         lock (_gate)
         {
             if (_disposed || version != _version) return;
-            _terminal = true; Status = "Failed"; Notification = message;
+            _terminal = true; Status = "Failed"; Notification = message; HasStartError = true;
             IsBusy = false; IsIndeterminate = false;
         }
     }
@@ -135,7 +133,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
 
     public async ValueTask<CopyPasswordResponse> RequestPasswordAsync(CopyPasswordPrompt prompt, CancellationToken cancellationToken)
     {
-        var reply = await RequestInputAsync(true, prompt.Reason switch
+        var reply = await RequestRowInputAsync(prompt.Identity, true, prompt.Reason switch
         {
             GameCopyErrorCode.IndeterminateEncryptedError => "Incorrect password or damaged archive",
             GameCopyErrorCode.IncorrectPassword => "Incorrect password. Try again or cancel.",
@@ -147,7 +145,7 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
 
     public async ValueTask<CopyOverwriteResponse> ConfirmOverwriteAsync(CopyOverwritePrompt prompt, CancellationToken cancellationToken)
     {
-        var reply = await RequestInputAsync(false, "Overwrite this file?", prompt.DestinationPath,
+        var reply = await RequestRowInputAsync(prompt.Identity, false, "Overwrite this file?", prompt.DestinationPath,
             prompt.RetainedOutputWarning, cancellationToken).ConfigureAwait(false);
         return new(prompt.Identity, reply.Decision switch
         {
@@ -157,55 +155,6 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
         });
     }
 
-    private async Task<(string Decision, string Password)> RequestInputAsync(bool password, string message,
-        string path, string warning, CancellationToken token)
-    {
-        var completion = new TaskCompletionSource<(string, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
-        CopyInputViewModel input;
-        lock (_gate)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (IsClosing) throw new OperationCanceledException("The application is closing.");
-            token.ThrowIfCancellationRequested();
-            if (_pendingInput is not null) throw new InvalidOperationException("A copy input is already pending.");
-            input = new(password, message, path, warning, Respond);
-            _pendingInput = input;
-            _respond = (decision, secret) => completion.TrySetResult((decision, secret));
-            _cancelInput = () => completion.TrySetCanceled();
-            _post(() => { lock (_gate) { if (!_disposed && ReferenceEquals(_pendingInput, input)) Input = input; } });
-        }
-        using var registration = token.Register(() => ReleaseInput(input, cancel: true));
-        try { return await completion.Task.ConfigureAwait(false); }
-        finally { ReleaseInput(input, cancel: false); }
-    }
-
-    private void Respond(CopyInputViewModel input, string decision)
-    {
-        lock (_gate)
-        {
-            if (_disposed || IsClosing || !ReferenceEquals(_pendingInput, input)) return;
-            var secret = input.Password;
-            input.Password = "";
-            _respond?.Invoke(decision, secret);
-            ReleaseInput(input, cancel: false);
-        }
-    }
-
-    private void ReleaseInput(CopyInputViewModel input, bool cancel)
-    {
-        lock (_gate)
-        {
-            if (!ReferenceEquals(_pendingInput, input)) return;
-            if (cancel) _cancelInput?.Invoke();
-            _pendingInput = null; _respond = null; _cancelInput = null;
-            _post(() =>
-            {
-                input.Password = "";
-                if (ReferenceEquals(Input, input)) Input = null;
-            });
-        }
-    }
-
     public ValueTask DisposeAsync()
     {
         TaskCompletionSource completion;
@@ -213,14 +162,14 @@ public sealed partial class GameCopyViewModel : ViewModelBase, IGameCopyInteract
         lock (_gate)
         {
             if (_disposeTask is not null) return new(_disposeTask);
-            _disposed = true; ++_version;
-            RetireCloseConfirmation();
-            if (_pendingInput is { } input) ReleaseInput(input, cancel: true);
-            cancellation = _operationCancellation;
             completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _disposeTask = completion.Task;
+            _disposed = true; ++_version;
+            RetireCloseConfirmation();
+            cancellation = _operationCancellation;
         }
         // Do not acquire coordinator/native locks while holding the presentation gate.
+        DisposeRows();
         _ = DisposeCoreAsync(completion, cancellation);
         return new(completion.Task);
     }
